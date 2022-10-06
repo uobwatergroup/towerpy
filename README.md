@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/uobwatergroup/towerpy/blob/master/towerpy/towerpy_logosd.png?raw=true" alt="[towerpylogo]"/>
+  <img src="https://github.com/uobwatergroup/towerpy/blob/main/towerpy/towerpy_logosd.png?raw=true" alt="[towerpylogo]"/>
 </p>
 
 # :satellite: TOWERPY
@@ -21,7 +21,7 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
 </p>
 <p align="left">
   <img alt="info" src="https://img.shields.io/badge/=&nbsp Info &nbsp;=-critical?style=for-the-badge"/>
-  <a href="https://github.com/uobwatergroup/towerpy/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
+  <a href="https://github.com/uobwatergroup/towerpy/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
   <a href="https://doi.org/10.5194/amt-14-2873-2021"><img src="https://img.shields.io/badge/DOI-1.1.1.1.1.1-important?style=for-the-badge&logo=creativecommons"/></a>
   <img alt="tag" src="https://img.shields.io/github/v/tag/uobwatergroup/towerpy-brightgreen?style=for-the-badge"/>
   
@@ -51,7 +51,7 @@ Then install the required dependencies and additional dependencies helpful for s
 
 Finally, install the latest version of towerpy using:
 
-``pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@master``
+``pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main``
 
 ## Installing from source
 
