@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/enchilaDaSzen/towerpy/blob/master/towerpy/towerpy_logosd.png?raw=true" alt="[towerpylogo]"/>
+  <img src="https://github.com/uobwatergroup/towerpy/blob/master/towerpy/towerpy_logosd.png?raw=true" alt="[towerpylogo]"/>
 </p>
 
 # :satellite: TOWERPY
@@ -21,18 +21,18 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
 </p>
 <p align="left">
   <img alt="info" src="https://img.shields.io/badge/=&nbsp Info &nbsp;=-critical?style=for-the-badge"/>
-  <a href="https://github.com/enchilaDaSzen/towerpy/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
+  <a href="https://github.com/uobwatergroup/towerpy/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
   <a href="https://doi.org/10.5194/amt-14-2873-2021"><img src="https://img.shields.io/badge/DOI-1.1.1.1.1.1-important?style=for-the-badge&logo=creativecommons"/></a>
-  <img alt="tag" src="https://img.shields.io/github/v/tag/enchilaDaSzen/towerpy-brightgreen?style=for-the-badge"/>
+  <img alt="tag" src="https://img.shields.io/github/v/tag/uobwatergroup/towerpy-brightgreen?style=for-the-badge"/>
   
 </p>
 
 
 # :books: Documentation
-You can find more details about _Towerpy_ [here](https://readthedocs.org/projects/enchiladaszen-demo/).
+You can find more details about _Towerpy_ [here](https://readthedocs.org/projects/uobwatergroup-demo/).
 
 # :speech_balloon: Citing
-If you use _towerpy_ as part of your workflow in a scientific publication, please consider citing the [towerpy paper](https://github.com/enchilaDaSzen/towerpy):
+If you use _towerpy_ as part of your workflow in a scientific publication, please consider citing the [towerpy paper](https://github.com/uobwatergroup/towerpy):
 
 # :hammer: Installing towerpy
 To ensure a smooth installation of towerpy, we strongly recommend using **conda**, the open-source Python package management system. [Download](https://www.anaconda.com/) and install Anaconda to get conda and other essential data science and machine learning packages.
@@ -51,15 +51,15 @@ Then install the required dependencies and additional dependencies helpful for s
 
 Finally, install the latest version of towerpy using:
 
-``pip install --upgrade git+https://github.com/enchilaDaSzen/towerpy.git@master``
+``pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@master``
 
 ## Installing from source
 
-Optionally, you can get the towerpy source code from the [GitHub repository](https://github.com/enchilaDaSzen/towerpy). 
+Optionally, you can get the towerpy source code from the [GitHub repository](https://github.com/uobwatergroup/towerpy). 
 
 Either download and unpack the zip file of the source code or use git to clone the repository:
 
-``git clone https://github.com/enchilaDaSzen/towerpy.git``
+``git clone https://github.com/uobwatergroup/towerpy.git``
 
 Once inside the folder where _towerpy_ was downloaded, it can be installed by using pip:
 
@@ -81,15 +81,15 @@ netCDF4 | vv1.5.8+
 
 
 # :thought_balloon: Missing a specific feature? Found a bug?
-Feel free to post a message to our [discussions page](https://github.com/enchilaDaSzen/towerpy/discussions) or have a look at our [contribution guidelines](https://github.com/enchilaDaSzen/towerpy/wiki/Contributing) to find out about our coding standards.
+Feel free to post a message to our [discussions page](https://github.com/uobwatergroup/towerpy/discussions) or have a look at our [contribution guidelines](https://github.com/uobwatergroup/towerpy/wiki/Contributing) to find out about our coding standards.
 
 # :construction_worker: Team
 Towerpy is created and maintained by 
 [Daniel Sanchez-Rivas](https://research-information.bris.ac.uk/en/persons/daniel-sanchez-rivas)<a itemprop="sameAs" content="https://orcid.org/0000-0001-9356-6641" href="https://orcid.org/0000-0001-9356-6641" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div> and [Miguel A Rico-Ramirez](https://research-information.bris.ac.uk/en/persons/miguel-a-rico-ramirez)<a itemprop="sameAs" content="https://orcid.org/0000-0002-8885-4582" href="https://orcid.org/0000-0002-8885-4582" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div>
 
 <p align="center">
-  <img alt="GitHub User's stars" src="https://img.shields.io/github/stars/enchilaDaSzen?style=social"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/enchilaDaSzen/towerpy">
+  <img alt="GitHub User's stars" src="https://img.shields.io/github/stars/uobwatergroup?style=social"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/uobwatergroup/towerpy">
 </p>
 
-[![Sparkline](https://stars.medv.io/enchilaDaSzen/towerpy.svg)](https://stars.medv.io/enchilaDaSzen/towerpy)
+[![Sparkline](https://stars.medv.io/uobwatergroup/towerpy.svg)](https://stars.medv.io/uobwatergroup/towerpy)
 
