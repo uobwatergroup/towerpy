@@ -9,7 +9,6 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
   <img alt="Platforms" src="https://img.shields.io/badge/ =&nbsp&nbsp OS &nbsp&nbsp&nbsp;=-critical?style=for-the-badge" />
   <img alt="linux" src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black"/>
   <img alt="wdw" src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white"/>
-  <img alt="mac" src="https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white"/>
 </p>
 <p align="left">
   <img alt="tools" src="https://img.shields.io/badge/= Tools =-critical?style=for-the-badge" />
