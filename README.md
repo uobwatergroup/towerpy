@@ -50,7 +50,7 @@ Then install the required dependencies and additional dependencies helpful for s
 
 Finally, install the latest version of towerpy using:
 
-``pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main``
+``python -m pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main``
 
 ## Installing from source
 
@@ -62,7 +62,11 @@ Either download and unpack the zip file of the source code or use git to clone t
 
 Once inside the folder where _towerpy_ was downloaded, it can be installed by using pip:
 
-`` pip install . ``
+`` python -m pip install . ``
+
+Or install Towerpy in “editable” mode.
+
+`` python -m pip install -e . ``
 
 # :snake: Dependencies
 
