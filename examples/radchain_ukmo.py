@@ -14,13 +14,12 @@ import cartopy.crs as ccrs
 # =============================================================================
 # Reads polar radar data
 # =============================================================================
-rsite = 'cobbacombe'
-fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
+rsite = 'jersey'
+# fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
 fdir = f'/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
+fname = f'metoffice-c-band-rain-radar_{rsite}_202010030735_raw-dual-polar-augzdr-lp-el0.dat'
 
-rdata = tp.io.ukmo.Rad_scan(fdir+f'metoffice-c-band-rain-radar_{rsite}_'
-                            '202010031735_raw-dual-polar-augzdr-lp-el0.dat',
-                            rsite)
+rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 
 # =============================================================================
