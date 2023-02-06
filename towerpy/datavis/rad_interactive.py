@@ -15,6 +15,7 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from matplotlib.offsetbox import AnchoredText
 from matplotlib.widgets import RadioButtons, Slider
 from ..utils import radutilities as rut
+from ..base import TowerpyError
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -942,6 +943,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
         htiplt.contourf(profsdt, profsheight[:, 0], profsvars[prflv],
                         shading='auto', cmap=cmaph, norm=normp,
                         levels=bnd.get('b'+var2plot))
+    else:
+        raise TowerpyError('Oops!... Check the selected plot type')
     if contourl is not None:
         contourlp = htiplt.contour(profsdt, profsheight[:, 0],
                                    profsvars[contourl],
