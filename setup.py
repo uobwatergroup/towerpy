@@ -1,7 +1,4 @@
-"""
-Towerpy: an open-source toolbox for processing polarimetric radar data.
-
-"""
+"""Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 from setuptools import setup, find_packages
 from os import path
@@ -13,7 +10,7 @@ setup(
       url='https://github.com/uobwatergroup/towerpy',
       author='Daniel Sanchez-Rivas and Miguel A Rico-Ramirez',
       author_email='dsanche1@uni-bonn.de; M.A.Rico-Ramirez@bristol.ac.uk',
-      # python_requires=">=3.9",
+      python_requires=">=3.9",
       packages=find_packages(exclude=['datasets']),
       include_package_data=True,
       install_requires=[

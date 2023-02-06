@@ -1,8 +1,4 @@
-"""
-Towerpy: an open-source toolbox for processing polarimetric radar data.
-
-@author: enchiladaszen
-"""
+"""Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import traceback
 import logging

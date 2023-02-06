@@ -1,8 +1,8 @@
 include towerpy/io/lnxlibreadpolarradardata.so
-include towerpy/io/wdslibreadpolarradardata.dll
+include towerpy/io/wdwlibreadpolarradardata.dll
 include towerpy/eclass/lnxlibclutterclassifier.so
-include towerpy/eclass/wdslibclutterclassifier.dll
+include towerpy/eclass/wdwlibclutterclassifier.dll
 include towerpy/attc/lnxlibattenuationcorrection.so
-include towerpy/attc/wdslibattenuationcorrection.dll
+include towerpy/attc/wdwlibattenuationcorrection.dll
 include towerpy/eclass/ukmo_mfs/*.dat
 include towerpy/eclass/ukmo_cmaps/*.dat
