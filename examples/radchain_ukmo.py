@@ -7,21 +7,23 @@ Created on Wed Sep  1 19:39:20 2021
 """
 
 import numpy as np
-import wradlib as wrl
+from wradlib.dp import process_raw_phidp_vulpiani as kdpvpi
 import towerpy as tp
 import cartopy.crs as ccrs
 
 # =============================================================================
 # Reads polar radar data
 # =============================================================================
-rsite = 'jersey'
-# fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
-fdir = f'/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
-fname = f'metoffice-c-band-rain-radar_{rsite}_202010030735_raw-dual-polar-augzdr-lp-el0.dat'
+rsite = 'chenies'
+fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
+fname = f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-augzdr-lp-el0.dat'
 
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 
+tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rdata.vars)
+
+#%%
 # =============================================================================
 # Computes the Signal-to-Noise-Ratio
 # =============================================================================
@@ -29,22 +31,22 @@ rsnr = tp.eclass.snr.SNR_Classif(rdata)
 rsnr.signalnoiseratio(rdata.georef, rdata.params,
                       rdata.vars, 35,
                       data2correct=rdata.vars,
-                      # plot_method=(True)
+                       plot_method=(True)
                       )
-
+#%%
 # =============================================================================
 # Classification of non-meteorological echoes
 # =============================================================================
-# fdircm = '/home/enchiladaszen/Documents/mygithub/enchilaDaSzen/towerpy/towerpy/eclass/ukmo_cmaps/chenies/chenies_cluttermap_el0.dat'
+fdircm = '/home/enchiladaszen/Documents/mygithub/enchilaDaSzen/towerpy/towerpy/eclass/ukmo_cmaps/chenies/chenies_cluttermap_el0.dat'
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
-rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=159,
+rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
                 min_snr=rsnr.min_snr,
-                # clmap=np.loadtxt(fdircm),
+                clmap=np.loadtxt(fdircm),
                 data2correct=rdata.vars,
-                # plot_method=True
+                plot_method=True
                 )
-
+#%%
 # =============================================================================
 # Melting layer allocation using polarimetric profiles
 # =============================================================================
@@ -63,38 +65,59 @@ rczdr.offset_correction(rnme.vars['ZDR [dB]'],
 # =============================================================================
 rattc = tp.attc.attc_zhzdr.AttenuationCorrection(rdata)
 rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
-                    rnme.nme_classif['classif'],
-                    mlyr_b=rmlyr.ml_bottom,
-                    attc_method='ABRI',
-                    pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']),
-                    pdp_pxavr_azm=1, pdp_dmin=10)
+                    rnme.nme_classif['classif'], mlyr_b=rmlyr.ml_bottom,
+                    attc_method='ABRI', pdp_pxavr_azm=1, pdp_dmin=10,
+                    pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars,
                      rattc.vars,
                      rnme.nme_classif['classif'],
-                     # mlyr_b=rmlyr.ml_bottom,
                      mlyr_b=rmlyr.ml_bottom,
                      rhv_thld=0.98, minbins=10, mov_avrgf_len=5, p2avrf=3,
                      beta_alpha_ratio=.2
                      )
 
-# tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
-#                                           rczdr.vars,
-#                                           rattc.vars,
-#                                           )
+tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
+                                          rczdr.vars,
+                                          rattc.vars)
 #%%
 # =============================================================================
 # KDP Derivation
 # =============================================================================
 rkdpv = {}
+# rkdpphi = {}
+# KDP from PhiDP
+# rkdpphi['KDP [deg/km]'] = wrl.dp.kdp_from_phidp(rattcx.vars['PhiDP [deg]'],
+#                                             winlen=3,
+#                                             dr=rdatax.params['gateres [m]']/1000,
+#                                             )
 
 # KDP Vulpiani
-rkdpv['PhiDP [deg]'], rkdpv['KDP [deg/km]'] = wrl.dp.process_raw_phidp_vulpiani(rattc.vars['PhiDP [deg]'],
-                                                                                dr=rdata.params['gateres [m]']/1000,
-                                                                                winlen=9)
-
+kdp_vulp = kdpvpi(rattc.vars['PhiDP [deg]'], winlen=11,
+                  dr=rdata.params['gateres [m]']/1000)
+rkdpv['PhiDP [deg]'] = kdp_vulp[0]
+rkdpv['KDP [deg/km]'] = kdp_vulp[1]
 rkdpv['PhiDP [deg]'][np.isnan(rattc.vars['ZH [dBZ]'])] = np.nan
 rkdpv['KDP [deg/km]'][np.isnan(rattc.vars['ZH [dBZ]'])] = np.nan
+
+tp.datavis.rad_display.plot_ppi(rdata.georef,
+                                rdata.params,
+                                rattc.vars,
+                                var2plot='KDP [deg/km]',
+                                # var2plot='PhiDP [deg]',
+                                vars_bounds={'KDP [deg/km]': (-1, 3, 17)},
+                                # 'PhiDP* [deg]': [0, 90, 11]}
+                                )
+
+tp.datavis.rad_display.plot_ppi(rdata.georef,
+                                rdata.params,
+                                rkdpv,
+                                var2plot='KDP [deg/km]',
+                                # var2plot='PhiDP [deg]',
+                                vars_bounds={'KDP [deg/km]': (-1, 3, 17)}
+                                )
+
+#%%
 
 # =============================================================================
 # Rainfall estimation
@@ -211,7 +234,7 @@ tp.datavis.rad_interactive.ppi_base(rdata.georef,
                                     # var2plot='alpha',
                                     # var2plot='PhiDP* [deg]',
                                     # var2plot='beta [-]',
-                                    # var2plot='rhoHV [-]',
+                                    var2plot='rhoHV [-]',
                                     # ucmap=cm[0],
                                     # ylims={'ZH [dBZ]': (0, 50)},
                                     # vars_bounds={'rhoHV [-]': (0.3, .9,1)}
