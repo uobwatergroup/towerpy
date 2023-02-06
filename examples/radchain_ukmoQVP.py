@@ -15,15 +15,11 @@ import cartopy.crs as ccrs
 # Reads polar radar data
 # =============================================================================
 rsite = 'chenies'
-rsite = 'deanhill'
-# rsite = 'jersey'
-# rsite = 'druima-starraig'
-# fdir = '/home/dsanchez/radar_trials/metoffice/chenies/'
-# fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/spel8/'
-fdir = f'/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/spel4/'
-rdata = tp.io.ukmo.Rad_scan(fdir+f'metoffice-c-band-rain-radar_{rsite}_'
-                            '202010031830_raw-dual-polar-augzdr-sp-el4.dat',
-                            rsite)
+fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/spel4/'
+# fdir = f'/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
+fname = f'metoffice-c-band-rain-radar_{rsite}_202010032100_raw-dual-polar-augzdr-sp-el4.dat'
+
+rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 # rdata.vars['PhiDP [deg]'] *= -1
 
@@ -93,80 +89,6 @@ rcalzdr.offsetdetection_qvps(pol_profs=rprofs, mlyr=rmlyr, min_h=1.1,
 #                             rad_params=rdata.params, rad_vars=rsnr.vars)
 
 # [i.phidp_offset for i in rphioffx]
-
-
-#%%
-# import matplotlib.pyplot as plt
-# import matplotlib.colors as colors
-
-# def plot_PHiDP_offsetcorrection(rad_georef, rad_params, pdp, pdp_mean,
-#                                 cmap='tpylsc_dbu_w_rd'):
-#     fig, ax = plt.subplots(figsize=(8, 8),
-#                            subplot_kw={'projection': 'polar', })
-#     ax.set_theta_direction(-1)
-#     dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
-#     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
-#     ptitle = dtdes1 + dtdes2
-#     ax.set_title(ptitle, fontsize=16)
-#     ax.grid(color='gray', linestyle=':')
-#     ax.set_theta_zero_location('N', offset=0)
-#     # =========================================================================
-#     # Plot the PhiDP values at each azimuth
-#     # =========================================================================
-#     ax.scatter((np.ones_like(pdp.T) * [rad_georef['azim [rad]']]).T,
-#                pdp, s=5, c=pdp, cmap=cmap,
-#                norm=colors.SymLogNorm(linthresh=.01, linscale=.01, base=2,
-#                                       vmin=pdp_mean.mean()-3,
-#                                       vmax=pdp_mean.mean()+3,
-#                                       # vmin=(round(pdp_mean.mean()/10)*10)-20,
-#                                       # vmax=(round(pdp_mean.mean()/10)*10)+20,
-#                                       ),
-#                label=r'$\Phi_{DP}}$')
-#     # =========================================================================
-#     # Plot the PhiDP mean value of each azimuth
-#     # =========================================================================
-#     ax.plot(rad_georef['azim [rad]'], pdp_mean, c='tab:green', linewidth=2,
-#             ls='', marker='s', markeredgecolor='g', alpha=0.4,
-#             label=r'$\overline{\Phi_{DP}}$')
-#     # =========================================================================
-#     # Plot the PhiDP offset
-#     # =========================================================================
-#     ax.plot(rad_georef['azim [rad]'], np.full(rad_georef['azim [rad]'].shape,
-#                                               pdp_mean.mean()),
-#             c='k', linewidth=2.5, label=r'$\Phi_{DP}}$ offset')
-#     # ax.set_rorigin(65)
-#     # ax.set_rscale('symlog',
-#     #               linthresh=(-80, -60),
-#     #                 linscale=.01
-#     #               )
-
-#     of1 = 10
-#     ax.set_ylim([pdp_mean.mean()-of1, pdp_mean.mean()+of1])
-#     ax.set_thetagrids(np.arange(0, 360, 90))
-#     ax.xaxis.grid(ls='-')
-#     ax.tick_params(axis='both', labelsize=14)
-#     ax.set_rlabel_position(-45)
-#     # ax.set_yticks(np.arange(round(pdp_mean.mean()/10)*10-of1,
-#     #                         round(pdp_mean.mean()/10)*10+of1+1,
-#     #                         10))
-#     angle = np.deg2rad(67.5)
-#     ax.legend(fontsize=15, loc="lower left",
-#               bbox_to_anchor=(.58 + np.cos(angle)/2, .4 + np.sin(angle)/2))
-#     ax.axes.set_aspect('equal')
-#     plt.tight_layout()
-
-# # cmap = ''
-# # cmap = 'tpylc_grad_tec_r'
-
-# # rad_georef, rad_params, rad_vars = rdata.georef, rdata.params, rdata.vars
-# var ='ZDR [dB]'
-# var ='PhiDP [deg]'
-# pdp = np.array([i[13:20] for i in rdata.vars[var]])
-# pdpm = np.array([np.nanmean(i) for i in pdp])
-
-# plot_PHiDP_offsetcorrection(rdata.georef, rdata.params, pdp, pdpm,
-#                             # cmap=cmap
-#                             )
 
 #%%
 tp.datavis.rad_display.plot_setppi(rdata.georef, rdata.params,

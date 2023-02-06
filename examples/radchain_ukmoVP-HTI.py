@@ -16,21 +16,21 @@ from tqdm import tqdm
 
 
 wdir = '/mnt/disk/users/ds17589/'
-wdir = '/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_dataset90/'
-wdir = '/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/'
+wdir = '/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/'
+# wdir = '/run/media/dsanchez/enchiladasz/safe/bristolphd/data4phd/radar_datasets/'
 
 
 # minsnr -> ldr = 28 lp = 35, sp = 55
 # bclass -> lp = 255 sp = 191, ldr = 113, noCM = 159
 rparams = [
     # {'site_name': 'castor-bay', 'minsnr': 55, 'bclass': 159, 'minh90': 1.1},
-    # {'site_name': 'chenies', 'minsnr': 55, 'bclass': 159, 'minh90': 1.1},
+    {'site_name': 'chenies', 'minsnr': 55, 'bclass': 159, 'minh90': 1.1},
     # {'site_name': 'clee-hill', 'minsnr': 54, 'bclass': 159, 'minh90': 1.45},
     # {'site_name': 'cobbacombe', 'minsnr': 55, 'bclass': 159, 'minh90': 1.25},
     # {'site_name': 'crug-y-gorrllwyn', 'minsnr': 55, 'bclass': 159, 'minh90': 1.25},
     # {'site_name': 'deanhill', 'minsnr': 54, 'bclass': 159, 'minh90': 1.1},
     # {'site_name': 'druima-starraig', 'minsnr': 55, 'bclass': 159, 'minh90': 1.1},
-    {'site_name': 'dudwick', 'minsnr': 56, 'bclass': 159, 'minh90': 1.1},
+    # {'site_name': 'dudwick', 'minsnr': 56, 'bclass': 159, 'minh90': 1.1},
     # {'site_name': 'hameldon-hill', 'minsnr': 55, 'bclass': 159, 'minh90': 1.3},
     # {'site_name': 'high-moorsley', 'minsnr': 55, 'bclass': 159, 'minh90': 1.1},
     # {'site_name': 'holehead', 'minsnr': 55, 'bclass': 159, 'minh90': 1.4},
