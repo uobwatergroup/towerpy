@@ -80,7 +80,7 @@ Matplotlib | v3.5.2
 Cartopy | v0.19+
 netCDF4 | vv1.5.8+
 
-\*Several modules within _towerpy_ run using shared objects (.so, .dll). These libraries are automatically installed during the _towerpy_ installation.
+\*Some modules within _towerpy_ run using shared objects/dynamic link libraries (.so, .dll). These libraries are automatically installed during the _towerpy_ installation.
 
 
 # :thought_balloon: Missing a specific feature? Found a bug?
@@ -88,7 +88,7 @@ Feel free to post a message to our [discussions page](https://github.com/uobwate
 
 # :construction_worker: Team
 Towerpy is created and maintained by 
-[Daniel Sanchez-Rivas](https://research-information.bris.ac.uk/en/persons/daniel-sanchez-rivas)<a itemprop="sameAs" content="https://orcid.org/0000-0001-9356-6641" href="https://orcid.org/0000-0001-9356-6641" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div> and [Miguel A Rico-Ramirez](https://research-information.bris.ac.uk/en/persons/miguel-a-rico-ramirez)<a itemprop="sameAs" content="https://orcid.org/0000-0002-8885-4582" href="https://orcid.org/0000-0002-8885-4582" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div>
+[Daniel Sanchez-Rivas](https://scholar.google.com/citations?user=NQSB5-8AAAAJ&hl=en)<a itemprop="sameAs" content="https://orcid.org/0000-0001-9356-6641" href="https://orcid.org/0000-0001-9356-6641" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div> and [Miguel A Rico-Ramirez](https://research-information.bris.ac.uk/en/persons/miguel-a-rico-ramirez)<a itemprop="sameAs" content="https://orcid.org/0000-0002-8885-4582" href="https://orcid.org/0000-0002-8885-4582" target="orcid.widget" rel="me noopener noreferrer" style="vertical-align:top;"><img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" style="width:1em;margin-right:.5em;" alt="ORCID iD icon"></a></div>
 
 <p align="center">
   <img alt="GitHub User's stars" src="https://img.shields.io/github/stars/uobwatergroup?style=social"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/uobwatergroup/towerpy">
