@@ -15,7 +15,7 @@ import cartopy.crs as ccrs
 # Read polar radar data
 # =============================================================================
 rsite = 'chenies'
-fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/lpel0/'
+fdir = f'../datasets/{rsite}/y2020/lpel0/'
 fname = f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-augzdr-lp-el0.dat'
 
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
@@ -36,11 +36,11 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=35,
 # =============================================================================
 # Classification of non-meteorological echoes
 # =============================================================================
-fdircm = '/home/enchiladaszen/Documents/mygithub/enchilaDaSzen/towerpy/towerpy/eclass/ukmo_cmaps/chenies/chenies_cluttermap_el0.dat'
+clmap = f'../towerpy/eclass/ukmo_cmaps/{rsite}/chenies_cluttermap_el0.dat'
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
 rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
-                min_snr=rsnr.min_snr, clmap=np.loadtxt(fdircm),
+                min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
                 data2correct=rdata.vars, plot_method=True)
 # %%
 # =============================================================================

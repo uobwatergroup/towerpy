@@ -13,7 +13,7 @@ import towerpy as tp
 # Read polar radar data
 # =============================================================================
 rsite = 'chenies'
-fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/spel8/'
+fdir = f'../datasets/{rsite}/y2020/spel8/'
 fname = f'metoffice-c-band-rain-radar_{rsite}_202010030736_raw-dual-polar-augzdr-sp-el8.dat'
 
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)

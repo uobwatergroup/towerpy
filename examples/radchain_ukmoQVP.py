@@ -14,7 +14,7 @@ import cartopy.crs as ccrs
 # Read polar radar data
 # =============================================================================
 rsite = 'chenies'
-fdir = f'/media/enchiladaszen/enchiladasz/safe/bristolphd/data4phd/radar_datasets/{rsite}/y2020/spel4/'
+fdir = f'../datasets/{rsite}/y2020/spel4/'
 fname = f'metoffice-c-band-rain-radar_{rsite}_202010030730_raw-dual-polar-augzdr-sp-el4.dat'
 
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)

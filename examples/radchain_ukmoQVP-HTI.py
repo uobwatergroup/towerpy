@@ -9,7 +9,8 @@ Created on Mon Feb  6 18:10:43 2023
 import pickle
 import towerpy as tp
 
-fdir = '/home/enchiladaszen/Documents/mygithub/enchilaDaSzen/towerpy/datasets/'
+rsite = 'chenies'
+fdir = f'../datasets/{rsite}/y2020/spel4/'
 
 with open(fdir+'qvps.tpy', 'rb') as f:
     rprofs = pickle.load(f)
