@@ -199,8 +199,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                     'tiles': False,
                     'tiles_source': None,
                     'tiles_style': None,
+                    'tiles_res': 8, 'alpha_tiles': 0.5, 'alpha_rad': 1
                     }
-    if cpy_feats is not None:
+    if cpy_feats:
         cpy_features.update(cpy_feats)
     if cpy_features['status']:
         states_provinces = cfeature.NaturalEarthFeature(
@@ -274,7 +275,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     elif proj == 'rect' and cpy_features['status']:
         ptitle = dtdes1 + dtdes2
         proj = ccrs.PlateCarree()
-        if data_proj is not None:
+        if data_proj:
             proj2 = data_proj
         else:
             raise TowerpyError('User must specify the projected coordinate'
@@ -285,10 +286,38 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                             wspace=0, hspace=1
                             )
         ax1 = fig.add_subplot(projection=proj)
-        if xlims is not None and ylims is not None:
+        if xlims and ylims:
             extx = xlims
             exty = ylims
             ax1.set_extent(extx+exty, crs=proj)
+        if cpy_features['tiles']:
+            if cpy_features['tiles_source'] is None or cpy_features['tiles_source'] == 'OSM':
+                imtiles = cimgt.OSM()
+                ax1.add_image(imtiles, cpy_features['tiles_res'],
+                              interpolation='spline36',
+                              alpha=cpy_features['alpha_tiles'])
+            elif cpy_features['tiles_source'] == 'GoogleTiles':
+                if cpy_features['tiles_style'] is None:
+                    imtiles = cimgt.GoogleTiles(style='street')
+                    ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                  interpolation='spline36',
+                                  alpha=cpy_features['alpha_tiles'])
+                else:
+                    imtiles = cimgt.GoogleTiles(style=cpy_features['tiles_style'])
+                    ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                  # interpolation='spline36',
+                                  alpha=cpy_features['alpha_tiles'])
+            elif cpy_features['tiles_source'] == 'Stamen':
+                if cpy_features['tiles_style'] is None:
+                    imtiles = cimgt.Stamen(style='toner')
+                    ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                  interpolation='spline36',
+                                  alpha=cpy_features['alpha_tiles'])
+                else:
+                    imtiles = cimgt.Stamen(style=cpy_features['tiles_style'])
+                    ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                  interpolation='spline36',
+                                  alpha=cpy_features['alpha_tiles'])
         if cpy_features['add_land']:
             ax1.add_feature(cfeature.LAND)
         if cpy_features['add_ocean']:
@@ -307,15 +336,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             ax1.add_feature(states_provinces, edgecolor='black', ls=":")
         if cpy_features['add_provinces']:
             ax1.add_feature(countries, edgecolor='black', )
-        if cpy_features['tiles']:
-            if cpy_features['tiles_source'] is None and cpy_features['tiles_style'] is None:
-                imtiles = cimgt.OSM()
-                ax1.add_image(imtiles, 8, interpolation='spline36', alpha=0.5)
-            # elif cpy_features['tiles_source'] and cpy_features['tiles_style' is None:
-            #     # imtiles = cimgt.GoogleTiles(style='street')
-            #     imtiles = cimgt.Stamen(style='watercolor')
-            #     'tiles_source': None,
-            #     'tiles_style': None,
+
         data_source = 'Natural Earth'
         data_license = 'public domain'
         # Add a text annotation for the license information to the
@@ -325,6 +346,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         #                     loc=4, prop={'size': 12}, frameon=True)
         # ax1.add_artist(text)
         print('\N{COPYRIGHT SIGN}' + f'{data_source}; license: {data_license}')
+        if cpy_features['tiles_source'] == 'Stamen':
+            print('\N{COPYRIGHT SIGN}' + 'Map tiles by Stamen Design, '
+                  + 'under CC BY 3.0. Data by OpenStreetMap, under ODbL.')
         gl = ax1.gridlines(draw_labels=True, dms=False,
                            x_inline=False, y_inline=False)
         gl.xlabel_style = {'size': 11}
@@ -338,9 +362,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         #                                   )
         mappable = ax1.pcolormesh(rad_georef['xgrid_proj'],
                                   rad_georef['ygrid_proj'],
-                                  rad_vars[var2plot],
+                                  rad_vars[var2plot], transform=proj2,
                                   shading='auto', cmap=cmaph, norm=normp,
-                                  transform=proj2)
+                                  alpha=cpy_features['alpha_rad'])
         # ax1.xaxis.set_major_formatter(lon_formatter)
         # ax1.yaxis.set_major_formatter(lat_formatter)
         plotunits = [i[i.find('['):]
