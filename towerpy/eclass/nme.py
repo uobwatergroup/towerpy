@@ -102,7 +102,7 @@ class NME_ID:
         classification by setting up the parameter 'binary_class'.
 
         2. This function uses the shared object 'lnxlibclutterclassifier'
-        or the dynamic link library 'wdslibclutterclassifier' depending on the
+        or the dynamic link library 'w64libclutterclassifier' depending on the
         operating system (OS).
 
         3. Based on the method described in [1]_
@@ -133,7 +133,7 @@ class NME_ID:
                                       Path(__file__).parent.absolute())
         elif platform.system() == 'Windows':
             libcc = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}'
-                                         + '/wdwlibclutterclassifier.dll')
+                                         + '/w64libclutterclassifier.dll')
         else:
             libcc = None
             raise TowerpyError(f'The {platform.system} OS is not currently'

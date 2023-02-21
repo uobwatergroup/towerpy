@@ -128,16 +128,13 @@ class Rad_scan:
                    'theta': th,
                    'xgrid': xgrid,
                    'ygrid': ygrid}
-        geogrid['beam_height [km]'] = np.array([geo.height_beamc(ray, rng/1000,
-                                                                 rad_height=rparams['altitude [m]']/1000)
+        geogrid['beam_height [km]'] = np.array([geo.height_beamc(ray, rng/1000)
                                                 for ray in np.rad2deg(elevrad)])
         geogrid['beambottom_height [km]'] = np.array([geo.height_beamc(ray-rparams['beamwidth [deg]']/2,
-                                                                       rng/1000,
-                                                                       rad_height=rparams['altitude [m]']/1000)
+                                                                       rng/1000)
                                                       for ray in np.rad2deg(elevrad)])
         geogrid['beamtop_height [km]'] = np.array([geo.height_beamc(ray+rparams['beamwidth [deg]']/2,
-                                                                    rng/1000,
-                                                                    rad_height=rparams['altitude [m]']/1000)
+                                                                    rng/1000)
                                                    for ray in np.rad2deg(elevrad)])
 
         self.georef = geogrid

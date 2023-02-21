@@ -42,10 +42,10 @@ class AttenuationCorrection:
         self.site_name = radobj.site_name
 
     def zh_correction(self, rad_georef, rad_params, attvars, cclass,
-                      mlyr_b=5, attc_method='ABRI', pdp_pxavr_rng=7,
-                      pdp_pxavr_azm=1, pdp_dmin=20, coeff_a=[1e-5, 9e-5],
-                      coeff_b=[0.65, 0.85], coeff_alpha=[0.020, 0.1],
-                      niter=500):
+                      mlvl=5, mlyr_thickness=0.5, attc_method='ABRI',
+                      pdp_pxavr_rng=7, pdp_pxavr_azm=1, pdp_dmin=20,
+                      coeff_a=[1e-5, 9e-5], coeff_b=[0.65, 0.85],
+                      coeff_alpha=[0.020, 0.1], niter=500):
         r"""
         Calculate the attenuation of :math:`Z_{H}`.
 
@@ -60,10 +60,12 @@ class AttenuationCorrection:
             Polarimetric variables used for the attenuation correction.
         cclass : array
             Clutter, noise and meteorological classification.
-        mlyr_b : float
-            Melting layer bottom [km]. Rain region below the melting layer.
-            Only gates below this height are included in the correction.
-            The default is 5.
+        mlvl : float
+            Melting level height, in km. The default is 5.
+        mlyr_thickness : float
+            Thicknes of the melting layer, in km. Only gates below this height,
+            (i.e. the rain region below the melting layer) are included in the
+            correction. The default is 0.5.
         attc_method : str
             Attenuation correction algorithm to be used. The default is 'ABRI':
 
@@ -131,7 +133,7 @@ class AttenuationCorrection:
         height.
 
         2. This function uses the shared object 'lnxlibattenuationcorrection'
-        or the dynamic link library 'wdwlibattenuationcorrection' depending on
+        or the dynamic link library 'w64libattenuationcorrection' depending on
         the operating system (OS).
 
         3. Based on the method described in [1]_
@@ -152,7 +154,7 @@ class AttenuationCorrection:
                                       Path(__file__).parent.absolute())
         elif platform.system() == 'Windows':
             libac = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}'
-                                         '/wdwlibattenuationcorrection.dll')
+                                         '/w64libattenuationcorrection.dll')
         else:
             libac = None
             raise TowerpyError(f'The {platform.system} OS is not currently'
@@ -164,10 +166,10 @@ class AttenuationCorrection:
                                                 array1d, array1d, array2d,
                                                 array2d, array2d, array2d,
                                                 array2d]
-        if mlyr_b is None or np.isnan(mlyr_b):
-            mlyr_b = 5
-        ralt = rad_params['altitude [m]']/1000
-        mlgrid = np.zeros_like(attvars['ZH [dBZ]']) + (mlyr_b+.7+ralt) * 1000
+        if mlvl is None or np.isnan(mlvl):
+            mlvl = 5
+        # ralt = rad_params['altitude [m]']/1000
+        mlgrid = np.zeros_like(attvars['ZH [dBZ]']) + (mlvl) * 1000
         param_atc = np.zeros(15)
         nrays = len(rad_georef['azim [rad]'])
         ngates = len(rad_georef['range [m]'])
@@ -202,7 +204,7 @@ class AttenuationCorrection:
         param_atc[11] = coeff_alpha[0]  # minalpha
         param_atc[12] = coeff_alpha[1]  # maxalpha
         param_atc[13] = niter  # number of iterations
-        param_atc[14] = 0  # BB thickness in meters
+        param_atc[14] = mlyr_thickness*1000  # BB thickness in meters
         zhh_Ac = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         Ah = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         phidp_m = np.full(attvars['ZH [dBZ]'].shape, np.nan)
@@ -226,7 +228,7 @@ class AttenuationCorrection:
                                                 attcorr['alpha [-]'])
 
         idxlimfl = [find_nearest(rad_georef['beam_height [km]'][i, :],
-                                 mlyr_b)+1
+                                 mlvl-mlyr_thickness)
                     for i in range(nrays)]
 
         for i in range(nrays):
@@ -245,9 +247,9 @@ class AttenuationCorrection:
               f'{toc-tic:.3f} sec.')
 
     def zdr_correction(self, rad_georef, rad_params, attvars, attcorr_vars,
-                       cclass, mlyr_b=5, rhv_thld=0.98, minbins=10,
-                       mov_avrgf_len=5, p2avrf=3, beta_alpha_ratio=0.1,
-                       method='linear',
+                       cclass, mlvl=5, mlyr_thickness=0.5, rhv_thld=0.98,
+                       minbins=10, mov_avrgf_len=5, p2avrf=3,
+                       beta_alpha_ratio=0.1, method='linear',
                        params={'ZH-ZDR relation': 'linear',
                                'ZH_lower_lim': 20, 'ZH_upper_lim': 45,
                                'model': 'a1*ZH-b1', 'zdr_max': 1.4,
@@ -269,10 +271,12 @@ class AttenuationCorrection:
             variables used for calculations.
         cclass : array
             Clutter and meteorological classification.
-        mlyr_b : float
-            Melting layer bottom [km]. Rain region below the melting layer.
-            Only gates below this height are included in the correction.
-            The default is 5.
+        mlvl : float
+            Melting level height, in km. The default is 5.
+        mlyr_thickness : float
+            Thicknes of the melting layer, in km. Only gates below this height,
+            (i.e. the rain region below the melting layer) are included in the
+            correction.
         rhv_thld : float
             Minimum value of :math:`\rho_{HV}` expected on the rain medium.
             The default is 0.98.
@@ -352,12 +356,12 @@ class AttenuationCorrection:
             params['model'] = 'a1*ZH^b1'
             params['a1'] = 0.00012
             params['b1'] = 2.5515
-        if mlyr_b is None or np.isnan(mlyr_b):
-            mlyr_b = 5
+        if mlvl is None or np.isnan(mlvl):
+            mlvl = 5
         nrays = len(rad_georef['azim [rad]'])
 
         idxlimfl = [find_nearest(rad_georef['beam_height [km]'][i, :],
-                    mlyr_b) for i in range(nrays)]
+                    mlvl-mlyr_thickness) for i in range(nrays)]
         m = np.zeros_like(attcorr_vars['ZH [dBZ]'])
         for n, rows in enumerate(m):
             rows[idxlimfl[n]:] = np.nan
