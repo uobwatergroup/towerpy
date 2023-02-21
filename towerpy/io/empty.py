@@ -127,15 +127,18 @@ class Rad_scan:
         self.params['gateres [m]'] = gateres
         alt = self.params['altitude [m]']
         bh = np.array([geo.height_beamc(ray, rng/1000,
-                                        rad_height=alt/1000)
+                                        # rad_height=alt/1000
+                                        )
                        for ray in np.rad2deg(elev)])
         bhb = np.array([geo.height_beamc(ray-self.params['beamwidth [deg]']/2,
                                          rng/1000,
-                                         rad_height=alt/1000)
+                                         # rad_height=alt/1000
+                                         )
                         for ray in np.rad2deg(elev)])
         bht = np.array([geo.height_beamc(ray+self.params['beamwidth [deg]']/2,
                                          rng/1000,
-                                         rad_height=alt/1000,)
+                                         # rad_height=alt/1000
+                                         )
                         for ray in np.rad2deg(elev)])
 
         geogrid['beam_height [km]'] = bh

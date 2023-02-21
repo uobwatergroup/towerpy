@@ -57,7 +57,7 @@ class Rad_scan:
         Notes
         -----
         1. This function uses the shared object 'lnxlibreadpolarradardata'
-        or the dynamic link library 'wdslibreadpolarradardata' depending on the
+        or the dynamic link library 'w64libreadpolarradardata' depending on the
         operating system (OS).
 
         Examples
@@ -74,7 +74,7 @@ class Rad_scan:
                                       Path(__file__).parent.absolute())
         elif platform.system() == 'Windows':
             librp = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}'
-                                         + '/wdslibreadpolarradardata.dll')
+                                         + '/w64libreadpolarradardata.dll')
         else:
             librp = None
             raise TowerpyError(f'Oops!... The {platform.system} OS '
@@ -229,15 +229,18 @@ class Rad_scan:
                    'xgrid': xgrid, 'ygrid': ygrid}
         parameters['range_start [m]'] = emptyarr[4][0]
         bh = np.array([geo.height_beamc(ray, emptyarr[4]/1000,
-                                        rad_height=outpar[13]/1000)
+                                        # rad_height=outpar[13]/1000
+                                        )
                        for ray in np.rad2deg(emptyarr[3])])
         bhb = np.array([geo.height_beamc(ray-parameters['beamwidth [deg]']/2,
                                          emptyarr[4]/1000,
-                                         rad_height=outpar[13]/1000)
+                                         # rad_height=outpar[13]/1000
+                                         )
                         for ray in np.rad2deg(emptyarr[3])])
         bht = np.array([geo.height_beamc(ray+parameters['beamwidth [deg]']/2,
                                          emptyarr[4]/1000,
-                                         rad_height=outpar[13]/1000)
+                                         # rad_height=outpar[13]/1000
+                                         )
                         for ray in np.rad2deg(emptyarr[3])])
         geogrid['beam_height [km]'] = bh
         geogrid['beambottom_height [km]'] = bhb

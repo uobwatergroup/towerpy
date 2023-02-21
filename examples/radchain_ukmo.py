@@ -47,7 +47,8 @@ rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
 # Melting layer allocation
 # =============================================================================
 rmlyr = tp.ml.mlyr.MeltingLayer(rdata)
-rmlyr.ml_bottom = 2
+rmlyr.ml_top = 2
+rmlyr.ml_thickness = 0.5
 
 # %%
 # =============================================================================
@@ -62,14 +63,15 @@ rczdr.offset_correction(rnme.vars['ZDR [dB]'],
 # =============================================================================
 rattc = tp.attc.attc_zhzdr.AttenuationCorrection(rdata)
 rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
-                    rnme.nme_classif['classif'], mlyr_b=rmlyr.ml_bottom,
-                    attc_method='ABRI', pdp_pxavr_azm=1, pdp_dmin=10,
+                    rnme.nme_classif['classif'], attc_method='ABRI',
+                    mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
+                    pdp_pxavr_azm=1, pdp_dmin=10,
                     pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars, rattc.vars,
-                     rnme.nme_classif['classif'], mlyr_b=rmlyr.ml_bottom,
-                     rhv_thld=0.98, minbins=10, mov_avrgf_len=5, p2avrf=3,
-                     beta_alpha_ratio=.2)
+                     rnme.nme_classif['classif'], rhv_thld=0.98, minbins=10,
+                     mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
+                     mov_avrgf_len=5, p2avrf=3, beta_alpha_ratio=.2)
 
 tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
                                           rczdr.vars,
