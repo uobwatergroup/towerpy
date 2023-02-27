@@ -53,13 +53,13 @@ def pol2cart(rho, theta):
     return x, y
 
 
-def height_beamc(rad_elev, rad_range, e_rad=6378, std_refr=4/3):
+def height_beamc(elev_angle, rad_range, e_rad=6378., std_refr=4/3):
     r"""
     Calculate the height of the centre of the radar beam above Earth's surface.
 
     Parameters
     ----------
-    rad_elev : float
+    elev_angle : float
         Radar elevation angle in deg.
     rad_range : array
         Range from the radar in km.
@@ -99,18 +99,18 @@ def height_beamc(rad_elev, rad_range, e_rad=6378, std_refr=4/3):
     """
     h = (np.sqrt((rad_range**2)+((std_refr*e_rad)**2) +
                  (2*rad_range*(std_refr*e_rad) *
-                  np.sin(np.deg2rad(rad_elev)))) -
+                  np.sin(np.deg2rad(elev_angle)))) -
          (std_refr*e_rad))
     return h
 
 
-def cartesian_distance(rad_elev, rad_range, hbeam, e_rad=6378, std_refr=4/3):
+def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378., std_refr=4/3):
     r"""
     Compute the distance (arc length) from the radar to the bins.
 
     Parameters
     ----------
-    rad_elev : float
+    elev_angle : float
         Radar elevation angle in deg.
     rad_range : array
         Range from the radar in km.
@@ -143,6 +143,6 @@ def cartesian_distance(rad_elev, rad_range, hbeam, e_rad=6378, std_refr=4/3):
         https://doi.org/10.1016/B978-0-12-221422-6.50007-3
     """
     s = (std_refr*e_rad) * np.arcsin(rad_range
-                                     * np.cos(np.deg2rad(rad_elev))
+                                     * np.cos(np.deg2rad(elev_angle))
                                      / (std_refr*e_rad+hbeam))
     return s

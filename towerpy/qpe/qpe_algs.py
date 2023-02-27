@@ -26,7 +26,8 @@ class RadarQPE:
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
 
-    def z_to_r(self, zh, a=200, b=1.6, bh_km=None, mlyr_b=None):
+    def z_to_r(self, zh, a=200, b=1.6, beam_height=None, mlvl=5,
+               mlyr_thickness=0.5):
         r"""
         Calculate the rain rate (R) from Zh (mm^6/m^3).
 
@@ -36,7 +37,7 @@ class RadarQPE:
              Floats that corresponds to reflectivity, in dBZ.
         a, b : float
             Parameters of the :math:`R(Z_H)` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -60,8 +61,8 @@ class RadarQPE:
 
         """
         zh = np.array(zh)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
             zh[:, mlidx:] = 0
             zh[nanidx] = np.nan
@@ -69,7 +70,7 @@ class RadarQPE:
         self.r_z = r
 
     def z_zdr_to_r1(self, zh, zdr, a=0.01583, b=0.8349, c=-0.3732,
-                    bh_km=None, mlyr_b=None):
+                    beam_height=None, mlvl=5, mlyr_thickness=0.5):
         """
         Calculate the rain rate (R) from Zh (mm^6/m^3) and ZDR (dB).
 
@@ -81,7 +82,7 @@ class RadarQPE:
             Floats that corresponds to differential reflectivit, in dB.
         a, b, c : floats
             Parameters of the :math:`R(Z_H, Z_{DR})` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -110,8 +111,8 @@ class RadarQPE:
         """
         zh = 10**(np.array(zh)/10)
         zdr = np.array(zdr)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
             zh[:, mlidx:] = 0
             zh[nanidx] = np.nan
@@ -120,8 +121,8 @@ class RadarQPE:
         r = {'Rainfall [mm/hr]': a*zh**b*10**(c*zdr)}
         self.r_z_zdr = r
 
-    def z_zdr_to_r2(self, zh, zdr, a=0.00403, b=0.8787, c=-0.8077, bh_km=None,
-                    mlyr_b=None):
+    def z_zdr_to_r2(self, zh, zdr, a=0.00403, b=0.8787, c=-0.8077,
+                    beam_height=None, mlvl=5, mlyr_thickness=0.5):
         """
         Calculate the rain rate (R) from Zh (mm^6/m^3) and Zdr (linear scale).
 
@@ -133,7 +134,7 @@ class RadarQPE:
             Floats that corresponds to differential reflectivity, in dB.
         a, b, c : floats
             Parameters of the :math:`R(Z_H, Z_{dr})` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -163,15 +164,16 @@ class RadarQPE:
         """
         zh = 10**(np.array(zh)/10)
         zdr = np.array(10**(0.1*zdr))
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
             zh[:, mlidx:] = 0
             zh[nanidx] = np.nan
         r = {'Rainfall [mm/hr]': a*zh**b*zdr**c}
         self.r_z_zdrl = r
 
-    def kdp_to_r(self, kdp, a=24.68, b=0.81, bh_km=None, mlyr_b=None):
+    def kdp_to_r(self, kdp, a=24.68, b=0.81, beam_height=None, mlvl=5,
+                 mlyr_thickness=0.5):
         """
         Calculate the rain rate (R) from KDP (deg km^-1).
 
@@ -182,7 +184,7 @@ class RadarQPE:
             in (deg km^-1).
         a, b : floats
             Parameters of the :math:`R(K_{DP})` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -210,16 +212,16 @@ class RadarQPE:
             https://doi.org/10.1175/JHM-D-10-05013.1
         """
         kdp = np.array(kdp)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
             kdp[:, mlidx:] = 0
             kdp[nanidx] = np.nan
         r = {'Rainfall [mm/hr]': a*abs(kdp)**b*np.sign(kdp)}
         self.r_kdp = r
 
-    def kdp_zdr_to_r(self, kdp, zdr, a=37.9, b=-0.72, c=0.89, bh_km=None,
-                     mlyr_b=None):
+    def kdp_zdr_to_r(self, kdp, zdr, a=37.9, b=-0.72, c=0.89, beam_height=None,
+                     mlvl=5, mlyr_thickness=0.5):
         """
         Calculate the rain rate (R) from KDP (deg km^-1) and ZDR (dB).
 
@@ -232,7 +234,7 @@ class RadarQPE:
             Floats that corresponds to differential reflectivity, in dB.
         a, b, c : floats
             Parameters of the :math:`R(K_{DP})` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -260,15 +262,16 @@ class RadarQPE:
         """
         kdp = np.array(kdp)
         zdr = np.array(zdr)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
             kdp[:, mlidx:] = 0
             kdp[nanidx] = np.nan
         r = {'Rainfall [mm/hr]': a*kdp**b*10**(-0.1*c*zdr)}
         self.r_kdp_zdr = r
 
-    def ah_to_r(self, ah, a=294, b=0.89, bh_km=None, mlyr_b=None):
+    def ah_to_r(self, ah, a=294, b=0.89, beam_height=None, mlvl=5,
+                mlyr_thickness=0.5):
         """
         Calculate the rain rate (R) from AH (in dB km^-1).
 
@@ -278,7 +281,7 @@ class RadarQPE:
             Floats that corresponds to specific attenuation, in dB/km.
         a, b : floats
             Parameters of the :math:`R(A_{H})` relationship
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -307,8 +310,8 @@ class RadarQPE:
 
         """
         ah = np.array(ah)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(ah))
             ah[:, mlidx:] = 0
             ah[nanidx] = np.nan
@@ -316,7 +319,7 @@ class RadarQPE:
         self.r_ah = r
 
     def z_kdp_to_r(self, zh, kdp, a1=200, b1=1.6, a2=24.68, b2=0.81,
-                   z_thld=40, bh_km=None, mlyr_b=None):
+                   z_thld=40, beam_height=None, mlvl=5, mlyr_thickness=0.5):
         r"""
         Calculate the rain rate (R) using an hybrid estimator Z-AH.
 
@@ -334,7 +337,7 @@ class RadarQPE:
         z_thld : float, optional
             :math:`Z_H` threshold used for the transition to :math:`K_{DP}`.
             The default is 40.
-        bh_km : array, optional
+        beam_height : array, optional
             Height of the centre of the radar beam, in km.
         mlyr_b : float, optional
             Bottom of the melting layer, i.e., the upper boundary delimiting
@@ -365,8 +368,8 @@ class RadarQPE:
         """
         zh = np.array(zh)
         kdp = np.array(kdp)
-        if bh_km is not None and mlyr_b is not None:
-            mlidx = find_nearest(bh_km, mlyr_b)
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
             zh[:, mlidx:] = 0
             zh[nanidx] = np.nan

@@ -105,23 +105,27 @@ tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
 # =============================================================================
 rqpe = tp.qpe.qpe_algs.RadarQPE(rdata)
 
-rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlyr_b=rmlyr.ml_bottom,
-            bh_km=rdata.georef['beam_height [km]'])
-rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr_b=rmlyr.ml_bottom,
-            bh_km=rdata.georef['beam_height [km]'])
-rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr_b=rmlyr.ml_bottom,
-             bh_km=rdata.georef['beam_height [km]'])
+rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlvl=rmlyr.ml_top,
+            mlyr_thickness=rmlyr.ml_thickness,
+            beam_height=rdata.georef['beam_height [km]'])
+rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlvl=rmlyr.ml_top,
+            mlyr_thickness=rmlyr.ml_thickness,
+            beam_height=rdata.georef['beam_height [km]'])
+rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlvl=rmlyr.ml_top,
+             mlyr_thickness=rmlyr.ml_thickness,
+             beam_height=rdata.georef['beam_height [km]'])
 rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'],
-                 mlyr_b=rmlyr.ml_bottom,
-                 bh_km=rdata.georef['beam_height [km]'])
+                 mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
+                 beam_height=rdata.georef['beam_height [km]'])
 rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'],
-                 a=0.0121, b=0.822, c=-1.7486, mlyr_b=rmlyr.ml_bottom,
-                 bh_km=rdata.georef['beam_height [km]'])
-# rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], bh_km=rdata.georef['beam_height [km]'],
+                 a=0.0121, b=0.822, c=-1.7486, mlvl=rmlyr.ml_top,
+                 mlyr_thickness=rmlyr.ml_thickness,
+                 beam_height=rdata.georef['beam_height [km]'])
+# rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)
 # rqpe.kdp_zdr_to_r(rkdpv['KDP [deg/km]'], rattc.vars['ZDR [dB]'],
 #                   mlyr_b=rmlyr.ml_bottom,
-#                   bh_km=rdata.georef['beam_height [km]'])
+#                   beam_height=rdata.georef['beam_height [km]'])
 
 # %%
 # =============================================================================
@@ -129,10 +133,7 @@ rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'],
 # =============================================================================
 # Plot cone coverage
 tp.datavis.rad_display.plot_cone_coverage(rdata.georef, rdata.params,
-                                          rsnr.vars,
-                                          var2plot=None,
-                                          # zlims=[0, 8]
-                                          )
+                                          rsnr.vars)
 # Plot the radar data in a map
 rdata.georef['xgrid_proj'] = rdata.georef['xgrid'] + rdata.params['easting [km]']
 rdata.georef['ygrid_proj'] = rdata.georef['ygrid'] + rdata.params['northing [km]']
