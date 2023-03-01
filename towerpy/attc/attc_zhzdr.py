@@ -227,13 +227,11 @@ class AttenuationCorrection:
         attcorr['KDP [deg/km]'] = np.nan_to_num(attcorr['AH [dB/km]'] /
                                                 attcorr['alpha [-]'])
 
-        idxlimfl = [find_nearest(rad_georef['beam_height [km]'][i, :],
-                                 mlvl-mlyr_thickness)
-                    for i in range(nrays)]
-
+        alphacopy = np.zeros_like(attcorr['alpha [-]']) + attcorr['alpha [-]']
         for i in range(nrays):
-            idxrf1 = (~np.isnan(attcorr['alpha [-]'][i, :][:idxlimfl[i]])).cumsum().argmax()
-            attcorr['PIA [dB]'][i, :][idxlimfl[i]:][~np.isnan(attcorr['PIA [dB]'][i, :][idxlimfl[i]:])] = attcorr['PIA [dB]'][i, :][idxrf1]
+            idmx = np.nancumsum(alphacopy[i]).argmax()
+            if idmx != 0:
+                attcorr['PIA [dB]'][i][idmx+1:] = attcorr['PIA [dB]'][i][idmx]
 
         # ======================================================================
         # Filter non met values
