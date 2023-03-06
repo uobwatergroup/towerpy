@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep  1 19:39:20 2021
-
-@author: ds17589
-"""
+"""Radar processing chain of UK Met Office radar data."""
 
 import numpy as np
 import towerpy as tp
