@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Feb  6 18:10:43 2023
-
-@author: dsanchez
-"""
+"""Display an HTI plot from VPs."""
 
 import pickle
 import towerpy as tp

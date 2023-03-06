@@ -1,12 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep  1 19:39:20 2021
+"""Radar processing chain for generating VPs using UK Met Office data."""
 
-@author: ds17589
-"""
-
-import numpy as np
 import towerpy as tp
 
 # =============================================================================
