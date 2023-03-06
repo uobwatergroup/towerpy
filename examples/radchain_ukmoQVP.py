@@ -1,12 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep  1 19:39:20 2021
+"""Radar processing chain for generating QVPs using UK Met Office data."""
 
-@author: ds17589
-"""
-
-import numpy as np
 import towerpy as tp
 import cartopy.crs as ccrs
 
@@ -44,9 +37,8 @@ tp.datavis.rad_display.plot_radprofiles(rdata.params,
 # ML detection
 # =============================================================================
 rmlyr = tp.ml.mlyr.MeltingLayer(rdata)
-rmlyr.ml_detection(rprofs, min_h=1.1, comb_id=14,
-                   plot_method=True
-                   )
+rmlyr.ml_detection(rprofs, min_h=1.1, comb_id=14, plot_method=True)
+
 # %%
 # =============================================================================
 # ZDR offset detection
@@ -60,10 +52,8 @@ rcalzdr.offsetdetection_qvps(pol_profs=rprofs, mlyr=rmlyr, min_h=0.25)
 # =============================================================================
 # Plot cone coverage
 tp.datavis.rad_display.plot_cone_coverage(rdata.georef, rdata.params,
-                                          rsnr.vars,
-                                          var2plot=None,
-                                          # zlims=[0, 8]
-                                          )
+                                          rsnr.vars)
+
 # Plot the radar data in a map
 rdata.georef['xgrid_proj'] = rdata.georef['xgrid'] + rdata.params['easting [km]']
 rdata.georef['ygrid_proj'] = rdata.georef['ygrid'] + rdata.params['northing [km]']
