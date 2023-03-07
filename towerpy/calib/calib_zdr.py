@@ -48,7 +48,10 @@ class ZDR_Calibration:
             Profiles of polarimetric variables.
         mlyr : class
             Melting layer class containing the top and bottom boundaries of
-            the ML.
+            the ML. Only gates below the melting layer bottom (i.e. the rain
+            region below the melting layer) are included in the method.
+            If None, the default values of the melting level and the thickness
+            of the melting layer are set to 5 and 0.5, respectively.
         min_h : float, optional
             Minimum height of usable data within the polarimetric profiles.
             The default is 1.1.
@@ -89,14 +92,25 @@ class ZDR_Calibration:
             Atmos. Meas. Tech., 15, 503–520,
             https://doi.org/10.5194/amt-15-503-2022
         """
-        if not np.isnan(mlyr.ml_bottom):
+        if mlyr is None:
+            mlvl = 5
+            mlyr_thickness = 0.5
+            mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            mlyr_bottom = mlyr.ml_bottom
+        if np.isnan(mlyr_bottom):
             boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
                               find_nearest(pol_profs.georef['profiles_height [km]'],
-                                           mlyr.ml_bottom)+1]
-
-            if boundaries_idx[1] <= boundaries_idx[0]:
-                boundaries_idx *= np.nan
+                                            mlvl-mlyr_thickness)]
         else:
+            boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
+                              find_nearest(pol_profs.georef['profiles_height [km]'],
+                                            mlyr_bottom)]
+        if boundaries_idx[1] <= boundaries_idx[0]:
+            boundaries_idx = [np.nan]
+        if np.isnan(mlvl) and np.isnan(mlyr_bottom):
             boundaries_idx = [np.nan]
 
         if any(np.isnan(boundaries_idx)):
@@ -186,16 +200,29 @@ class ZDR_Calibration:
             Atmos. Meas. Tech., 15, 503–520,
             https://doi.org/10.5194/amt-15-503-2022
         """
-        if not np.isnan(mlyr.ml_bottom):
+        if mlyr is None:
+            mlvl = 5
+            mlyr_thickness = 0.5
+            mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            mlyr_bottom = mlyr.ml_bottom
+        if np.isnan(mlyr_bottom):
             boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
                               find_nearest(pol_profs.georef['profiles_height [km]'],
-                                           mlyr.ml_bottom)+1]
-            maxheight = find_nearest(pol_profs.georef['profiles_height [km]'], max_h)
-
-            if boundaries_idx[1] <= boundaries_idx[0]:
-                boundaries_idx *= np.nan
+                                           mlvl-mlyr_thickness)]
         else:
+            boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
+                              find_nearest(pol_profs.georef['profiles_height [km]'],
+                                           mlyr_bottom)]
+        if boundaries_idx[1] <= boundaries_idx[0]:
             boundaries_idx = [np.nan]
+        if np.isnan(mlvl) and np.isnan(mlyr_bottom):
+            boundaries_idx = [np.nan]
+
+        maxheight = find_nearest(pol_profs.georef['profiles_height [km]'],
+                                 max_h)
 
         if any(np.isnan(boundaries_idx)):
             self.zdr_offset = 0

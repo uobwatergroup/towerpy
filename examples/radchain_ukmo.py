@@ -59,14 +59,13 @@ rczdr.offset_correction(rnme.vars['ZDR [dB]'],
 rattc = tp.attc.attc_zhzdr.AttenuationCorrection(rdata)
 rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
                     rnme.nme_classif['classif'], attc_method='ABRI',
-                    mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
-                    pdp_pxavr_azm=1, pdp_dmin=10,
+                    mlyr=rmlyr, pdp_pxavr_azm=1, pdp_dmin=10,
                     pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars, rattc.vars,
                      rnme.nme_classif['classif'], rhv_thld=0.98, minbins=10,
-                     mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
-                     mov_avrgf_len=5, p2avrf=3, beta_alpha_ratio=.2)
+                     mlyr=rmlyr, mov_avrgf_len=5, p2avrf=3,
+                     beta_alpha_ratio=.2)
 
 tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
                                           rczdr.vars,
@@ -100,21 +99,16 @@ tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
 # =============================================================================
 rqpe = tp.qpe.qpe_algs.RadarQPE(rdata)
 
-rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlvl=rmlyr.ml_top,
-            mlyr_thickness=rmlyr.ml_thickness,
+rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
             beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlvl=rmlyr.ml_top,
-            mlyr_thickness=rmlyr.ml_thickness,
+rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
             beam_height=rdata.georef['beam_height [km]'])
-rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlvl=rmlyr.ml_top,
-             mlyr_thickness=rmlyr.ml_thickness,
+rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr=rmlyr,
              beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'],
-                 mlvl=rmlyr.ml_top, mlyr_thickness=rmlyr.ml_thickness,
+rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
                  beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'],
-                 a=0.0121, b=0.822, c=-1.7486, mlvl=rmlyr.ml_top,
-                 mlyr_thickness=rmlyr.ml_thickness,
+rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
+                 a=0.0121, b=0.822, c=-1.7486, 
                  beam_height=rdata.georef['beam_height [km]'])
 # rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)

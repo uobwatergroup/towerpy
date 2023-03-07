@@ -26,8 +26,7 @@ class RadarQPE:
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
 
-    def z_to_r(self, zh, a=200, b=1.6, beam_height=None, mlvl=5,
-               mlyr_thickness=0.5):
+    def z_to_r(self, zh, a=200, b=1.6, beam_height=None, mlyr=None):
         r"""
         Calculate the rain rate (R) from Zh (mm^6/m^3).
 
@@ -39,9 +38,12 @@ class RadarQPE:
             Parameters of the :math:`R(Z_H)` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -61,6 +63,14 @@ class RadarQPE:
 
         """
         zh = np.array(zh)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
@@ -70,7 +80,7 @@ class RadarQPE:
         self.r_z = r
 
     def z_zdr_to_r1(self, zh, zdr, a=0.01583, b=0.8349, c=-0.3732,
-                    beam_height=None, mlvl=5, mlyr_thickness=0.5):
+                    beam_height=None, mlyr=None):
         """
         Calculate the rain rate (R) from Zh (mm^6/m^3) and ZDR (dB).
 
@@ -84,9 +94,12 @@ class RadarQPE:
             Parameters of the :math:`R(Z_H, Z_{DR})` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -111,6 +124,14 @@ class RadarQPE:
         """
         zh = 10**(np.array(zh)/10)
         zdr = np.array(zdr)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
@@ -122,7 +143,7 @@ class RadarQPE:
         self.r_z_zdr = r
 
     def z_zdr_to_r2(self, zh, zdr, a=0.00403, b=0.8787, c=-0.8077,
-                    beam_height=None, mlvl=5, mlyr_thickness=0.5):
+                    beam_height=None, mlyr=None):
         """
         Calculate the rain rate (R) from Zh (mm^6/m^3) and Zdr (linear scale).
 
@@ -136,9 +157,12 @@ class RadarQPE:
             Parameters of the :math:`R(Z_H, Z_{dr})` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -164,6 +188,14 @@ class RadarQPE:
         """
         zh = 10**(np.array(zh)/10)
         zdr = np.array(10**(0.1*zdr))
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
@@ -172,8 +204,7 @@ class RadarQPE:
         r = {'Rainfall [mm/hr]': a*zh**b*zdr**c}
         self.r_z_zdrl = r
 
-    def kdp_to_r(self, kdp, a=24.68, b=0.81, beam_height=None, mlvl=5,
-                 mlyr_thickness=0.5):
+    def kdp_to_r(self, kdp, a=24.68, b=0.81, beam_height=None, mlyr=None):
         """
         Calculate the rain rate (R) from KDP (deg km^-1).
 
@@ -186,9 +217,12 @@ class RadarQPE:
             Parameters of the :math:`R(K_{DP})` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -212,6 +246,14 @@ class RadarQPE:
             https://doi.org/10.1175/JHM-D-10-05013.1
         """
         kdp = np.array(kdp)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
@@ -221,7 +263,7 @@ class RadarQPE:
         self.r_kdp = r
 
     def kdp_zdr_to_r(self, kdp, zdr, a=37.9, b=-0.72, c=0.89, beam_height=None,
-                     mlvl=5, mlyr_thickness=0.5):
+                     mlyr=None):
         """
         Calculate the rain rate (R) from KDP (deg km^-1) and ZDR (dB).
 
@@ -236,9 +278,12 @@ class RadarQPE:
             Parameters of the :math:`R(K_{DP})` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -262,6 +307,14 @@ class RadarQPE:
         """
         kdp = np.array(kdp)
         zdr = np.array(zdr)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
@@ -270,8 +323,7 @@ class RadarQPE:
         r = {'Rainfall [mm/hr]': a*kdp**b*10**(-0.1*c*zdr)}
         self.r_kdp_zdr = r
 
-    def ah_to_r(self, ah, a=294, b=0.89, beam_height=None, mlvl=5,
-                mlyr_thickness=0.5):
+    def ah_to_r(self, ah, a=294, b=0.89, beam_height=None, mlyr=None):
         """
         Calculate the rain rate (R) from AH (in dB km^-1).
 
@@ -283,9 +335,12 @@ class RadarQPE:
             Parameters of the :math:`R(A_{H})` relationship
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -310,6 +365,14 @@ class RadarQPE:
 
         """
         ah = np.array(ah)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(ah))
@@ -319,7 +382,7 @@ class RadarQPE:
         self.r_ah = r
 
     def z_kdp_to_r(self, zh, kdp, a1=200, b1=1.6, a2=24.68, b2=0.81,
-                   z_thld=40, beam_height=None, mlvl=5, mlyr_thickness=0.5):
+                   z_thld=40, beam_height=None, mlyr=None):
         r"""
         Calculate the rain rate (R) using an hybrid estimator Z-AH.
 
@@ -339,9 +402,12 @@ class RadarQPE:
             The default is 40.
         beam_height : array, optional
             Height of the centre of the radar beam, in km.
-        mlyr_b : float, optional
-            Bottom of the melting layer, i.e., the upper boundary delimiting
-            the rain region within the scan, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
 
         Returns
         -------
@@ -368,6 +434,14 @@ class RadarQPE:
         """
         zh = np.array(zh)
         kdp = np.array(kdp)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
             mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
