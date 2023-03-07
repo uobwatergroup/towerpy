@@ -36,10 +36,10 @@ class PhiDP_Calibration:
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
 
-    def offsetdetection_vps(self, pol_profs, mlyr=None, min_h=1.1,
-                            max_h=None, zhmin=5, zhmax=30, rhvmin=0.98,
-                            minbins=2, stats=False, plot_method=False,
-                            rad_georef=None, rad_params=None, rad_vars=None):
+    def offsetdetection_vps(self, pol_profs, mlyr=None, min_h=1.1, max_h=None,
+                            zhmin=5, zhmax=30, rhvmin=0.98, minbins=2,
+                            stats=False, plot_method=False, rad_georef=None,
+                            rad_params=None, rad_vars=None):
         r"""
         Calculate the offset on :math:`\Phi_{DP}` using vertical profiles.
 
@@ -83,22 +83,30 @@ class PhiDP_Calibration:
             Radar variables used for plotting the offset correction method.
             The default is None.
         """
-        if max_h:
+        if mlyr is None:
+            mlvl = 5
+            mlyr_thickness = 0.5
+            mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            mlyr_bottom = mlyr.ml_bottom
+        if np.isnan(mlyr_bottom):
             boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
                               find_nearest(pol_profs.georef['profiles_height [km]'],
-                                           max_h)+1]
-            if boundaries_idx[1] <= boundaries_idx[0]:
-                boundaries_idx *= np.nan
+                                           mlvl-mlyr_thickness)]
         else:
-            if not np.isnan(mlyr.ml_bottom):
-                boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'],
-                                               min_h),
-                                  find_nearest(pol_profs.georef['profiles_height [km]'],
-                                               mlyr.ml_bottom)+1]
-                if boundaries_idx[1] <= boundaries_idx[0]:
-                    boundaries_idx *= np.nan
-            else:
-                boundaries_idx = [np.nan]
+            boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
+                              find_nearest(pol_profs.georef['profiles_height [km]'],
+                                           mlyr_bottom)]
+        if boundaries_idx[1] <= boundaries_idx[0]:
+            boundaries_idx = [np.nan]
+            # boundaries_idx *= np.nan
+        if np.isnan(mlvl) and np.isnan(mlyr_bottom):
+            boundaries_idx = [np.nan]
+        if max_h:
+            maxheight = find_nearest(pol_profs.georef['profiles_height [km]'],
+                                     max_h)
 
         if any(np.isnan(boundaries_idx)):
             self.phidp_offset = 0

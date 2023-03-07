@@ -489,17 +489,15 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         mrv = rad_vars[polradv]
         cmaph = tpycm_plv
         normp = dnorm.get('n'+polradv)
-        if 'ZDR' in polradv:
+        if 'rho' in polradv:
+            fcb = 2
+        elif 'ZDR' or 'KDP' in polradv:
             cmaph = tpycm_2slope
+            fcb = 2
         elif polradv == 'V [m/s]':
             cmaph = tpycm_dv
         elif polradv == 'gradV [dV/dh]':
             cmaph = tpycm_dv
-        if 'rho' in polradv:
-            fcb = 2
-        elif 'ZDR' in polradv:
-            fcb = 2
-        elif polradv == 'gradV [dV/dh]':
             fcb = 2
         else:
             fcb = 0

@@ -1408,7 +1408,7 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var,
         label1 = '$Z_{DR}}$'
         labelm = r'$\overline{Z_{DR}}$'
         labelo = r'$Z_{DR}}$ offset'
-        dval = 0.5
+        dval = 0.1
         dof = 1
 
     fig, ax = plt.subplots(figsize=(8, 8),
@@ -1450,10 +1450,11 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var,
         ax.set_yticks(np.arange(round(var_mean.mean()/dval)*dval-dof,
                                 round(var_mean.mean()/dval)*dval+dof+1,
                                 dval))
-    # else:
-    #     ax.set_yticks(np.arange(round(var_mean.mean()/dval)*dval-dof,
-    #                             round(var_mean.mean()/dval)*dval+dof,
-    #                             dval))
+    else:
+        ax.set_ylim([var_mean.mean()-dof, var_mean.mean()+dof])
+        # ax.set_yticks(np.arange(round(var_mean.mean()/dval)*dval-dof,
+        #                         round(var_mean.mean()/dval)*dval+dof+.1,
+        #                         dval))
     angle = np.deg2rad(67.5)
     ax.legend(fontsize=15, loc="lower left",
               bbox_to_anchor=(.58 + np.cos(angle)/2, .4 + np.sin(angle)/2))
