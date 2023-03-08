@@ -23,10 +23,10 @@ class Rad_scan:
         """
         self.file_name = filename
 
-    def ncasx_nc(self, ncfilename, elevangle=None, bvars=False,
-                 tz='Europe/London'):
+    def ppi_ncasx(self, ncfilename, elevangle=None, bvars=False,
+                  tz='Europe/London'):
         """
-        Read-in NetCDF radar data.
+        Read-in NCAS NetCDF radar data.
 
         Parameters
         ----------

@@ -64,8 +64,8 @@ rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
                     pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars, rattc.vars,
-                     rnme.nme_classif['classif'], rhv_thld=0.98, minbins=10,
-                     mlyr=rmlyr, mov_avrgf_len=5, p2avrf=3,
+                     rnme.nme_classif['classif'], mlyr=rmlyr, rhv_thld=0.98,
+                     minbins=10, mov_avrgf_len=5, p2avrf=3,
                      beta_alpha_ratio=.2)
 
 tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
