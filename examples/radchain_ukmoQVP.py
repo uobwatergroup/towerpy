@@ -8,7 +8,8 @@ import cartopy.crs as ccrs
 # =============================================================================
 rsite = 'chenies'
 fdir = f'../datasets/{rsite}/y2020/spel4/'
-fname = f'metoffice-c-band-rain-radar_{rsite}_202010030730_raw-dual-polar-augzdr-sp-el4.dat'
+fname = (f'metoffice-c-band-rain-radar_{rsite}_202010030730_raw-dual-polar-'
+         + 'augzdr-sp-el4.dat')
 
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
@@ -55,8 +56,10 @@ tp.datavis.rad_display.plot_cone_coverage(rdata.georef, rdata.params,
                                           rsnr.vars)
 
 # Plot the radar data in a map
-rdata.georef['xgrid_proj'] = rdata.georef['xgrid'] + rdata.params['easting [km]']
-rdata.georef['ygrid_proj'] = rdata.georef['ygrid'] + rdata.params['northing [km]']
+xgridp = rdata.georef['xgrid'] + rdata.params['easting [km]']
+rdata.georef['xgrid_proj'] = xgridp
+ygridp = rdata.georef['ygrid'] + rdata.params['northing [km]']
+rdata.georef['ygrid_proj'] = ygridp
 
 rdata.georef['xgrid_proj'] *= 1000
 rdata.georef['ygrid_proj'] *= 1000
