@@ -5,14 +5,14 @@ import towerpy as tp
 import cartopy.crs as ccrs
 # from wradlib.dp import process_raw_phidp_vulpiani as kdpvpi
 
-# =============================================================================
-# Read polar radar data
-# =============================================================================
 rsite = 'chenies'
 fdir = f'../datasets/{rsite}/y2020/lpel0/'
 fname = (f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-'
          + 'augzdr-lp-el0.dat')
 
+# =============================================================================
+# Read polar radar data
+# =============================================================================
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 
@@ -34,6 +34,9 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=35,
 clmap = f'../towerpy/eclass/ukmo_cmaps/{rsite}/chenies_cluttermap_el0.dat'
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
+# rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
+#                 min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
+#                 data2correct=rdata.vars, plot_method=True)
 rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
                 min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
                 data2correct=rdata.vars, plot_method=True)
@@ -102,8 +105,6 @@ rqpe = tp.qpe.qpe_algs.RadarQPE(rdata)
 
 rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
             beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
-            beam_height=rdata.georef['beam_height [km]'])
 rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr=rmlyr,
              beam_height=rdata.georef['beam_height [km]'])
 rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
@@ -111,6 +112,13 @@ rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
 rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
                  a=0.0121, b=0.822, c=-1.7486,
                  beam_height=rdata.georef['beam_height [km]'])
+# rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
+#             beam_height=rdata.georef['beam_height [km]'])
+# rqpe.z_zdr_to_r1(rnme.vars['ZH [dBZ]'], rnme.vars['ZDR [dB]'], mlyr=rmlyr,
+#                  beam_height=rdata.georef['beam_height [km]'])
+# rqpe.z_zdr_to_r2(rnme.vars['ZH [dBZ]'], rnme.vars['ZDR [dB]'], mlyr=rmlyr,
+#                  a=0.0121, b=0.822, c=-1.7486,
+#                  beam_height=rdata.georef['beam_height [km]'])
 # rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)
 # rqpe.kdp_zdr_to_r(rkdpv['KDP [deg/km]'], rattc.vars['ZDR [dB]'],

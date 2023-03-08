@@ -3,14 +3,14 @@
 import towerpy as tp
 import cartopy.crs as ccrs
 
-# =============================================================================
-# Read polar radar data
-# =============================================================================
 rsite = 'chenies'
 fdir = f'../datasets/{rsite}/y2020/spel4/'
 fname = (f'metoffice-c-band-rain-radar_{rsite}_202010030730_raw-dual-polar-'
          + 'augzdr-sp-el4.dat')
 
+# =============================================================================
+# Read polar radar data
+# =============================================================================
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 
