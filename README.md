@@ -76,7 +76,7 @@ Package | Required
 ------------ | -------------
 NumPy | v1.21+
 SciPy | v1.7.1+
-Matplotlib | v3.5.2
+Matplotlib | v3.5.2+
 Cartopy | v0.19+
 netCDF4 | vv1.5.8+
 
