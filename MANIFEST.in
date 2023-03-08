@@ -6,4 +6,3 @@ include towerpy/attc/lnxlibattenuationcorrection.so
 include towerpy/attc/w64libattenuationcorrection.dll
 include towerpy/eclass/ukmo_mfs/*.dat
 include towerpy/eclass/ukmo_cmaps/*.dat
-include
