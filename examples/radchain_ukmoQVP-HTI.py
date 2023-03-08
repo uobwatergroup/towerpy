@@ -13,8 +13,8 @@ with open(fdir+'qvps.tpy', 'rb') as f:
 with open(fdir+'mlyrsqvps.tpy', 'rb') as f:
     rmlyr = pickle.load(f)
 
-radb = tp.datavis.rad_interactive.hti_base(rprofs, mlyrs=rmlyr,
-                                           stats='std', ptype='fcontour',
+radb = tp.datavis.rad_interactive.hti_base(rprofs, mlyrs=rmlyr, stats='std',
+                                           ptype='fcontour',
                                            var2plot='rhoHV [-]',
                                            # contourl='ZH [dBZ]',
                                            htiylim=[0, 8], tz='Europe/London')
