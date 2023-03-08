@@ -108,7 +108,7 @@ rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr=rmlyr,
 rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
                  beam_height=rdata.georef['beam_height [km]'])
 rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
-                 a=0.0121, b=0.822, c=-1.7486, 
+                 a=0.0121, b=0.822, c=-1.7486,
                  beam_height=rdata.georef['beam_height [km]'])
 # rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)

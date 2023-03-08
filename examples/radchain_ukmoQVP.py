@@ -23,7 +23,7 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=55,
 
 # %%
 # =============================================================================
-# Generate polarimetric profiles of polarimetric variables
+# Generate QVPs of polarimetric variables
 # =============================================================================
 rprofs = tp.profs.polprofs.PolarimetricProfiles(rdata)
 rprofs.pol_qvps(rdata.georef, rdata.params, rsnr.vars, stats=True)
