@@ -24,4 +24,4 @@ following publication:
 
 print(_welcome_text)
 
-__version__ = "v0.99-alpha"
+__version__ = "v1.0-alpha"
