@@ -5,14 +5,14 @@ import towerpy as tp
 import cartopy.crs as ccrs
 # from wradlib.dp import process_raw_phidp_vulpiani as kdpvpi
 
-# =============================================================================
-# Read polar radar data
-# =============================================================================
 rsite = 'chenies'
 fdir = f'../datasets/{rsite}/y2020/lpel0/'
 fname = (f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-'
          + 'augzdr-lp-el0.dat')
 
+# =============================================================================
+# Read polar radar data
+# =============================================================================
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 
@@ -101,8 +101,6 @@ tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
 rqpe = tp.qpe.qpe_algs.RadarQPE(rdata)
 
 rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
-            beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
             beam_height=rdata.georef['beam_height [km]'])
 rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr=rmlyr,
              beam_height=rdata.georef['beam_height [km]'])
