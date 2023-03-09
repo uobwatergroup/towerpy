@@ -34,9 +34,6 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=35,
 clmap = f'../towerpy/eclass/ukmo_cmaps/{rsite}/chenies_cluttermap_el0.dat'
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
-# rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
-#                 min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
-#                 data2correct=rdata.vars, plot_method=True)
 rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
                 min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
                 data2correct=rdata.vars, plot_method=True)
@@ -112,13 +109,6 @@ rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
 rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
                  a=0.0121, b=0.822, c=-1.7486,
                  beam_height=rdata.georef['beam_height [km]'])
-# rqpe.z_to_r(rnme.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
-#             beam_height=rdata.georef['beam_height [km]'])
-# rqpe.z_zdr_to_r1(rnme.vars['ZH [dBZ]'], rnme.vars['ZDR [dB]'], mlyr=rmlyr,
-#                  beam_height=rdata.georef['beam_height [km]'])
-# rqpe.z_zdr_to_r2(rnme.vars['ZH [dBZ]'], rnme.vars['ZDR [dB]'], mlyr=rmlyr,
-#                  a=0.0121, b=0.822, c=-1.7486,
-#                  beam_height=rdata.georef['beam_height [km]'])
 # rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)
 # rqpe.kdp_zdr_to_r(rkdpv['KDP [deg/km]'], rattc.vars['ZDR [dB]'],
