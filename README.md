@@ -84,7 +84,7 @@ netCDF4 | vv1.5.8+
 
 
 # :thought_balloon: Missing a specific feature? Found a bug?
-Feel free to post a message to our [discussions page](https://github.com/uobwatergroup/towerpy/discussions) or have a look at our [contribution guidelines](https://github.com/uobwatergroup/towerpy/wiki/Contributing) to find out about our coding standards.
+Feel free to post a message to our [discussions page](https://github.com/uobwatergroup/towerpy/discussions) or have a look at our [contribution guidelines](.github/CONTRIBUTING.md) to find out about our coding standards.
 
 # :construction_worker: Team
 Towerpy is created and maintained by 
