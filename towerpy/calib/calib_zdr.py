@@ -83,11 +83,15 @@ class ZDR_Calibration:
 
         Notes
         -----
-        1. Based on the method described in [1]_
+        1. Based on the method described in [1]_ and [2]_
 
         References
         ----------
-        .. [1] Sanchez-Rivas, D. and Rico-Ramirez, M. A. (2022): "Calibration
+        .. [1] Gorgucci, E., Scarchilli, G., and Chandrasekar, V. (1999),
+            A procedure to calibrate multiparameter weather radar using
+            properties of the rain medium, IEEE T. Geosci. Remote, 37, 269–276,
+            https://doi.org/10.1109/36.739161
+        .. [2] Sanchez-Rivas, D. and Rico-Ramirez, M. A. (2022): "Calibration
             of radar differential reflectivity using quasi-vertical profiles",
             Atmos. Meas. Tech., 15, 503–520,
             https://doi.org/10.5194/amt-15-503-2022
@@ -103,11 +107,11 @@ class ZDR_Calibration:
         if np.isnan(mlyr_bottom):
             boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
                               find_nearest(pol_profs.georef['profiles_height [km]'],
-                                            mlvl-mlyr_thickness)]
+                                           mlvl-mlyr_thickness)]
         else:
             boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
                               find_nearest(pol_profs.georef['profiles_height [km]'],
-                                            mlyr_bottom)]
+                                           mlyr_bottom)]
         if boundaries_idx[1] <= boundaries_idx[0]:
             boundaries_idx = [np.nan]
         if np.isnan(mlvl) and np.isnan(mlyr_bottom):
@@ -191,7 +195,7 @@ class ZDR_Calibration:
 
         Notes
         -----
-        1. Based on the method described in [1]_
+        1. Based on the method described in [1]
 
         References
         ----------
