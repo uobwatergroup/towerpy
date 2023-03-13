@@ -911,6 +911,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
 
     plotunits = [i[i.find('['):]
                  for i in profsvars.keys() if var2plot == i][0]
+    plotvname = [i[:i.find('[')-1]
+                 for i in profsvars.keys() if var2plot == i][0]
 
     # -------------------------------------------------------------------------
     fontsizelabels = 24
@@ -976,7 +978,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
                                    ax=htiplt, format=f'%.{fcb}f', cax=cax1,
                                    orientation="horizontal")
     cb1.ax.tick_params(direction='in', labelsize=20)
-    cb1.ax.set_ylabel(plotunits, fontsize=15, labelpad=50)
+    cb1.ax.set_ylabel(f'{plotvname} \n'
+                      + f'{plotunits}', fontsize=15, labelpad=50)
     cax1.xaxis.set_ticks_position("top")
     htiplt.tick_params(axis='both', direction='in', labelsize=fontsizetick,
                        pad=10)
