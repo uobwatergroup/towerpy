@@ -32,6 +32,7 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=35,
 # Classification of non-meteorological echoes
 # =============================================================================
 clmap = f'../towerpy/eclass/ukmo_cmaps/{rsite}/chenies_cluttermap_el0.dat'
+# tp.datavis.rad_display.plot_mfs(f'../towerpy/eclass/mfs_cband/')
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
 rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
