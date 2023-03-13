@@ -1460,3 +1460,91 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var,
               bbox_to_anchor=(.58 + np.cos(angle)/2, .4 + np.sin(angle)/2))
     ax.axes.set_aspect('equal')
     plt.tight_layout()
+
+
+def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
+    """
+    Plot the membership functions used in clutter classification.
+
+    Parameters
+    ----------
+    path_mfs : str
+        Location of the membership function files..
+    norm : bool, optional
+        Determines if the variables are normalised for a more comprehensive
+        visualisation of the MFS. The default is True.
+    vars_bounds : dict containing key and 3-element tuple or list, optional
+        Boundaries [min, max, LaTeX Varnames] between which radar variables are
+        to be mapped.
+    figsize : list or tuple containing 2-element numbers, optional
+        Width, height in inches. The default is None.
+    """
+    import os
+    mfspk = {
+        'ZHH': [[-10, 60], '$Z_H$ [dBZ]'],
+        'sZhh': [[0, 20], r'$\sigma(Z_{H})$ [dBZ]'],
+        'ZDR': [[-6, 6], '$Z_{DR}$ [dB]'],
+        'sZdr': [[0, 5], r'$\sigma(Z_{DR}$) [dB]'],
+        'Rhv': [[0, 1], r'$\rho_{HV}$ [ ]'],
+        'sRhv': [[0, .4], r'$\sigma(\rho_{HV})$ [ ]'],
+        'Pdp': [[0, 180], r'$\Phi_{DP})$ [deg]'],
+        'sPdp': [[0, 180], r'$\sigma(\Phi_{DP})$ [deg]'],
+        'LDR': [[-40, 10], 'LDR [dB]'],
+        'Vel': [[-3, 3], 'V [m/s]'],
+        }
+    if vars_bounds is not None:
+        mfspk.update(vars_bounds)
+
+    mfsp = {f[f.find('mf_')+3: f.find('_preci')]: np.loadtxt(f'{path_mfs}{f}')
+            for f in sorted(os.listdir(path_mfs))
+            if f.endswith('_precipi.dat')}
+    mfsp = {k: v for k, v in sorted(mfsp.items()) if k in mfspk}
+    mfsc = {f[f.find('mf_')+3: f.find('_clu')]: np.loadtxt(f'{path_mfs}{f}')
+            for f in sorted(os.listdir(path_mfs))
+            if f.endswith('_clutter.dat')}
+    mfsc = {k: v for k, v in sorted(mfsc.items()) if k in mfspk}
+
+    varsp = {k for k in mfsp.keys()}
+    varsc = {k for k in mfsc.keys()}
+
+    if len(varsp) % 2 == 0:
+        ncols = 4
+        nrows = len(varsp) // ncols
+        fig_size = (18, 5)
+    else:
+        ncols = 3
+        nrows = (len(varsp) // ncols)
+        fig_size = (18, 7.5)
+
+    if varsp != varsc:
+        raise TowerpyError('Oops!... The number of membership functions for'
+                           + 'clutter and precipitation do not correspond.'
+                           + 'Please check before continue.')
+
+    if norm is True:
+        mfs_prnorm = {k: np.array([val[:, 0], rut.normalisenan(val[:, 1])]).T
+                      for k, val in mfsp.items()}
+        mfs_clnorm = {k: np.array([val[:, 0], rut.normalisenan(val[:, 1])]).T
+                      for k, val in mfsc.items()}
+    if figsize is not None:
+        fig_size = figsize
+    f, ax = plt.subplots(nrows, ncols, sharey=True, figsize=fig_size)
+    for a, (key, value) in zip(ax.flatten(), mfs_prnorm.items()):
+        a.plot(value[:, 0], value[:, 1], c='tab:blue', label='PR')
+        a.plot(mfs_clnorm[key][:, 0], mfs_clnorm[key][:, 1], label='CL',
+               ls='dashed', c='tab:orange')
+        # a.set_xlim(left=0)
+        a.set_xlim(mfspk[key][0])
+        a.tick_params(axis='both', labelsize=16)
+
+        divider = make_axes_locatable(a)
+        cax = divider.append_axes("top", size="15%", pad=0)
+        cax.get_xaxis().set_visible(False)
+        cax.get_yaxis().set_visible(False)
+        cax.set_facecolor('slategrey')
+
+        at = AnchoredText(mfspk[key][1], loc=10,
+                          prop=dict(size=18, color='white'), frameon=False)
+        cax.add_artist(at)
+        a.legend(fontsize=14)
+        f.tight_layout()

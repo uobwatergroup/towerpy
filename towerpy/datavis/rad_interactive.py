@@ -177,12 +177,13 @@ class PPI_Int:
 
         Parameters
         ----------
-        event : key-press, 0 or 5
-            Record the coordinates when user pressed 0 or 5.
+        event : key-press, 0-9
+            Record the coordinates when user press any number from 0 to 9.
 
         """
         gres_m = intradparams['gateres [m]']
-        if event.key in ('0', '5') and event.inaxes == f3_axvar2plot:
+        keynum = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+        if event.key in keynum and event.inaxes == f3_axvar2plot:
             nangle, nrange = quadangle(event.xdata, event.ydata, gres_m)
             print('you pressed', event.key, nangle, nrange)
             self.clickcoords.append((nangle, nrange, event.key))
@@ -515,11 +516,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
               ' ============================================================\n'
               '  Right-click on a pixel within the PPI to select its \n'
               '  azimuth or use the n and m keys to browse through the next \n'
-              '  and previous azimuth. \n'
+              '  and previous azimuth.                                      \n'
               '  Radial profiles of polarimetric variables will be shown at \n'
-              '  the axes on the right. \n'
-              '  Press 0 (MetEchoes) or 5 (NonMetEchoes) to store the       \n'
-              '  coordinates of the current position of the mouse pointer.  \n'
+              '  the axes on the right.                                     \n'
+              '  Press a number (0-9) to store the coordinates and value    \n'
+              '  of the current position of the mouse pointer.              \n'
               '  These coordinate can be retrieved at                       \n'
               '  ppiexplorer.clickcoords                                    \n'
               ' =============================================================')
@@ -576,8 +577,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
               '  previous azimuth. \n'
               '  Radial profiles of polarimetric variables will be shown at \n'
               '  the axes on the right. \n'
-              '  Press 0 (MetEchoes) or 5 (NonMetEchoes) to store the       \n'
-              '  coordinates of the current position of the mouse pointer.  \n'
+              '  Press a number (0-9) to store the coordinates and value    \n'
+              '  of the current position of the mouse pointer.              \n'
               '  These coordinate can be retrieved at                       \n'
               '  ppiexplorer.clickcoords                                    \n'
               ' =============================================================')
