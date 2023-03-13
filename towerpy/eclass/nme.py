@@ -123,7 +123,7 @@ class NME_ID:
             self.echoesID.update(classid)
         if path_mfs is None:
             pathmfs = str.encode(str(Path(__file__).parent.absolute())
-                                 + '/ukmo_mfs/')
+                                 + '/mfs_cband/')
         else:
             pathmfs = str.encode(path_mfs)
         array1d = npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS')
