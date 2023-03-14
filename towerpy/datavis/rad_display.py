@@ -1487,10 +1487,11 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
         'sZdr': [[0, 5], r'$\sigma(Z_{DR}$) [dB]'],
         'Rhv': [[0, 1], r'$\rho_{HV}$ [ ]'],
         'sRhv': [[0, .4], r'$\sigma(\rho_{HV})$ [ ]'],
-        'Pdp': [[0, 180], r'$\Phi_{DP})$ [deg]'],
+        'Pdp': [[0, 180], r'$\Phi_{DP}$ [deg]'],
         'sPdp': [[0, 180], r'$\sigma(\Phi_{DP})$ [deg]'],
-        'LDR': [[-40, 10], 'LDR [dB]'],
         'Vel': [[-3, 3], 'V [m/s]'],
+        'sVel': [[0, 5], r'$\sigma(V)$ [m/s]'],
+        'LDR': [[-40, 10], 'LDR [dB]'],
         }
     if vars_bounds is not None:
         mfspk.update(vars_bounds)
@@ -1508,12 +1509,15 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
     varsc = {k for k in mfsc.keys()}
 
     if len(varsp) % 2 == 0:
-        ncols = 4
+        ncols = int(len(varsp) / 2)
         nrows = len(varsp) // ncols
         fig_size = (18, 5)
     else:
         ncols = 3
-        nrows = (len(varsp) // ncols)
+        if len(varsp) % 3 == 0:
+            nrows = (len(varsp) // ncols)
+        else:
+            nrows = (len(varsp) // ncols)+1
         fig_size = (18, 7.5)
 
     if varsp != varsc:
