@@ -267,7 +267,7 @@ class PPI_Int:
 
         figradint.canvas.draw()
 
-    def savearray2binfile(self, file_name, dir2save):
+    def savearray2binfile(self, file_name, dir2save, min_snr=None, rsite=None):
         """
         Save the coordinates and pixel values of key-mouse events in a binfile.
 
@@ -283,6 +283,18 @@ class PPI_Int:
         b = [[pcoords[0], pcoords[1], int(pcoords[2])]
              for pcoords in coord_lst]
         coord_lstnd = list(set([i for i in [tuple(i) for i in b]]))
+        # gres_m = intradparams['gateres [m]']
+        ngates1 = intradparams['ngates']
+        nrays1 = intradparams['nrays']
+        fgates = [i for i, j in enumerate(coord_lstnd) if j[1] >= ngates1]
+        frays = [i for i, j in enumerate(coord_lstnd) if j[0] >= nrays1]
+        if len(fgates) > 0 or len(frays) > 0:
+            print('Some selected pixels were out of the PPI scan, these'
+                  + ' pixels will be removed from the coordinates list.')
+        coord_lstnd[:] = [j for i, j in enumerate(coord_lstnd)
+                          if i not in fgates]
+        coord_lstnd[:] = [j for i, j in enumerate(coord_lstnd)
+                          if i not in frays]
         # Creates a shapelike array to store the manual classification
         dict1occ = list(intradvars.values())[0]
 
@@ -292,11 +304,19 @@ class PPI_Int:
         rdataobj = {}
         rdataobj['manual_class'] = nanarr
         rdataobj['coord_list'] = coord_lstnd
-        fname = file_name
+        if min_snr is not None:
+            rdataobj['min_snr'] = min_snr
+        if rsite is not None:
+            rdataobj['rsite'] = rsite
+
+        fname = file_name[file_name.rfind('/')+1:]
+        fnamec = file_name
+        rdataobj['file_name'] = fnamec
+
         if dir2save:
-            with open(dir2save+fname+'.tpy', 'wb') as handle:
+            with open(dir2save+fname+'.tpmc', 'wb') as handle:
                 pickle.dump(rdataobj, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            print('A binary file was created at '+dir2save+fname+'.tpy')
+            print('A binary file was created at '+dir2save+fname+'.tpmc')
 
 
 def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',

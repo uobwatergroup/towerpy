@@ -245,63 +245,45 @@ def get_windows_data(wdw_size, wdw_coords, array2extract):
     return wdw
 
 
-def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3]):
+def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3], classid=None):
     """
     Compute the texture of given arrays.
 
     Parameters
     ----------
     tpy_coordlist : 3-element tuple or list of int
-        Coordinates and value of a given pixel.
+        Coordinates and classID of a given pixel.
     rad_vars : TYPE
         Radar variables used to compute the texture.
     wdw_size :  2-element tuple or list of int
         Size of the window [row, cols]. Must be odd numbers. The default is
         [3, 3].
+    classid : dict
+        Key/values of the echoes classification:
+            'precipi' = 0
+
+            'clutter' = 5
 
     Returns
     -------
-    mfsCL : TYPE
+    rvars : dict
         DESCRIPTION.
-    mfsPR : TYPE
-        DESCRIPTION.
-
     """
-    mfsCL = np.array([np.array([rad_vars['ZH [dBZ]'][nval[0], nval[1]],
-                                rad_vars['ZDR [dB]'][nval[0], nval[1]],
-                                rad_vars['rhoHV [-]'][nval[0], nval[1]],
-                                rad_vars['V [m/s]'][nval[0], nval[1]],
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['ZH [dBZ]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['ZDR [dB]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['rhoHV [-]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['PhiDP [deg]']), ddof=1)
-                                ]) for nidx, nval in enumerate(tpy_coordlist)
-                      if nval[2] == 5])
+    echoesID = {'precipi': 0, 'clutter': 5}
+    if classid is not None:
+        echoesID.update(classid)
 
-    mfsPR = np.array([np.array([rad_vars['ZH [dBZ]'][nval[0], nval[1]],
-                                rad_vars['ZDR [dB]'][nval[0], nval[1]],
-                                rad_vars['rhoHV [-]'][nval[0], nval[1]],
-                                rad_vars['V [m/s]'][nval[0], nval[1]],
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['ZH [dBZ]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['ZDR [dB]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['rhoHV [-]']), ddof=1),
-                                np.nanstd(get_windows_data(wdw_size,
-                                                           nval[:-1],
-                                                           rad_vars['PhiDP [deg]']), ddof=1)
-                                ]) for nidx, nval in enumerate(tpy_coordlist)
-                      if nval[2] == 0])
-    return mfsCL, mfsPR
+    vval = {keid: {nvar: [vvar[nval[0], nval[1]] for nidx, nval
+                          in enumerate(tpy_coordlist) if nval[2] == veid]
+                   for nvar, vvar in rad_vars.items()}
+            for keid, veid in echoesID.items()}
+
+    vtxt = {keid: {'s'+nvar: [np.nanstd(get_windows_data(wdw_size, nval[:-1],
+                                                         vvar), ddof=1)
+                              for nidx, nval
+                              in enumerate(tpy_coordlist) if nval[2] == veid]
+                   for nvar, vvar in rad_vars.items()}
+            for keid, veid in echoesID.items()}
+
+    rvars = {k: vtxt[k] | vval[k] for k in echoesID.keys()}
+    return rvars
