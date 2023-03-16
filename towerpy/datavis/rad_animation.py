@@ -70,7 +70,7 @@ def anim_base(rad_georef, rad_params, rad_vars, gifdir=None, vars_bounds=None,
            'Rainfall [mm/hr]': [0.1, 64, 11]}
     if vars_bounds is not None:
         lpv.update(vars_bounds)
-    cpy_features = {'status': True,
+    cpy_features = {'status': False,
                     # 'coastresolution': '10m',
                     'add_land': True,
                     'add_ocean': True,
@@ -268,8 +268,8 @@ def anim_base(rad_georef, rad_params, rad_vars, gifdir=None, vars_bounds=None,
             anim_title = anim_titl1 + anim_titl2
             ax1.set_title(anim_title)
         else:
-            ax1.pcolormesh(rad_georef[i]['xgrid_proj'],
-                           rad_georef[i]['ygrid_proj'],
+            ax1.pcolormesh(rad_georef[i]['xgrid'],
+                           rad_georef[i]['ygrid'],
                            rad_vars[i][var2plot],
                            shading='auto', cmap=cmaph, norm=normp)
             ax1.set(xlabel='Distance from the radar [km]',
@@ -346,10 +346,10 @@ def anim_base(rad_georef, rad_params, rad_vars, gifdir=None, vars_bounds=None,
     anim = animation.FuncAnimation(figanim,
                                    animate,
                                    # init_func=init_run,
-                                   # repeat_delay=10,
+                                   repeat_delay=10,
                                    frames=len(rad_params),
                                    # blit=True,
-                                   cache_frame_data=False
+                                   # cache_frame_data=False
                                    )
     if gifdir is not None:
         anim.save(f'{gifdir}{gfname}.gif',
