@@ -15,7 +15,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from ..utils import radutilities as rut
 from ..base import TowerpyError
 
-warnings.filterwarnings("ignore", category=UserWarning)
+# warnings.filterwarnings("ignore", category=UserWarning)
 
 tpycm_ref = mpl.colormaps['tpylsc_ref']
 tpycm_plv = mpl.colormaps['tpylsc_pvars']
@@ -27,7 +27,8 @@ tpycm_3c = mpl.colormaps['tpylc_yw_gy_bu']
 
 def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              vars_bounds=None, xlims=None, ylims=None, data_proj=None,
-             ucmap=None, unorm=None, cpy_feats=None):
+             ucmap=None, unorm=None, ring=None, range_rings=None,
+             cpy_feats=None):
     """
     Display a radar PPI scan.
 
@@ -57,7 +58,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              'Rainfall [mm/hr]': [0.1, 64, 11]}
     xlims : 2-element tuple or list, optional
         Set the x-axis view limits [min, max]. The default is None.
-    ylims : TYPE, optional
+    ylims : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
     data_proj : Cartopy Coordinate Reference System object, optional
         Cartopy projection used to plot the data in a map e.g.,
@@ -247,6 +248,26 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                             rad_vars[var2plot], shading='auto',
                             cmap=cmaph,
                             norm=normp)
+        if range_rings is not None:
+            nrings = np.arange(range_rings*1000, rad_georef['range [m]'][-1],
+                               range_rings*1000)
+            idx_rs = [rut.find_nearest(rad_georef['range [m]'], r)
+                      for r in nrings]
+            dmmy_rsx = np.array([rad_georef['xgrid'][:, i] for i in idx_rs])
+            dmmy_rsy = np.array([rad_georef['ygrid'][:, i] for i in idx_rs])
+            dmmy_rsz = np.array([np.ones(i.shape) for i in dmmy_rsx])
+            ax1.scatter(dmmy_rsx, dmmy_rsy, dmmy_rsz, c='grey', ls='--',
+                        alpha=3/4)
+            ax1.axhline(0, c='grey', ls='--', alpha=3/4)
+            ax1.axvline(0, c='grey', ls='--', alpha=3/4)
+        if ring is not None:
+            idx_rr = rut.find_nearest(rad_georef['range [m]'],
+                                      ring*1000)
+            dmmy_rx = rad_georef['xgrid'][:, idx_rr]
+            dmmy_ry = rad_georef['ygrid'][:, idx_rr]
+            dmmy_rz = np.ones(dmmy_rx.shape)
+            ax1.scatter(dmmy_rx, dmmy_ry, dmmy_rz, c='k', ls='--'
+                        , alpha=3/4)
         ax1_divider = make_axes_locatable(ax1)
         cax1 = ax1_divider.append_axes('top', size="7%", pad="2%")
         cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
@@ -269,6 +290,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         #              fontsize=8, xycoords='axes fraction',
         #              va='center', ha='center',
         #              bbox=dict(boxstyle=txtboxs, fc=fc, ec=ec))
+        # ax1.grid(True)
         plt.tight_layout()
         plt.show()
 
