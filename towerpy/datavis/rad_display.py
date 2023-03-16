@@ -68,6 +68,11 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     unorm : matplotlib.colors normalisation object, optional
         User-defined normalisation method to map colormaps onto radar data.
         The default is None.
+    ring : int or float, optional
+        Plot a circle in the given distance, in km.
+    range_rings : int, float, list or tuple, optional
+        If int or float, plot circles at a fixed range, in km.
+        If list or tuple, plot circles at the given ranges, in km.
     cpy_feats : dict, optional
         Cartopy attributes to add to the map. The default are:
         {
@@ -249,8 +254,12 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                             cmap=cmaph,
                             norm=normp)
         if range_rings is not None:
-            nrings = np.arange(range_rings*1000, rad_georef['range [m]'][-1],
-                               range_rings*1000)
+            if isinstance(range_rings, (int, float)):
+                nrings = np.arange(range_rings*1000,
+                                   rad_georef['range [m]'][-1],
+                                   range_rings*1000)
+            elif isinstance(range_rings, (list, tuple)):
+                nrings = np.array(range_rings) * 1000
             idx_rs = [rut.find_nearest(rad_georef['range [m]'], r)
                       for r in nrings]
             dmmy_rsx = np.array([rad_georef['xgrid'][:, i] for i in idx_rs])
@@ -260,14 +269,15 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                         alpha=3/4)
             ax1.axhline(0, c='grey', ls='--', alpha=3/4)
             ax1.axvline(0, c='grey', ls='--', alpha=3/4)
+            ax1.grid(True)
+
         if ring is not None:
             idx_rr = rut.find_nearest(rad_georef['range [m]'],
                                       ring*1000)
             dmmy_rx = rad_georef['xgrid'][:, idx_rr]
             dmmy_ry = rad_georef['ygrid'][:, idx_rr]
             dmmy_rz = np.ones(dmmy_rx.shape)
-            ax1.scatter(dmmy_rx, dmmy_ry, dmmy_rz, c='k', ls='--'
-                        , alpha=3/4)
+            ax1.scatter(dmmy_rx, dmmy_ry, dmmy_rz, c='k', ls='--', alpha=3/4)
         ax1_divider = make_axes_locatable(ax1)
         cax1 = ax1_divider.append_axes('top', size="7%", pad="2%")
         cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
