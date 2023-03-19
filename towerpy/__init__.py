@@ -24,4 +24,5 @@ following publication:
 
 print(_welcome_text)
 
-__version__ = "v1.0-alpha"
+name = 'towerpy'
+__version__ = "v1.0.0"
