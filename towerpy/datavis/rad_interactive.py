@@ -928,7 +928,9 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
                    for mlyr in mlyrs]
         mlyrbot = [mlyr.ml_bottom if isinstance(mlyr.ml_bottom, float)
                    else np.nan for mlyr in mlyrs]
-
+    else:
+        mlyrtop = None
+        mlyrbot = None
     plotunits = [i[i.find('['):]
                  for i in profsvars.keys() if var2plot == i][0]
     plotvname = [i[:i.find('[')-1]
@@ -948,7 +950,9 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
 
     intpvars, intheight, intscdt = profsvars, profsheight, profsdt
     intstats, ppvar, statsname = profsstat, prflv, stats
+    # if mlyrs:
     mlyrt, mlyrb = mlyrtop, mlyrbot
+
     tzi = tz
 
     figprofsint, axd = plt.subplot_mosaic(

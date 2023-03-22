@@ -112,8 +112,8 @@ class MeltingLayer:
 
     def ml_detection(self, pol_profs, min_h=0, max_h=5, zhnorm_min=5.,
                      zhnorm_max=60., rhvnorm_min=0.85, rhvnorm_max=1.,
-                     param_k=0.05, param_w=0.75, comb_id=None,
-                     plot_method=False):
+                     phidp_peak='left', gradv_peak='left', param_k=0.05,
+                     param_w=0.75, comb_id=None, plot_method=False):
         r"""
         Detect melting layer signatures within polarimetric VPs/QVPs.
 
@@ -138,6 +138,16 @@ class MeltingLayer:
         rhvnorm_max : float, optional
             Max value of :math:`\rho_{HV}` to use for the min-max
             normalisation. The default is 1.
+        phidp_peak : str, optional
+            Direction of the peak in :math:`\Phi_{DP}` related to the ML. The
+            method described in [1]_ assumes that the peak points to the left,
+            (see Figure 3 in the paper) but this can be changed using this
+            argument.
+        gradv_peak : str, optional
+            Direction of the peak in :math:`gradV` related to the ML. The
+            method described in [1]_ assumes that the peak points to the left,
+            (see Figure 3 in the paper) but this can be changed using this
+            argument.
         param_k : float, optional
             Threshold related to the magnitude of the peak used to detect the
             ML. The default is 0.05.
@@ -157,12 +167,10 @@ class MeltingLayer:
 
         References
         ----------
-        [1] Sanchez-Rivas, D. and Rico-Ramirez, M. A.
+        .. [1] Sanchez-Rivas, D. and Rico-Ramirez, M. A. (2021)
             "Detection of the melting level with polarimetric weather radar"
-            in Atmospheric Measurement Techniques Journal,
-            Volume 14, issue 4, pp. 2873–2890,
-            13 Apr 2021
-            https://doi.org/10.5194/amt-14-2873-2021
+            in Atmospheric Measurement Techniques Journal, Volume 14, issue 4,
+            pp. 2873–2890, 13 Apr 2021 https://doi.org/10.5194/amt-14-2873-2021
 
         """
         min_hidx = rut.find_nearest(pol_profs.georef['profiles_height [km]'],
@@ -185,16 +193,34 @@ class MeltingLayer:
                 raise TowerpyError(r'At least $Z_H$ and $\rho_{HV}$ are '
                                    + 'required to run this function')
             if 'gradV [dV/dh]' in pol_profs.vps:
-                profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
+                if gradv_peak == 'left':
+                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
+                elif gradv_peak == 'right':
+                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
+                    profdvel *= -1
             if 'ZDR [dB]' in pol_profs.vps:
                 profzdr = pol_profs.vps['ZDR [dB]'].copy()
             if 'PhiDP [deg]' in pol_profs.vps:
-                profpdp = pol_profs.vps['PhiDP [deg]'].copy()
+                if phidp_peak == 'left':
+                    profpdp = pol_profs.vps['PhiDP [deg]'].copy()
+                elif phidp_peak == 'right':
+                    profpdp = pol_profs.vps['PhiDP [deg]'].copy()
+                    profpdp *= -1
         else:
-            profzh = pol_profs.qvps['ZH [dBZ]'].copy()
-            profrhv = pol_profs.qvps['rhoHV [-]'].copy()
-            profzdr = pol_profs.qvps['ZDR [dB]'].copy()
-            profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
+            if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.qvps:
+                profzh = pol_profs.qvps['ZH [dBZ]'].copy()
+                profrhv = pol_profs.qvps['rhoHV [-]'].copy()
+            else:
+                raise TowerpyError(r'At least $Z_H$ and $\rho_{HV}$ are '
+                                   + 'required to run this function')
+            if 'ZDR [dB]' in pol_profs.qvps:
+                profzdr = pol_profs.qvps['ZDR [dB]'].copy()
+            if 'PhiDP [deg]' in pol_profs.qvps:
+                if phidp_peak == 'left':
+                    profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
+                elif phidp_peak == 'right':
+                    profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
+                    profpdp *= -1
 
         # Normalise ZH and rhoHV
         profzh[profzh < zhnorm_min] = zhnorm_min
