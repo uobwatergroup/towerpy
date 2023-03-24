@@ -6,11 +6,12 @@ Usage
 Installation
 ------------
 
-To use Lumache, first install it using pip:
+To use towerpy, first install it using:
 
 .. code-block:: console
 
-   (.venv) $ pip install lumache
+   (.venv) $ git clone https://github.com/uobwatergroup/towerpy.git
+   (.venv) $ python -m pip install -e .
 
 Creating recipes
 ----------------
@@ -18,17 +19,17 @@ Creating recipes
 To retrieve a list of random ingredients,
 you can use the ``lumache.get_random_ingredients()`` function:
 
-.. autofunction:: lumache.get_random_ingredients
+.. autofunction:: towerpy.io.ukmo.Rad_scan
 
 The ``kind`` parameter should be either ``"meat"``, ``"fish"``,
-or ``"veggies"``. Otherwise, :py:func:`lumache.get_random_ingredients`
+or ``"veggies"``. Otherwise, :py:func:`towerpy.io.ukmo.Rad_scan`
 will raise an exception.
 
-.. autoexception:: lumache.InvalidKindError
+.. autoexception:: towerpy.InvalidKindError
 
 For example:
 
->>> import lumache
->>> lumache.get_random_ingredients()
-['shells', 'gorgonzola', 'parsley']
+>>> import towerpy as tp
+>>> tp.io.ukmo.Rad_scan
+
 
