@@ -16,16 +16,15 @@ To use towerpy, first install it using:
 Creating recipes
 ----------------
 
-To retrieve a list of random ingredients,
-you can use the ``lumache.get_random_ingredients()`` function:
+To initialise a radar object you can use the
+``towerpy.io.ukmo.Rad_scan()`` function:
 
 .. autofunction:: towerpy.io.ukmo.Rad_scan
 
-The ``kind`` parameter should be either ``"meat"``, ``"fish"``,
-or ``"veggies"``. Otherwise, :py:func:`towerpy.io.ukmo.Rad_scan`
-will raise an exception.
+The ppi_ukmoraw function retrieves raw polarimetric variables
+from the current UKMO PPI binary files.
+.. autofunction:: towerpy.io.ukmo.Rad_scan.ppi_ukmoraw
 
-.. autoexception:: towerpy.InvalidKindError
 
 For example:
 
