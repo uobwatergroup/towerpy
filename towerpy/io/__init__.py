@@ -1,4 +1,6 @@
-"""Towerpy: an open-source toolbox for processing polarimetric radar data."""
+"""
+Read-in radar data.
+"""
 
 # import subpackage
 from . import empty

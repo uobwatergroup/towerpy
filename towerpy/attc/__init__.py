@@ -1,15 +1,6 @@
-# _welcome_text = """
-# You are using the Towerpy framework, an open source library for
-# working with polarimetric weather radar data.
+"""
+Calculate the attenuation of the radar signal power.
+"""
 
-# If you find our work useful for your research, please consider citing our
-# following publication:
-
-
-# """
-
-# print(_welcome_text)
-
-
-# import subpackage
+# import subpackages
 from . import attc_zhzdr
