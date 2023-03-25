@@ -10,6 +10,7 @@ Towerpy
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
    :caption: API Reference
 
    autoapi/index
