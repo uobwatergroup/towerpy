@@ -9,3 +9,4 @@ dependencies:
     - nbsphinx
     - myst_nb
     - sphinx-autoapi
+    - pydata-sphinx-theme
