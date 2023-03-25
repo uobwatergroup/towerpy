@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - sphinx>=1.4
+  - nbconvert
+  - ipykernel
+  - pip:
+    - nbsphinx
+    - myst_nb
+    - autoapi.extension
