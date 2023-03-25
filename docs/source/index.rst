@@ -10,10 +10,9 @@ Towerpy
 
 .. toctree::
    :maxdepth: 2
-   :hidden:
-   :caption: Reference Guide
+   :caption: API Reference
 
-   api/ref_guide.rst
+   autoapi/index
 
 .. toctree::
    :maxdepth: 2

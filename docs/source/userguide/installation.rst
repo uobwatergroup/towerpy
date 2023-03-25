@@ -1,7 +1,7 @@
 .. _installation:
 
 Installation
-------------
+============
 
 To ensure a smooth installation of towerpy, we strongly recommend using conda, the open-source Python package management system. `Download <https://www.anaconda.com/>`_ and install Anaconda to get conda and other essential data science and machine learning packages.
 
@@ -39,16 +39,26 @@ Or install Towerpy in “editable” mode::
     python -m pip install -e .
 
 
-# :snake: Dependencies
+Dependencies
+------------
 
-## The following dependencies are required to work with _towerpy_:
+The following dependencies are required to work with _towerpy_:
 
-Package | Required
------------- | -------------
-NumPy | v1.21+
-SciPy | v1.7.1+
-Matplotlib | v3.5.2+
-Cartopy | v0.19+
-netCDF4 | vv1.5.8+
+.. list-table:: Dependencies
+   :widths: 20 20
+   :header-rows: 1
 
-\*Some modules within _towerpy_ run using shared objects/dynamic link libraries (.so, .dll). These libraries are automatically installed during the _towerpy_ installation.
+   * - Package
+     - Required
+   * - NumPy
+     - v1.21+
+   * - SciPy
+     - v1.7.1+
+   * - Matplotlib
+     - v3.5.2+
+   * - Cartopy
+     - v0.19+
+   * - netCDF4
+     - vv1.5.8+
+
+Some modules within *towerpy* run using shared objects/dynamic link libraries (.so, .dll). These libraries are automatically installed during the *towerpy* installation.
