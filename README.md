@@ -28,7 +28,7 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
 
 
 # :books: Documentation
-You can find more details about _Towerpy_ [here](https://readthedocs.org/projects/uobwatergroup-demo/).
+You can find more details about _Towerpy_ [here](https://towerpy.readthedocs.io/en/latest/).
 
 # :speech_balloon: Citing
 If you use _towerpy_ as part of your workflow in a scientific publication, please consider citing the [towerpy paper](https://github.com/uobwatergroup/towerpy):
