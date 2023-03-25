@@ -8,4 +8,3 @@ dependencies:
   - pip:
     - nbsphinx
     - myst_nb
-    - autoapi.extension
