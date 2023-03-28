@@ -264,7 +264,7 @@ class PolarimetricProfiles:
     def pol_rdqvps(self, rscans_georef, rscans_params, rscans_vars,
                    valid_gates=30, thlds='default', power_param1=0,
                    power_param2=2, spec_range=50, vert_res=2, r0=None,
-                   rf=None, qvps_height_method='bh', plot_method=False):
+                   qvps_height_method='bh', plot_method=False):
         r"""
         Generate RD-QVPs of polarimetric variables.
 
@@ -342,20 +342,22 @@ class PolarimetricProfiles:
                     raise TowerpyError('Length of values r0 does not match'
                                        ' length of elevation index'
                                        ' (rscans_vars)')
-        if rf is None:
-            rf = [i['ngates'] for i in rscans_params]
-        else:
-            if isinstance(rf, (int, float)):
-                rf = [find_nearest(i['range [m]'], rf*1000)
-                      for i in rscans_georef]
-            elif isinstance(r0, list):
-                if len(rf) == len(rscans_vars):
-                    rf = [find_nearest(i['range [m]'], rf[c]*1000)
-                          for c, i in enumerate(rscans_georef)]
-                else:
-                    raise TowerpyError('Length of values rf does not match'
-                                       ' length of elevation index'
-                                       ' (rscans_vars)')
+        # if rf is None:
+        #     rf = [i['ngates'] for i in rscans_params]
+        # else:
+        #     if isinstance(rf, (int, float)):
+        #         rf = [find_nearest(i['range [m]'], rf*1000)
+        #               for i in rscans_georef]
+        #     elif isinstance(r0, list):
+        #         if len(rf) == len(rscans_vars):
+        #             rf = [find_nearest(i['range [m]'], rf[c]*1000)
+        #                   for c, i in enumerate(rscans_georef)]
+        #         else:
+        #             raise TowerpyError('Length of values rf does not match'
+        #                                ' length of elevation index'
+        #                                ' (rscans_vars)')
+        rf = [find_nearest(i['range [m]'], spec_range*1000)
+              for i in rscans_georef]
 
         dh1 = [v['beam_height [km]'][0]+np.diff(v['range [m]']/1000, prepend=0) * np.sin(np.deg2rad(rscans_params[c]['elev_ang [deg]']))
                for c, v in enumerate(rscans_georef)]
