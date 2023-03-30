@@ -4,6 +4,7 @@ import numpy as np
 import time
 import copy
 from ..base import TowerpyError
+from ..datavis import rad_display
 from ..utils.radutilities import find_nearest
 
 
@@ -298,9 +299,6 @@ class PolarimetricProfiles:
         r0 : float or list of floats, optional
             Initial range within the PPI scans to build the QVPS, in km.
             The default is None.
-        rf : float or list of floats, optional
-            Final range within the PPI scans to build the QVPS, in km.
-            The default is None.
         qvps_height_method : str, optional
             'bh' or 'vr'
         plot_method : bool, optional
@@ -446,8 +444,12 @@ class PolarimetricProfiles:
                                       for i in range(len(yaxis))])
                       for pvar in qvpvar}
 
-        rdqvps = {pvar: np.array([np.nansum(rdqvps_val[pvar][row]*(w_func[row]*rdqvps_vidx[pvar][row]))/np.nansum((w_func[row]*rdqvps_vidx[pvar][row]))
-                                  if np.count_nonzero(rdqvps_vidx[pvar][row])>1
+        rdqvps = {pvar: np.array([np.nansum(rdqvps_val[pvar][row]
+                                            * (w_func[row]
+                                            * rdqvps_vidx[pvar][row]))
+                                  / np.nansum((w_func[row]
+                                              * rdqvps_vidx[pvar][row]))
+                                  if np.count_nonzero(rdqvps_vidx[pvar][row]) > 1
                                   else np.nan for row in range(len(yaxis))])
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps
@@ -458,5 +460,8 @@ class PolarimetricProfiles:
         self.elev_angle = [i['elev_ang [deg]'] for i in rscans_params]
         self.scandatetime = [i['datetime'] for i in rscans_params]
         toc = time.time()
+        if plot_method:
+            rad_display.plot_rdqvps(rscans_georef, rscans_params, self,
+                                    spec_range=spec_range)
         print(f'RD-QVPS running time: {toc-tic:.3f} sec.')
 
