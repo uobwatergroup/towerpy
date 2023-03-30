@@ -21,17 +21,19 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
 <p align="left">
   <img alt="info" src="https://img.shields.io/badge/=&nbsp Info &nbsp;=-critical?style=for-the-badge"/>
   <a href="https://github.com/uobwatergroup/towerpy/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
+  <img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/uobwatergroup/towerpy?style=for-the-badge">
   <a href="https://doi.org/10.5194/amt-14-2873-2021"><img src="https://img.shields.io/badge/DOI-1.1.1.1.1.1-important?style=for-the-badge&logo=creativecommons"/></a>
-  <img alt="tag" src="https://img.shields.io/github/v/tag/uobwatergroup/towerpy-brightgreen?style=for-the-badge"/>
   
 </p>
 
 
 # :books: Documentation
+[![Documentation Status](https://readthedocs.org/projects/towerpy/badge/?version=latest)](https://towerpy.readthedocs.io/en/latest/?badge=latest)
+
 You can find more details about _Towerpy_ [here](https://towerpy.readthedocs.io/en/latest/).
 
 # :speech_balloon: Citing
-If you use _towerpy_ as part of your workflow in a scientific publication, please consider citing the [towerpy paper](https://github.com/uobwatergroup/towerpy):
+If you find _towerpy_ useful for a scientific publication, please consider citing the [towerpy paper](https://github.com/uobwatergroup/towerpy):
 
 # :hammer: Installing towerpy
 To ensure a smooth installation of towerpy, we strongly recommend using **conda**, the open-source Python package management system. [Download](https://www.anaconda.com/) and install Anaconda to get conda and other essential data science and machine learning packages.
