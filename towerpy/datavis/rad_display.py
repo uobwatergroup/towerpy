@@ -1358,6 +1358,111 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None,
     plt.show()
 
 
+def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
+                vars_bounds=None, ylims=None, ucmap=None, spec_range=None):
+    """
+    Display a set of RD-QVPS of polarimetric variables.
+
+    Parameters
+    ----------
+    tp_rdqvp : PolarimetricProfiles Class
+        Outputs of the RD-QVPs function.
+    mlyr : MeltingLayer Class, optional
+        Plots the melting layer within the polarimetric profiles.
+        The default is None.
+    vars_bounds : dict containing key and 2-element tuple or list, optional
+        Boundaries [min, max] between which radar variables are
+        to be plotted. The default are:
+            {'ZH [dBZ]': [-10, 60],
+             'ZDR [dB]': [-2, 6],
+             'PhiDP [deg]': [0, 180], 'KDP [deg/km]': [-2, 6],
+             'rhoHV [-]': [0.6, 1],
+             'LDR [dB]': [-35, 0],
+             'V [m/s]': [-5, 5], 'gradV [dV/dh]': [-1, 0]}
+    ylims : 2-element tuple or list, optional
+        Set the y-axis view limits [min, max]. The default is None.
+    ucmap : colormap, optional
+        User-defined colormap.
+    spec_range : int, optional
+        Range from the radar within which the data was used.
+    """
+    tpcm = 'tpylsc_pvars_r'
+    cmaph = mpl.colormaps[tpcm](np.linspace(0., .8,
+                                            len(tp_rdqvp.qvps_itp)))
+    if ucmap is not None:
+        cmaph = mpl.colormaps[ucmap](np.linspace(0, 1,
+                                                 len(tp_rdqvp.qvps_itp)))
+
+    fontsizelabels = 20
+    fontsizetitle = 25
+    fontsizetick = 18
+    lpv = {'ZH [dBZ]': [-10, 60], 'ZDR [dB]': [-2, 2],
+           'PhiDP [deg]': [0, 90], 'KDP [deg/km]': [-2, 6],
+           'rhoHV [-]': [0.9, 1], 'LDR [dB]': [-35, 0],
+           'V [m/s]': [-5, 5], 'gradV [dV/dh]': [-1, 0],
+           }
+    if vars_bounds:
+        lpv.update(vars_bounds)
+
+    # ttxt = f"{rscans_params[0]['datetime']:%Y-%m-%d %H:%M:%S}"
+    dt1 = min([i['datetime'] for i in rscans_params])
+    dt2 = max([i['datetime'] for i in rscans_params])
+    ttxt = (f"{dt1:%Y-%m-%d %H:%M:%S} - {dt2:%H:%M:%S}")
+
+    fig = plt.figure(layout="constrained")
+    fig.suptitle('RD-quasi-vertical profiles of polarimetric variables \n'
+                 f'{ttxt}', fontsize=fontsizetitle)
+
+    axd = fig.subplot_mosaic("""
+                             ABCD
+                             EEEE
+                             """, sharey=True, height_ratios=[5, 1])
+
+    for c, i in enumerate(tp_rdqvp.qvps_itp):
+        for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
+            axd[a].plot(value, tp_rdqvp.georef['profiles_height [km]'],
+                        label=(f"{rscans_params[c]['elev_ang [deg]']}"
+                               + r"$^{\circ}$"), color=cmaph[c], ls='--')
+            axd[a].set_xlabel(f'{key}', fontsize=fontsizelabels)
+            if n == 0:
+                axd[a].set_ylabel('Height [km]', fontsize=fontsizelabels,
+                                  labelpad=10)
+            axd[a].tick_params(axis='both', labelsize=fontsizetick)
+            axd[a].grid(True)
+            axd[a].legend(loc='upper right')
+    for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
+        axd[a].plot(tp_rdqvp.rd_qvps[key],
+                    tp_rdqvp.georef['profiles_height [km]'], 'k', lw=3,
+                    label='RD-QVP')
+        axd[a].legend(loc='upper right')
+        if vars_bounds:
+            if key in lpv:
+                axd[a].set_xlim(lpv.get(key))
+            else:
+                axd[a].set_xlim([np.nanmin(value), np.nanmax(value)])
+        if mlyr:
+            axd[a].axhline(mlyr.ml_top, c='tab:blue', ls='dashed', lw=5,
+                           alpha=.5, label='$ML_{top}$')
+            axd[a].axhline(mlyr.ml_bottom, c='tab:purple', ls='dashed', lw=5,
+                           alpha=.5, label='$ML_{bottom}$')
+        if ylims:
+            axd[a].set_ylim(ylims)
+
+    scan_st = axd['E']
+    for c, i in enumerate(rscans_georef):
+        scan_st.plot(i['range [m]']/1000, i['beam_height [km]'][0],
+                     color=cmaph[c], ls='--',
+                     label=(f"{rscans_params[c]['elev_ang [deg]']}"
+                            + r"$^{\circ}$"))
+        scan_st.plot(i['range [m]']/-1000, i['beam_height [km]'][0],
+                     color=cmaph[c], ls='--')
+
+    scan_st.tick_params(axis='both', labelsize=fontsizetick-5)
+    if spec_range:
+        scan_st.axvline(spec_range, c='k', lw=3)
+        scan_st.axvline(-spec_range, c='k', lw=3)
+
+
 def plot_rhocalibration(hists, histmax, idxminstd, rng_ite):
     """
     S.
