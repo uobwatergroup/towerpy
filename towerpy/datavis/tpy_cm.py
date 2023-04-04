@@ -4,7 +4,6 @@
 import warnings
 import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from .tpy_colors import towerpy_colours
 
@@ -20,10 +19,10 @@ tpy_LSC = {cname: mcolors.LinearSegmentedColormap.from_list(cname, colrs)
 tpy_LC = {cname: mcolors.ListedColormap(colrs)
           for cname, colrs in towerpy_colours.items()}
 
-comb_tpycms = np.vstack((plt.cm.get_cmap(tpy_LSC['grey'])(np.linspace(0, 1,
-                                                                      64)),
-                         plt.cm.get_cmap(tpy_LSC['pvars'])(np.linspace(0, 1,
-                                                                       192))))
+comb_tpycms = np.vstack((mpl.colormaps.get_cmap(tpy_LSC['grey'])(np.linspace(0, 1,
+                                                                             64)),
+                         mpl.colormaps.get_cmap(tpy_LSC['pvars'])(np.linspace(0, 1,
+                                                                              192))))
 
 tpy_LSC['2slope'] = mcolors.LinearSegmentedColormap.from_list('2slope',
                                                               comb_tpycms)

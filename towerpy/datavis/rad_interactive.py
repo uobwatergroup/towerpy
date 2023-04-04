@@ -17,7 +17,7 @@ from matplotlib.widgets import RadioButtons, Slider
 from ..utils import radutilities as rut
 from ..base import TowerpyError
 
-warnings.filterwarnings("ignore", category=UserWarning)
+# warnings.filterwarnings("ignore", category=UserWarning)
 
 tpycm_ref = mpl.colormaps['tpylsc_ref']
 tpycm_plv = mpl.colormaps['tpylsc_pvars']
