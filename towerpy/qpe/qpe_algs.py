@@ -384,7 +384,7 @@ class RadarQPE:
     def z_kdp_to_r(self, zh, kdp, a1=200, b1=1.6, a2=24.68, b2=0.81,
                    z_thld=40, beam_height=None, mlyr=None):
         r"""
-        Calculate the rain rate (R) using an hybrid estimator Z-AH.
+        Calculate the rain rate (R) using an hybrid estimator Z-KDP.
 
         Parameters
         ----------
@@ -452,3 +452,74 @@ class RadarQPE:
         rzh[(zh >= z_thld)] = rkdp[(zh >= z_thld)]
         r = {'Rainfall [mm/hr]': rzh}
         self.r_z_kdp = r
+
+    def z_ah_to_r(self, zh, ah, a1=200, b1=1.6, a2=294, b2=0.89,
+                  z_thld=40, beam_height=None, mlyr=None):
+        r"""
+        Calculate the rain rate (R) using an hybrid estimator Z-AH.
+
+        Parameters
+        ----------
+        zh : float or array
+             Floats that corresponds to reflectivity, in dBZ.
+        ah : float or array
+            Floats that corresponds to specific attenuation, in dB/km.
+        a1, b1 : float
+            Parameters of the :math:`R(Z_H)` relationship.
+        a2, b2 : floats
+            Parameters of the :math:`R(A_{H})` relationship.
+        z_thld : float, optional
+            :math:`Z_H` threshold used for the transition to :math:`R(A_{H})`.
+            The default is 40.
+        beam_height : array, optional
+            Height of the centre of the radar beam, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
+
+        Returns
+        -------
+        R : dict
+            Computed rain rates (in mm h^-1).
+
+        Notes
+        -----
+        Standard values according to [1]_ and [2]_.
+
+        .. math::  Z = aR^b \rightarrow Z_H <= 40 dBZ
+        .. math::  R = aA_H^b \rightarrow Z_H > 40 dBZ
+
+        References
+        ----------
+        .. [1] Marshall, J.S., Palmer, W.M.K., 1948. "The distribution of
+            raindrops with size. Journal of Meteorology 5, 165–166.
+            https://doi.org/10.1175/1520-0469(1948)005<0165:TDORWS>2.0.CO;2
+        .. [2] Ryzhkov, A., Diederich, M., Zhang, P., & Simmer, C. (2014).
+            "Potential Utilization of Specific Attenuation for Rainfall
+            Estimation, Mitigation of Partial Beam Blockage, and Radar
+            Networking" Journal of Atmospheric and Oceanic Technology, 31(3),
+            599-619. https://doi.org/10.1175/JTECH-D-13-00038.1
+        """
+        zh = np.array(zh)
+        ah = np.array(ah)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
+        if beam_height is not None:
+            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
+            nanidx = np.where(np.isnan(zh))
+            zh[:, mlidx:] = 0
+            zh[nanidx] = np.nan
+        rzh = ((10**(zh/10))/a1)**(1/b1)
+        rah = a2*ah**b2
+        rzh[(zh >= z_thld)] = rah[(zh >= z_thld)]
+        r = {'Rainfall [mm/hr]': rzh}
+        self.r_z_ah = r
