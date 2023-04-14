@@ -12,3 +12,4 @@ Notebooks Gallery
    radchain_ukmo90.ipynb
    radchain_ukmoC.ipynb
    recipe for the MFS computation.ipynb
+   import_radardata.ipynb
