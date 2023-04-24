@@ -154,18 +154,19 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             var2plot = list(rad_vars.keys())[0]
             cmaph = tpycm_plv
             normp = dnorm.get('n'+var2plot)
-            if 'rho' in var2plot:
+            if '[-]' in var2plot:
                 cbtks_fmt = 2
                 cmaph = tpycm_plv
-            if 'ZDR' in var2plot:
+                tcks = bnd['brhoHV [-]']
+            if '[dB]' in var2plot:
                 cmaph = tpycm_2slope
                 cbtks_fmt = 1
-            if 'KDP' in var2plot:
+            if '[deg/km]' in var2plot:
                 cmaph = tpycm_2slope
                 # cbtks_fmt = 1
-            if var2plot == 'V [m/s]':
+            if '[m/s]' in var2plot:
                 cmaph = tpycm_dv
-            if 'Rainfall' in var2plot:
+            if '[mm/hr]' in var2plot:
                 cmaph = tpycm_rnr
                 # tpycm.set_under(color='#D2ECFA', alpha=0)
                 # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
@@ -173,16 +174,22 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     else:
         cmaph = tpycm_plv
         normp = dnorm.get('n'+var2plot)
-        if 'rho' in var2plot:
+        if '[-]' in var2plot:
             cbtks_fmt = 2
-        if 'ZDR' in var2plot:
+            tcks = bnd['brhoHV [-]']
+        # if 'ZDR' in var2plot:
+        #     cmaph = tpycm_2slope
+        #     cbtks_fmt = 1
+        # if 'KDP' in var2plot:
+        #     cmaph = tpycm_2slope
+        if '[dB]' in var2plot:
             cmaph = tpycm_2slope
             cbtks_fmt = 1
-        if 'KDP' in var2plot:
+        elif '[deg/km]' in var2plot:
             cmaph = tpycm_2slope
-        if var2plot == 'V [m/s]':
+        if '[m/s]' in var2plot:
             cmaph = tpycm_dv
-        if 'Rainfall' in var2plot:
+        if '[mm/hr]' in var2plot:
             cmaph = tpycm_rnr
             # tpycm.set_under(color='#D2ECFA', alpha=0)
             # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
@@ -235,9 +242,15 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         ax1.set_yticklabels([])
         ax1.set_thetagrids(np.arange(0, 360, 90))
         ax1.axes.set_aspect('equal')
-        cb1 = plt.colorbar(f1, ax=ax1, aspect=8, shrink=0.65,
-                           pad=.1, norm=normp)
-        cb1.ax.tick_params(direction='in', axis='both', labelsize=10)
+        if var2plot == 'rhoHV [-]':
+            cb1 = plt.colorbar(f1, ax=ax1, aspect=8, shrink=0.65,
+                               pad=.1, norm=normp, ticks=tcks,
+                               format=f'%.{cbtks_fmt}f')
+            cb1.ax.tick_params(direction='in', axis='both', labelsize=10)
+        else:
+            cb1 = plt.colorbar(f1, ax=ax1, aspect=8, shrink=0.65,
+                               pad=.1, norm=normp)
+            cb1.ax.tick_params(direction='in', axis='both', labelsize=10)
         cb1.ax.set_title(f'{var2plot}', fontsize=10)
         # ax1.annotate('| Created using Towerpy |', xy=txtboxc,
         #              fontsize=8, xycoords='axes fraction',
@@ -280,8 +293,14 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             ax1.scatter(dmmy_rx, dmmy_ry, dmmy_rz, c='k', ls='--', alpha=3/4)
         ax1_divider = make_axes_locatable(ax1)
         cax1 = ax1_divider.append_axes('top', size="7%", pad="2%")
-        cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
-        cb1.ax.tick_params(direction='in', labelsize=12)
+        if var2plot == 'rhoHV [-]':
+            cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal',
+                               ticks=tcks, format=f'%.{cbtks_fmt}f')
+            cb1.ax.tick_params(direction='in', labelsize=10)
+        else:
+            cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
+            cb1.ax.tick_params(direction='in', labelsize=12)
+        # cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
         cb1.ax.set_title(f'{ptitle} \n' + f'PPI {var2plot}', fontsize=14)
         # cb1.ax.minorticks_on()
         # cb1.ax.xaxis.set_ticks(bnd['brhoHV [-]'], minor=True)
@@ -438,7 +457,7 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
         Radar variables to be plotted.
     xlims : 2-element tuple or list, optional
         Set the x-axis view limits [min, max]. The default is None.
-    ylims : TYPE, optional
+    ylims : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
     vars_bounds : dict containing key and 3-element tuple or list, optional
         Boundaries [min, max, nvals] between which radar variables are
@@ -525,23 +544,23 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
     f, ax = plt.subplots(nr, nc, sharex=True, sharey=True, figsize=(16, 9))
     f.suptitle(f'{ptitle}', fontsize=16)
 
-    for a, (key, value) in zip(ax.flatten(), rad_vars.items()):
+    for a, (key, var2plot) in zip(ax.flatten(), rad_vars.items()):
         if key in lpv:
             norm = dnorm.get('n'+key)
         else:
-            b1 = np.linspace(np.nanmin(value), np.nanmax(value), 11)
+            b1 = np.linspace(np.nanmin(var2plot), np.nanmax(var2plot), 11)
             norm = mcolors.BoundaryNorm(b1, tpycm_plv.N, extend='both')
-        if key.startswith('ZH'):
+        if '[dBZ]' in key:
             cmap = tpycm_ref
-        elif key.startswith('ZDR') or key.startswith('KDP'):
+        elif '[dB]' in key or '[deg/km]' in key:
             cmap = tpycm_2slope
-        elif key.startswith('Rainfall'):
+        elif '[mm/hr]' in key:
             cmap = tpycm_rnr
-        elif key.endswith('[m/s]'):
+        elif '[m/s]' in key:
             cmap = tpycm_dv
         else:
             cmap = tpycm_plv
-        f1 = a.pcolormesh(rad_georef['xgrid'], rad_georef['ygrid'], value,
+        f1 = a.pcolormesh(rad_georef['xgrid'], rad_georef['ygrid'], var2plot,
                           shading='auto', cmap=cmap, norm=norm)
         if mlyr is not None:
             a.scatter(dmmyx_mlb, dmmyy_mlb, dmmyz_mlb, c='tab:blue')
@@ -557,9 +576,12 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
         a.grid(True)
         a.axes.set_aspect('equal')
         a.tick_params(axis='both', which='major', labelsize=10)
-        plt.colorbar(f1, ax=a,
-                     # extend=ex
-                     )
+        if key.startswith('rhoHV'):
+            plt.colorbar(f1, ax=a, ticks=bnd.get('b'+key),
+                         format=f'%.{2}f',
+                         )
+        else:
+            plt.colorbar(f1, ax=a)
     if len(rad_vars) == 5:
         f.delaxes(ax[1, 2])
     if len(rad_vars) == 7:
@@ -605,9 +627,9 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
              'Rainfall [mm/hr]': [0.1, 64, 11]}
     xlims : 2-element tuple or list, optional
         Set the x-axis view limits [min, max]. The default is None.
-    ylims : TYPE, optional
+    ylims : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
-    zlims : TYPE, optional
+    zlims : 2-element tuple or list, optional
         Set the z-axis view limits [min, max]. The default is None.
     limh : int or float, optional
         Set a height limit to the plot. The default is None.
@@ -675,18 +697,18 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
             var2plot = list(rad_vars.keys())[0]
             cmaph = tpycm_plv
             normp = dnorm.get('n'+var2plot)
-            if 'rho' in var2plot:
+            if '[-]' in var2plot:
                 cbtks_fmt = 2
                 cmaph = tpycm_plv
-            if 'ZDR' in var2plot:
+            if '[dB]' in var2plot:
                 cmaph = tpycm_2slope
                 cbtks_fmt = 1
-            if 'KDP' in var2plot:
+            if '[deg/km]' in var2plot:
                 cmaph = tpycm_2slope
                 # cbtks_fmt = 1
-            if var2plot == 'V [m/s]':
+            if '[m/s]' in var2plot:
                 cmaph = tpycm_dv
-            if 'Rainfall' in var2plot:
+            if '[mm/hr]' in var2plot:
                 cmaph = tpycm_rnr
                 # tpycm.set_under(color='#D2ECFA', alpha=0)
                 # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
@@ -694,16 +716,16 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     else:
         cmaph = tpycm_plv
         normp = dnorm.get('n'+var2plot)
-        if 'rho' in var2plot:
+        if '[-]' in var2plot:
             cbtks_fmt = 2
-        if 'ZDR' in var2plot:
+        if '[dB]' in var2plot:
             cmaph = tpycm_2slope
             cbtks_fmt = 1
-        if 'KDP' in var2plot:
+        if '[deg/km]' in var2plot:
             cmaph = tpycm_2slope
-        if var2plot == 'V [m/s]':
+        if '[m/s]' in var2plot:
             cmaph = tpycm_dv
-        if 'Rainfall' in var2plot:
+        if '[mm/hr]' in var2plot:
             cmaph = tpycm_rnr
             # tpycm.set_under(color='#D2ECFA', alpha=0)
             # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
@@ -869,7 +891,7 @@ def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
         Clutter map used for the NME_ID method. The default is None.
     xlims : 2-element tuple or list, optional
         Set the x-axis view limits [min, max]. The default is None.
-    ylims : TYPE, optional
+    ylims : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
     """
     dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
@@ -1044,7 +1066,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     fig_mos1 = plt.figure(figsize=fig_size, constrained_layout=True)
     ax_idx = fig_mos1.subplot_mosaic(mosaic, sharex=True, sharey=True)
     for key, value in rad_vars_att.items():
-        if 'ZH' in key:
+        if '[dBZ]' in key:
             cmap = tpycm_ref
             norm = dnorm.get('n'+key)
             fzhna = ax_idx['A'].pcolormesh(rad_georef['xgrid'],
@@ -1064,7 +1086,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     ax_idx['A'].axes.set_aspect('equal')
     ax_idx['A'].tick_params(axis='both', labelsize=10)
     for key, value in rad_vars_attcorr.items():
-        if 'ZH' in key:
+        if '[dBZ]' in key:
             cmap = tpycm_ref
             norm = dnorm.get('n'+key)
             fzhna = ax_idx['B'].pcolormesh(rad_georef['xgrid'],
@@ -1084,7 +1106,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     ax_idx['B'].axes.set_aspect('equal')
     ax_idx['B'].tick_params(axis='both', labelsize=10)
     for key, value in rad_vars_attcorr.items():
-        if 'AH' in key:
+        if '[dB/km]' in key:
             cmap = tpycm_plv
             norm = dnorm.get('n'+key)
             fzhna = ax_idx['C'].pcolormesh(rad_georef['xgrid'],
@@ -1102,7 +1124,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     # if isinstance(rescorr4attzdr, dict):
     if any(key.lower().startswith('zdr') for key in rad_vars_attcorr):
         for key, value in rad_vars_att.items():
-            if 'ZDR' in key:
+            if '[dB]' in key:
                 cmap = tpycm_2slope
                 norm = dnorm.get('n'+key)
                 fzhna = ax_idx['D'].pcolormesh(rad_georef['xgrid'],
@@ -1119,7 +1141,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
         ax_idx['D'].axes.set_aspect('equal')
         ax_idx['D'].tick_params(axis='both', labelsize=10)
         for key, value in rad_vars_attcorr.items():
-            if 'ZDR' in key:
+            if '[dB]' in key:
                 cmap = tpycm_2slope
                 norm = dnorm.get('n'+key)
                 fzhna = ax_idx['E'].pcolormesh(rad_georef['xgrid'],
@@ -1158,7 +1180,7 @@ def plot_attcorrection(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     fig_mos2 = plt.figure(figsize=fig_size, constrained_layout=True)
     ax_idx2 = fig_mos2.subplot_mosaic(mosaic, sharex=True, sharey=True)
     for key, value in rad_vars_att.items():
-        if 'PhiDP' in key:
+        if '[deg]' in key:
             cmap = tpycm_plv
             norm = dnorm.get('n'+key)
             fzhna = ax_idx2['A'].pcolormesh(rad_georef['xgrid'],
@@ -1341,17 +1363,18 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None,
             a.axhline(mlyr.ml_bottom, c='tab:purple', ls='dashed', lw=5,
                       alpha=.5, label='$ML_{bottom}$')
             a.legend(loc='upper right', fontsize=fontsizetick)
-        if 'ZH' in key:
+        if key == 'ZH [dBZ]':
             a.set_xlabel('$Z_{H}$ [dBZ]', fontsize=fontsizelabels)
-        if 'ZDR' in key:
+        elif key == 'ZDR [dB]':
             a.set_xlabel('$Z_{DR}$ [dB]', fontsize=fontsizelabels)
-        if 'rhoHV' in key:
+        elif key == 'rhoHV [-]':
             a.set_xlabel(r'$ \rho_{HV}$ [ ]', fontsize=fontsizelabels)
-        if 'PhiDP' in key:
+        elif key == 'PhiDP [deg]':
             a.set_xlabel(r'$ \Phi_{DP}$ [deg]', fontsize=fontsizelabels)
-        if 'V [m/s]' in key and rad_params['elev_ang [deg]'] > 89:
+        # elif key == 'V [m/s]' and rad_params['elev_ang [deg]'] > 89:
+        elif key == 'V [m/s]':
             a.set_xlabel('V [m/s]', fontsize=fontsizelabels)
-        if 'gradV [dV/dh]' in key and rad_params['elev_ang [deg]'] > 89:
+        elif key == 'gradV [dV/dh]' and rad_params['elev_ang [deg]'] > 89:
             a.set_xlabel('grad V [dV/dh]', fontsize=fontsizelabels)
         if ylims:
             a.set_ylim(ylims)

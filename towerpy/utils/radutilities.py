@@ -17,7 +17,7 @@ def find_nearest(iarray, val2search):
 
     Returns
     -------
-    idx : TYPE
+    idx : float or int
         Index into the array.
 
     """
@@ -33,12 +33,12 @@ def normalisenan(a):
     Parameters
     ----------
     a : array
-        The data to normalize, element by element.
+        The data to normalise, element by element.
 
     Returns
     -------
     normarray : array
-        Normalized input a.
+        Normalised input a.
 
     """
     normarray = (a-np.nanmin(a))/(np.nanmax(a)-np.nanmin(a))
@@ -47,21 +47,21 @@ def normalisenan(a):
 
 def normalisenanvalues(a, vmin, vmax):
     """
-    Scale input vectors to unit norm, usen given values.
+    Scale input vectors to unit norm, by scaling the vector to given values.
 
     Parameters
     ----------
-    a : TYPE
-        DESCRIPTION.
-    vmin : TYPE
-        DESCRIPTION.
-    vmax : TYPE
-        DESCRIPTION.
+    a : array
+        The data to normalize.
+    vmin : float or int
+        Minimum value used to scale the data.
+    vmax : float or int
+        Maximum value used to scale the data.
 
     Returns
     -------
-    normarray : TYPE
-        DESCRIPTION.
+    normarray : array
+        Normalised data.
 
     """
     normarray = (a-vmin)/(vmax-vmin)
@@ -74,13 +74,13 @@ def fillnan1d(x):
 
     Parameters
     ----------
-    x : TYPE
-        DESCRIPTION.
+    x : array
+        The data to be filled.
 
     Returns
     -------
-    TYPE
-        DESCRIPTION.
+    xf
+        Array with nan values filtered.
 
     """
     x = np.array(x)
@@ -103,7 +103,7 @@ def maf_radial(rad_vars, maf_len=3, maf_ignorenan=True, maf_extendvalid=False,
         Odd number used to apply a moving average filter to each beam and
         smooth the signal. The default is 3.
     maf_ignorenan : bool, optional
-        DESCRIPTION. The default is True.
+        Set to False if nan values shall not be filtered. The default is True.
     maf_params : dict, optional
         Filters the radar variable using min and max constraints.
         The default are:
@@ -123,7 +123,7 @@ def maf_radial(rad_vars, maf_len=3, maf_ignorenan=True, maf_extendvalid=False,
     Returns
     -------
     mafvars : dict
-        DESCRIPTION.
+        Transformed data.
 
     """
     lpv = {'ZH [dBZ]': [np.NINF, np.inf], 'ZDR [dB]': [np.NINF, np.inf],
@@ -222,7 +222,7 @@ def get_windows_data(wdw_size, wdw_coords, array2extract):
     ----------
     wdw_size : 2-element tuple or list of int
         Size of the window [row, cols]. Must be odd numbers.
-    wdw_coords : TYPE
+    wdw_coords :  2-element tuple or list of int/floats
         Coordinates within the PPI scan of the centre of the window to extract.
     array2extract : array
         Data array from which the data will bve retrieved.
@@ -253,7 +253,7 @@ def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3], classid=None):
     ----------
     tpy_coordlist : 3-element tuple or list of int
         Coordinates and classID of a given pixel.
-    rad_vars : TYPE
+    rad_vars : dict
         Radar variables used to compute the texture.
     wdw_size :  2-element tuple or list of int
         Size of the window [row, cols]. Must be odd numbers. The default is
@@ -267,7 +267,7 @@ def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3], classid=None):
     Returns
     -------
     rvars : dict
-        DESCRIPTION.
+        Texture values.
     """
     echoesID = {'precipi': 0, 'clutter': 5}
     if classid is not None:
