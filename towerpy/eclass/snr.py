@@ -95,7 +95,7 @@ class SNR_Classif:
         rad_params : dict
             Radar technical details.
         rad_vars : dict
-            DESCRIPTION.
+            Radar variables used to compute the SNR..
         min_snr : float64, optional
             Reference noise value. The default is 0.
         data2correct : dict, optional

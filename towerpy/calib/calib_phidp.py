@@ -79,7 +79,7 @@ class PhiDP_Calibration:
             and beam height, amongst others. The default is None.
         rad_params : dict, optional
             Radar technical details. The default is None.
-        rad_vars : TYPE, optional
+        rad_vars : dict, optional
             Radar variables used for plotting the offset correction method.
             The default is None.
         """

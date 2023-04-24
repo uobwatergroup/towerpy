@@ -483,18 +483,18 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             normp = dnorm.get('n'+polradv)
             mrv = rad_vars[polradv]
             fcb = 0
-            if 'rho' in polradv:
+            if '[-]' in polradv:
                 cbtks_fmt = 2
                 cmaph = tpycm_plv
-            if 'ZDR' in polradv:
+            if '[dB]' in polradv:
                 cmaph = tpycm_2slope
                 cbtks_fmt = 1
-            if 'KDP' in polradv:
+            if '[deg/km]' in polradv:
                 cmaph = tpycm_2slope
                 # cbtks_fmt = 1
-            if polradv == 'V [m/s]':
+            if '[m/s]' in polradv:
                 cmaph = tpycm_dv
-            if 'Rainfall' in polradv:
+            if '[mm/hr]' in polradv:
                 cmaph = tpycm_rnr
                 # tpycm.set_under(color='#D2ECFA', alpha=0)
                 # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
@@ -510,14 +510,14 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         mrv = rad_vars[polradv]
         cmaph = tpycm_plv
         normp = dnorm.get('n'+polradv)
-        if 'rho' in polradv:
+        if '[-]' in polradv:
             fcb = 2
-        elif 'ZDR' or 'KDP' in polradv:
+        elif '[dB]' or '[deg/km]' in polradv:
             cmaph = tpycm_2slope
             fcb = 2
-        elif polradv == 'V [m/s]':
+        elif '[m/s]' in polradv:
             cmaph = tpycm_dv
-        elif polradv == 'gradV [dV/dh]':
+        elif '[dV/dh]' in polradv:
             cmaph = tpycm_dv
             fcb = 2
         else:
@@ -825,8 +825,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
 
     Returns
     -------
-    radio : TYPE
-        DESCRIPTION.
+    radio : widget
+        A MPL radio button.
 
     """
     lpv = {'ZH [dBZ]': [-10, 60, 15], 'ZV [dBZ]': [-10, 60, 15],
@@ -887,11 +887,11 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
         cmaph = tpycm_plv
         normp = dnorm.get('n'+var2plot)
         fcb = 2
-        if 'ZDR' in var2plot or 'KDP' in var2plot:
+        if '[dB]' in var2plot or '[deg/km]' in var2plot:
             cmaph = tpycm_2slope
-        if var2plot == 'V [m/s]':
+        if '[m/s]' in var2plot:
             cmaph = tpycm_dv.reversed()
-        if var2plot == 'gradV [dV/dh]':
+        if '[dV/dh]' in var2plot:
             cmaph = tpycm_dv
         if lpv.get(var2plot)[0] > -1 and lpv.get(var2plot)[1] < 1:
             fcb = 2
@@ -991,7 +991,7 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
 
     ax1_divider = make_axes_locatable(htiplt)
     cax1 = ax1_divider.append_axes("top", size="10%", pad="7%")
-    if var2plot == 'rhoHV [-]':
+    if '[-]' in var2plot:
         cb1 = figprofsint.colorbar(mpl.cm.ScalarMappable(norm=normp,
                                                          cmap=cmaph),
                                    ax=htiplt, format=f'%.{fcb}f', cax=cax1,
