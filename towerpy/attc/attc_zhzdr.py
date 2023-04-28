@@ -10,8 +10,9 @@ import numpy.ctypeslib as npct
 from scipy import optimize
 from ..base import TowerpyError
 from ..utils.radutilities import find_nearest
+from ..datavis import rad_display
 
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+# warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class AttenuationCorrection:
@@ -44,7 +45,7 @@ class AttenuationCorrection:
     def zh_correction(self, rad_georef, rad_params, attvars, cclass, mlyr=None,
                       attc_method='ABRI', pdp_pxavr_rng=7, pdp_pxavr_azm=1,
                       pdp_dmin=20, coeff_a=[1e-5, 9e-5], coeff_b=[0.65, 0.85],
-                      coeff_alpha=[0.020, 0.1], niter=500):
+                      coeff_alpha=[0.020, 0.1], niter=500, plot_method=False):
         r"""
         Calculate the attenuation of :math:`Z_{H}`.
 
@@ -110,6 +111,8 @@ class AttenuationCorrection:
         niter : int
             Number of iterations to find the optimised values of
             the coeffs :math:`a, b, \alpha`. The default is 500.
+        plot_method : Bool, optional
+            Plot the ZH attenuation correction method. The default is False.
 
         Returns
         -------
@@ -248,6 +251,9 @@ class AttenuationCorrection:
         toc = time.time()
         print(r'Z_H attenuation correction running time: '
               f'{toc-tic:.3f} sec.')
+        if plot_method:
+            rad_display.plot_zhattcorr(rad_georef, rad_params, attvars,
+                                       attcorr)
 
     def zdr_correction(self, rad_georef, rad_params, attvars, attcorr_vars,
                        cclass, mlyr=None, rhv_thld=0.98, mov_avrgf_len=5,
@@ -258,7 +264,7 @@ class AttenuationCorrection:
                                                 'model': 'a1*ZH-b1',
                                                 'zdr_max': 1.4,
                                                 'a1': 0.048, 'b1': 0.774},
-                       descr=False):
+                       descr=False, plot_method=False):
         r"""
         Calculate the attenuation of :math:`Z_{DR}`.
 
@@ -311,6 +317,8 @@ class AttenuationCorrection:
         descr : bool
             Controls if the statistics of the calculations are returned.
             The default is True.
+        plot_method : Bool, optional
+            Plot the ZDR attenuation correction method. The default is False.
 
         Returns
         -------
@@ -567,3 +575,6 @@ class AttenuationCorrection:
         toc = time.time()
         print(r'Z_{DR} attenuation correction running time: '
               f'{toc-tic:.3f} sec.')
+        if plot_method:
+            rad_display.plot_zdrattcorr(rad_georef, rad_params, attvars,
+                                        attcorr1)
