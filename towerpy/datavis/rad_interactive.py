@@ -499,29 +499,22 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                 # tpycm.set_under(color='#D2ECFA', alpha=0)
                 # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
                 cbtks_fmt = 1
-    # if var2plot is None or var2plot == 'ZH [dBZ]':
-    #     polradv = 'ZH [dBZ]'
-    #     mrv = rad_vars[polradv]
-    #     cmaph, normp = tpycm_ref, dnorm['nZH [dBZ]']
-    #     tcks = bnd['bZH [dBZ]']
-    #     fcb = 0
     else:
         polradv = var2plot
         mrv = rad_vars[polradv]
         cmaph = tpycm_plv
         normp = dnorm.get('n'+polradv)
+        fcb = 0
         if '[-]' in polradv:
             fcb = 2
-        elif '[dB]' or '[deg/km]' in polradv:
+        if '[dB]' in polradv or '[deg/km]' in polradv:
             cmaph = tpycm_2slope
             fcb = 2
-        elif '[m/s]' in polradv:
+        if '[m/s]' in polradv:
             cmaph = tpycm_dv
-        elif '[dV/dh]' in polradv:
+        if '[dV/dh]' in polradv:
             cmaph = tpycm_dv
             fcb = 2
-        else:
-            fcb = 0
         if polradv in lpv:
             if lpv.get(polradv)[0] > -1 and lpv.get(polradv)[1] < 1:
                 fcb = 2
