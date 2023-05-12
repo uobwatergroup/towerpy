@@ -44,8 +44,10 @@ class AttenuationCorrection:
 
     def zh_correction(self, rad_georef, rad_params, attvars, cclass, mlyr=None,
                       attc_method='ABRI', pdp_pxavr_rng=7, pdp_pxavr_azm=1,
-                      pdp_dmin=20, coeff_a=[1e-5, 9e-5], coeff_b=[0.65, 0.85],
-                      coeff_alpha=[0.020, 0.1], niter=500, plot_method=False):
+                      pdp_dmin=20, coeff_a=[1e-5, 9e-5, 3e-5],
+                      coeff_b=[0.65, 0.85, 0.78],
+                      coeff_alpha=[0.020, 0.1, 0.073], niter=500,
+                      plot_method=False):
         r"""
         Calculate the attenuation of :math:`Z_{H}`.
 
@@ -93,21 +95,21 @@ class AttenuationCorrection:
         pdp_dmin : float
             Minimum total :math:`\Phi_{DP}` expected in a ray to perform
             attenuation correction (at least 20-30 degrees). The default is 20.
-        coeff_a : list
-            Min and max values of coeff :math:`a`. These bounds are used
-            to find the optimum value of :math:`a` from
-            :math:`A_H = a Z_{H}^b`. Default values are [1e-5, 9e-5],
-            computed for C-band.
-        coeff_b : list
-            Min and max values of coeff :math:`b`. These bounds are used
+        coeff_a : 3-element tuple or list, optional
+            [Min, max, fixed value] of coeff :math:`a`. These bounds are
+            used to find the optimum value of :math:`a` from
+            :math:`A_H = a Z_{H}^b`. Default values are [1e-5, 9e-5, 3e-5],
+            derived for C-band.
+        coeff_b : 3-element tuple or list, optional
+            [Min, max, fixed value] of coeff :math:`b`. These bounds are used
             to find the optimum value of :math:`b` from
-            :math:`A_H = a Z_{H}^b`. Default values are [0.65, 0.85],
-            computed for C-band.
-        coeff_alpha : list
-            Min and max values of coeff :math:`\alpha`. These bounds are used
-            to find the optimum value of :math:`\alpha` from
-            :math:`A_H = \alpha K_{DP}`. Default values are [0.020, 0.1],
-            computed for C-band.
+            :math:`A_H = a Z_{H}^b`. Default values are [0.65, 0.85, 0.78],
+            derived for C-band.
+        coeff_alpha : 3-element tuple or list, optional
+            [Min, max, fixed value] of coeff :math:`\alpha`. These bounds are
+            used to find the optimum value of :math:`\alpha` from
+            :math:`A_H = \alpha K_{DP}`. Default values are
+            [0.020, 0.1, 0.073], derived for C-band.
         niter : int
             Number of iterations to find the optimised values of
             the coeffs :math:`a, b, \alpha`. The default is 500.
@@ -202,9 +204,9 @@ class AttenuationCorrection:
         param_atc[1] = pdp_pxavr_rng
         param_atc[2] = pdp_pxavr_azm
         param_atc[3] = pdp_dmin
-        param_atc[4] = 3e-5  # a_opt
-        param_atc[5] = 0.78  # b_opt
-        param_atc[6] = 0.073  # alpha_opt
+        param_atc[4] = coeff_a[2]  # a_opt
+        param_atc[5] = coeff_b[2]  # b_opt
+        param_atc[6] = coeff_alpha[2]  # alpha_opt
         param_atc[7] = coeff_a[0]  # mina
         param_atc[8] = coeff_a[1]  # maxa
         param_atc[9] = coeff_b[0]  # minb

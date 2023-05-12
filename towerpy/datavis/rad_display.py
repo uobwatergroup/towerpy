@@ -1840,7 +1840,7 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
                      '\n' f'{ttxt}',
                      fontsize=fontsizetitle)
     else:
-        fig, ax = plt.subplots(1, 4, sharey=True)
+        fig, ax = plt.subplots(1, len(rad_profs), sharey=True)
         fig.suptitle('Quasi-Vertical profiles of polarimetric variables \n'
                      f'{ttxt}',
                      fontsize=fontsizetitle)
@@ -1910,13 +1910,18 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
         elif key == 'ZDR [dB]':
             a.set_xlabel('$Z_{DR}$ [dB]', fontsize=fontsizelabels)
         elif key == 'rhoHV [-]':
-            a.set_xlabel(r'$ \rho_{HV}$ [ ]', fontsize=fontsizelabels)
+            a.set_xlabel(r'$ \rho_{HV}$ [-]', fontsize=fontsizelabels)
         elif key == 'PhiDP [deg]':
             a.set_xlabel(r'$ \Phi_{DP}$ [deg]', fontsize=fontsizelabels)
         elif key == 'V [m/s]':
             a.set_xlabel('V [m/s]', fontsize=fontsizelabels)
         elif key == 'gradV [dV/dh]' and rad_params['elev_ang [deg]'] > 89:
             a.set_xlabel('grad V [dV/dh]', fontsize=fontsizelabels)
+        elif key == 'KDP [deg/km]':
+            a.set_xlabel('$K_{DP}$'+r'$\left [\frac{deg}{km}\right ]$',
+                         fontsize=fontsizelabels)
+        else:
+            a.set_xlabel(key, fontsize=fontsizelabels)
         if ylims:
             a.set_ylim(ylims)
         else:

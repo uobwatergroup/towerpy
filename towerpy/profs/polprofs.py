@@ -151,7 +151,7 @@ class PolarimetricProfiles:
 
     def pol_qvps(self, rad_georef, rad_params, rad_vars, thlds='default',
                  valid_gates=30, stats=False, qvps_height_method='bh'):
-        """
+        r"""
         Generate QVPs of polarimetric variables.
 
         Parameters
@@ -179,6 +179,11 @@ class PolarimetricProfiles:
                 'max': Max values
 
                 'sem': Standard Error of the Mean
+
+        Notes
+        -----
+        1. It is recommended to follow the routine described in [2]_ to
+        preprocess :math:`\Phi_{DP}` and compute :math:`K_{DP}`.
 
         References
         ----------
@@ -223,7 +228,8 @@ class PolarimetricProfiles:
                     for k, kv in rad_vars.items()}
 
         validgates = valid_gates
-        qvpvar = ['ZH [dBZ]', 'ZDR [dB]', 'rhoHV [-]', 'PhiDP [deg]']
+        qvpvar = ['ZH [dBZ]', 'ZDR [dB]', 'rhoHV [-]', 'PhiDP [deg]',
+                  'KDP [deg/km]']
 
         qvpdata = {key: values
                    for key, values in rad_vars.items() if key in qvpvar}
