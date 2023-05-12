@@ -1,6 +1,7 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import numpy as np
+from scipy import interpolate
 import cartopy.io.shapereader as shpreader
 
 
@@ -88,6 +89,42 @@ def fillnan1d(x):
     idx = np.where(~mask, np.arange(mask.size), 0)
     np.maximum.accumulate(idx, out=idx)
     return x[idx]
+
+
+def interp_nan(x, y, kind='linear', nan_type='mask'):
+    """
+    Interpolate 1-D arrays to fill nan-masked values.
+
+    Parameters
+    ----------
+    x : array_like
+        1-D array.
+    y : array_like
+        1-D array.
+    kind : str, optional
+        Specifies the kind of interpolation used in the
+        scipy.interpolate.interp1d function. The default is 'linear'.
+    nan_type : str, optional
+        Type of non-valid values, either 'nan' or 'mask'.
+        The default is 'mask'.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
+    if nan_type == 'mask':
+        idx_valid = np.ma.where(np.isfinite(y))
+    elif nan_type == 'nan':
+        idx_valid = np.where(np.isfinite(y))
+    f = interpolate.interp1d(x[idx_valid], y[idx_valid], bounds_error=False,
+                             kind=kind)
+    if nan_type == 'mask':
+        nanitp = np.where(~np.isfinite(y).mask, y, f(x))
+    elif nan_type == 'nan':
+        nanitp = np.where(np.isfinite(y), y, f(x))
+    return nanitp
 
 
 def maf_radial(rad_vars, maf_len=3, maf_ignorenan=True, maf_extendvalid=False,
