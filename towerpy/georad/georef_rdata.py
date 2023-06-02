@@ -53,7 +53,7 @@ def pol2cart(rho, theta):
     return x, y
 
 
-def height_beamc(elev_angle, rad_range, e_rad=6378., std_refr=4/3):
+def height_beamc(elev_angle, rad_range, e_rad=6378, std_refr=4/3):
     r"""
     Calculate the height of the centre of the radar beam above Earth's surface.
 
@@ -104,7 +104,7 @@ def height_beamc(elev_angle, rad_range, e_rad=6378., std_refr=4/3):
     return h
 
 
-def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378., std_refr=4/3):
+def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
     r"""
     Compute the distance (arc length) from the radar to the bins.
 
