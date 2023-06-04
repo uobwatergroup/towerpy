@@ -603,51 +603,70 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
 
 def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
                proj='rect', vars_bounds=None, xlims=None, ylims=None,
-               data_proj=None, ucmap=None, unorm=None, ring=None,
-               range_rings=None, cpy_feats=None):
+               data_proj=None, ucmap=None, unorm=None, cpy_feats=None,
+               ncols=None, nrows=None):
     """
-    ssss.
+    Graph multiple PPI scans into a grid.
 
     Parameters
     ----------
-    rscans_georef : TYPE
-        DESCRIPTION.
-    rscans_params : TYPE
-        DESCRIPTION.
-    rscans_vars : TYPE
-        DESCRIPTION.
-    var2plot : TYPE, optional
-        DESCRIPTION. The default is None.
-    proj : TYPE, optional
-        DESCRIPTION. The default is 'rect'.
-    vars_bounds : TYPE, optional
-        DESCRIPTION. The default is None.
-    xlims : TYPE, optional
-        DESCRIPTION. The default is None.
-    ylims : TYPE, optional
-        DESCRIPTION. The default is None.
-    data_proj : TYPE, optional
-        DESCRIPTION. The default is None.
-    ucmap : TYPE, optional
-        DESCRIPTION. The default is None.
-    unorm : TYPE, optional
-        DESCRIPTION. The default is None.
-    ring : TYPE, optional
-        DESCRIPTION. The default is None.
-    range_rings : TYPE, optional
-        DESCRIPTION. The default is None.
-    cpy_feats : TYPE, optional
-        DESCRIPTION. The default is None.
-
-    Raises
-    ------
-    TowerpyError
-        DESCRIPTION.
-
-    Returns
-    -------
-    None.
-
+    rscans_georef : list
+        List of eoreferenced data containing descriptors of the azimuth, gates
+        and beam height, amongst others, corresponding to each PPI scan.
+    rscans_params : list
+        List of radar technical details corresponding to each PPI scan.
+    rscans_vars : list
+        List of Dicts containing radar variables to plot corresponding to each
+        PPI scan.
+    var2plot : str, optional
+        Key of the radar variable to plot. The default is None. This option
+        will plot ZH or the 'first' element in the rad_vars dict.
+    proj : 'rect' or 'polar', optional
+        Coordinates projection (polar or rectangular). The default is 'rect'.
+    vars_bounds : dict containing key and 3-element tuple or list, optional
+        Boundaries [min, max, nvals] between which radar variables are
+        to be mapped. The default are:
+            {'ZH [dBZ]': [-10, 60, 15],
+             'ZDR [dB]': [-2, 6, 17],
+             'PhiDP [deg]': [0, 180, 10], 'KDP [deg/km]': [-2, 6, 17],
+             'rhoHV [-]': [0.3, .9, 1],
+             'V [m/s]': [-5, 5, 11], 'gradV [dV/dh]': [-1, 0, 11],
+             'LDR [dB]': [-35, 0, 11],
+             'Rainfall [mm/hr]': [0.1, 64, 11]}
+    xlims : 2-element tuple or list, optional
+        Set the x-axis view limits [min, max]. The default is None.
+    ylims : 2-element tuple or list, optional
+        Set the y-axis view limits [min, max]. The default is None.
+    data_proj : Cartopy Coordinate Reference System object, optional
+        Cartopy projection used to plot the data in a map e.g.,
+        ccrs.OSGB(approx=False).
+    ucmap : colormap, optional
+        User-defined colormap.
+    unorm : matplotlib.colors normalisation object, optional
+        User-defined normalisation method to map colormaps onto radar data.
+        The default is None.
+    cpy_feats : dict, optional
+        Cartopy attributes to add to the map. The default are:
+        {
+        'status': False,
+        'add_land': False,
+        'add_ocean': False,
+        'add_coastline': False,
+        'add_borders': False,
+        'add_countries': True,
+        'add_provinces': True,
+        'borders_ls': ':',
+        'add_lakes': False,
+        'lakes_transparency': 0.5,
+        'add_rivers': False,
+        'tiles': False,
+        'tiles_source': None,
+        'tiles_style': None,
+        }
+    ncols : int, optional
+        Set the number of columns used to build the grid. The default is None.
+    nrows : int, optional
+        Set the number of rows used to build the grid. The default is None.
     """
     from mpl_toolkits.axes_grid1 import ImageGrid
     from cartopy.mpl.geoaxes import GeoAxes
@@ -811,12 +830,30 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
                          # constrained_layout=True
                          )
         grgeor = [[i['xgrid'], i['ygrid']] for i in rscans_georef]
-        if len(rscans_vars) <= 3:
-            nrw = 1
-            ncl = len(rscans_vars)
+        if nrows is None and ncols is None:
+            if len(rscans_vars) <= 3:
+                nrw = 1
+                ncl = len(rscans_vars)
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = 3
+        elif nrows is not None and ncols is None:
+            if len(rscans_vars) <= 3:
+                nrw = nrows
+                ncl = len(rscans_vars)
+            else:
+                nrw = nrows
+                ncl = 3
+        elif ncols is not None and nrows is None:
+            if len(rscans_vars) <= 3:
+                nrw = 1
+                ncl = ncols
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = ncols
         else:
-            nrw = int(np.ceil(len(rscans_vars)/2))
-            nrw = 3
+            nrw = nrows
+            ncl = ncols
         grid2 = ImageGrid(fig, 111, nrows_ncols=(nrw, ncl),
                           axes_pad=0.05, label_mode="L", share_all=True,
                           cbar_location="right", cbar_mode="single",
@@ -845,7 +882,7 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
         #     t = add_inner_title(ax, im_title, loc='upper left')
         #     t.patch.set_ec("none")
         #     t.patch.set_alpha(0.5)
-        if len(rscans_vars) >= 3 and len(rscans_vars) % 2 == 0:
+        if len(rscans_vars) >= 3 and len(rscans_vars) % 2 == 0 and ncols is None and ncols is None:
             grid2[-1].remove()
         plt.tight_layout()
         # plt.show()
@@ -856,13 +893,31 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
         projection = ccrs.PlateCarree()
         axes_class = (GeoAxes, dict(map_projection=projection))
         grgeor = [[i['xgrid_proj'], i['ygrid_proj']] for i in rscans_georef]
-        if len(rscans_vars) <= 2:
-            nrw = 1
-            ncl = len(rscans_vars)
+        if nrows is None and ncols is None:
+            if len(rscans_vars) <= 2:
+                nrw = 1
+                ncl = len(rscans_vars)
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = 2
+        elif nrows is not None and ncols is None:
+            if len(rscans_vars) <= 2:
+                nrw = nrows
+                ncl = len(rscans_vars)
+            else:
+                nrw = nrows
+                ncl = 2
+        elif ncols is not None and nrows is None:
+            if len(rscans_vars) <= 2:
+                nrw = 1
+                ncl = ncols
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = ncols
         else:
-            nrw = int(np.ceil(len(rscans_vars)/2))
-            ncl = 2
-        grid2 = ImageGrid(fig, 111, nrows_ncols=(nrw, 2),
+            nrw = nrows
+            ncl = ncols
+        grid2 = ImageGrid(fig, 111, nrows_ncols=(nrw, ncl),
                           axes_pad=1.5, label_mode="keep",
                           cbar_location="right", cbar_mode="single",
                           cbar_size="9%", cbar_pad=0.75,
@@ -965,7 +1020,7 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
             ax1.cax.set_title(var2plot[var2plot .find('['):], fontsize=12)
             ax1.axes.set_aspect('equal')
             plt.show()
-        if len(rscans_vars) > 2 and len(rscans_vars) % 2 != 0:
+        if len(rscans_vars) > 2 and len(rscans_vars) % 2 != 0 and ncols is None and ncols is None:
             grid2[-1].remove()
 
 
@@ -2305,6 +2360,11 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
 
     Parameters
     ----------
+    rscans_georef : List
+        List of eoreferenced data containing descriptors of the azimuth, gates
+        and beam height, amongst others, corresponding to each QVP.
+    rscans_params : List
+        List of radar technical details corresponding to each QVP.
     tp_rdqvp : PolarimetricProfiles Class
         Outputs of the RD-QVPs function.
     mlyr : MeltingLayer Class, optional

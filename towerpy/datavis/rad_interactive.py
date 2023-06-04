@@ -4,7 +4,6 @@ import warnings
 import datetime as dt
 from zoneinfo import ZoneInfo
 import pickle
-import math
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -154,7 +153,7 @@ class PPI_Int:
             Right or left click from the mouse.
 
         """
-        gres_m = intradparams['gateres [m]']
+        # gres_m = intradparams['gateres [m]']
         if gcoord_sys == 'polar':
             if event.button is MouseButton.LEFT:
                 if event.inaxes != f3_axvar2plot:
