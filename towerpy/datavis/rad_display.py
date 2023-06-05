@@ -601,6 +601,429 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
     plt.show()
 
 
+def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
+               proj='rect', vars_bounds=None, xlims=None, ylims=None,
+               data_proj=None, ucmap=None, unorm=None, cpy_feats=None,
+               ncols=None, nrows=None):
+    """
+    Graph multiple PPI scans into a grid.
+
+    Parameters
+    ----------
+    rscans_georef : list
+        List of eoreferenced data containing descriptors of the azimuth, gates
+        and beam height, amongst others, corresponding to each PPI scan.
+    rscans_params : list
+        List of radar technical details corresponding to each PPI scan.
+    rscans_vars : list
+        List of Dicts containing radar variables to plot corresponding to each
+        PPI scan.
+    var2plot : str, optional
+        Key of the radar variable to plot. The default is None. This option
+        will plot ZH or the 'first' element in the rad_vars dict.
+    proj : 'rect' or 'polar', optional
+        Coordinates projection (polar or rectangular). The default is 'rect'.
+    vars_bounds : dict containing key and 3-element tuple or list, optional
+        Boundaries [min, max, nvals] between which radar variables are
+        to be mapped. The default are:
+            {'ZH [dBZ]': [-10, 60, 15],
+             'ZDR [dB]': [-2, 6, 17],
+             'PhiDP [deg]': [0, 180, 10], 'KDP [deg/km]': [-2, 6, 17],
+             'rhoHV [-]': [0.3, .9, 1],
+             'V [m/s]': [-5, 5, 11], 'gradV [dV/dh]': [-1, 0, 11],
+             'LDR [dB]': [-35, 0, 11],
+             'Rainfall [mm/hr]': [0.1, 64, 11]}
+    xlims : 2-element tuple or list, optional
+        Set the x-axis view limits [min, max]. The default is None.
+    ylims : 2-element tuple or list, optional
+        Set the y-axis view limits [min, max]. The default is None.
+    data_proj : Cartopy Coordinate Reference System object, optional
+        Cartopy projection used to plot the data in a map e.g.,
+        ccrs.OSGB(approx=False).
+    ucmap : colormap, optional
+        User-defined colormap.
+    unorm : matplotlib.colors normalisation object, optional
+        User-defined normalisation method to map colormaps onto radar data.
+        The default is None.
+    cpy_feats : dict, optional
+        Cartopy attributes to add to the map. The default are:
+        {
+        'status': False,
+        'add_land': False,
+        'add_ocean': False,
+        'add_coastline': False,
+        'add_borders': False,
+        'add_countries': True,
+        'add_provinces': True,
+        'borders_ls': ':',
+        'add_lakes': False,
+        'lakes_transparency': 0.5,
+        'add_rivers': False,
+        'tiles': False,
+        'tiles_source': None,
+        'tiles_style': None,
+        }
+    ncols : int, optional
+        Set the number of columns used to build the grid. The default is None.
+    nrows : int, optional
+        Set the number of rows used to build the grid. The default is None.
+    """
+    from mpl_toolkits.axes_grid1 import ImageGrid
+    from cartopy.mpl.geoaxes import GeoAxes
+
+    lpv = {'ZH [dBZ]': [-10, 60, 15], 'ZDR [dB]': [-2, 6, 17],
+           'PhiDP [deg]': [0, 180, 10], 'KDP [deg/km]': [-2, 6, 17],
+           'rhoHV [-]': [0.3, .9, 1], 'V [m/s]': [-5, 5, 11],
+           'gradV [dV/dh]': [-1, 0, 11], 'LDR [dB]': [-35, 0, 11],
+           'Rainfall [mm/hr]': [0.1, 64, 11]}
+    if vars_bounds is not None:
+        lpv.update(vars_bounds)
+    bnd = {'b'+key: np.linspace(value[0], value[1], value[2])
+           if 'rhoHV' not in key
+           else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
+                           np.linspace(value[1], value[2], 11)))
+           for key, value in lpv.items()}
+    if vars_bounds is None:
+        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16,
+                                             20, 24, 28, 32, 48, 64])
+
+    dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
+                                               mpl.colormaps['tpylsc_pvars'].N,
+                                               extend='both')
+             for key, value in bnd.items()}
+    if 'bZH [dBZ]' in bnd.keys():
+        dnorm['nZH [dBZ]'] = mcolors.BoundaryNorm(bnd['bZH [dBZ]'],
+                                                  mpl.colormaps['tpylsc_ref'].N,
+                                                  extend='both')
+    if 'brhoHV [-]' in bnd.keys():
+        dnorm['nrhoHV [-]'] = mcolors.BoundaryNorm(bnd['brhoHV [-]'],
+                                                   mpl.colormaps['tpylsc_pvars'].N,
+                                                   extend='min')
+    if 'bRainfall [mm/hr]' in bnd.keys():
+        bnrr = mcolors.BoundaryNorm(bnd['bRainfall [mm/hr]'],
+                                    mpl.colormaps['tpylsc_rainrt'].N,
+                                    extend='max')
+        dnorm['nRainfall [mm/hr]'] = bnrr
+    if 'bZDR [dB]' in bnd.keys():
+        dnorm['nZDR [dB]'] = mcolors.BoundaryNorm(bnd['bZDR [dB]'],
+                                                  mpl.colormaps['tpylsc_2slope'].N,
+                                                  extend='both')
+        # dnorm['nZDR [dB]'] = mcolors.TwoSlopeNorm(vmin=lpv['ZDR [dB]'][0],
+        #                                           vcenter=0,
+        #                                           vmax=lpv['ZDR [dB]'][1],
+    if 'bKDP [deg/km]' in bnd.keys():
+        dnorm['nKDP [deg/km]'] = mcolors.BoundaryNorm(bnd['bKDP [deg/km]'],
+                                                      mpl.colormaps['tpylsc_2slope'].N,
+                                                      # tpycm_2slope.N,
+                                                      extend='both')
+    if 'bV [m/s]' in bnd.keys():
+        dnorm['nV [m/s]'] = mcolors.BoundaryNorm(bnd['bV [m/s]'],
+                                                 mpl.colormaps['tpylsc_dbu_rd'].N,
+                                                 extend='both')
+
+    # txtboxs = 'round, rounding_size=0.5, pad=0.5'
+    # txtboxc = (0, -.09)
+    # fc, ec = 'w', 'k'
+    if unorm is not None:
+        dnorm.update(unorm)
+    cbtks_fmt = 0
+    if var2plot is None or var2plot == 'ZH [dBZ]':
+        if all('ZH [dBZ]' in i.keys() for i in rscans_vars):
+            cmaph, normp = mpl.colormaps['tpylsc_ref'], dnorm['nZH [dBZ]']
+            var2plot = 'ZH [dBZ]'
+        else:
+            # var2plot = list(rad_vars.keys())[0]
+            # var2plot = [sorted(list(i.keys()))[0] for i in rscans_vars]
+            dskeys = [k for i in rscans_vars for k in i.keys()]
+            var2plot = list(set([x for x in dskeys
+                                 if dskeys.count(x) >= len(rscans_vars)]))[0]
+            cmaph = mpl.colormaps['tpylsc_pvars']
+            normp = dnorm.get('n'+var2plot)
+            if 'rho' in var2plot:
+                cbtks_fmt = 2
+                cmaph = mpl.colormaps['tpylsc_pvars']
+                tcks = bnd['brhoHV [-]']
+            if 'ZDR' in var2plot:
+                cmaph = mpl.colormaps['tpylsc_2slope']
+                cbtks_fmt = 1
+            if 'KDP' in var2plot:
+                cmaph = mpl.colormaps['tpylsc_2slope']
+                # cbtks_fmt = 1
+            if var2plot == 'V [m/s]':
+                cmaph = mpl.colormaps['tpylsc_dbu_rd']
+            if 'Rainfall' in var2plot:
+                cmaph = mpl.colormaps['tpylsc_rainrt']
+                # tpycm.set_under(color='#D2ECFA', alpha=0)
+                # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
+                cbtks_fmt = 1
+    else:
+        cmaph = mpl.colormaps['tpylsc_pvars']
+        normp = dnorm.get('n'+var2plot)
+        if 'rho' in var2plot:
+            cbtks_fmt = 2
+            tcks = bnd['brhoHV [-]']
+        if 'ZDR' in var2plot:
+            cmaph = mpl.colormaps['tpylsc_2slope']
+            cbtks_fmt = 1
+        if 'KDP' in var2plot:
+            cmaph = mpl.colormaps['tpylsc_2slope']
+        if var2plot == 'V [m/s]':
+            cmaph = mpl.colormaps['tpylsc_dbu_rd']
+        if 'Rainfall' in var2plot:
+            cmaph = mpl.colormaps['tpylsc_rainrt']
+            # tpycm.set_under(color='#D2ECFA', alpha=0)
+            # mpl.colormaps['tpylsc_rainrt'].set_bad(color='#D2ECFA', alpha=0)
+            cbtks_fmt = 1
+    if ucmap is not None:
+        cmaph = ucmap
+    # plotunits = var2plot[var2plot .find('['):]
+    cpy_features = {'status': False,
+                    # 'coastresolution': '10m',
+                    'add_land': False,
+                    'add_ocean': False,
+                    'add_coastline': False,
+                    'add_borders': False,
+                    'add_countries': True,
+                    'add_provinces': True,
+                    'borders_ls': ':',
+                    'add_lakes': False,
+                    'lakes_transparency': 0.5,
+                    'add_rivers': False,
+                    'tiles': False,
+                    'tiles_source': None,
+                    'tiles_style': None,
+                    'tiles_res': 8, 'alpha_tiles': 0.5, 'alpha_rad': 1
+                    }
+    if cpy_feats:
+        cpy_features.update(cpy_feats)
+    if cpy_features['status']:
+        states_provinces = cfeature.NaturalEarthFeature(
+            category='cultural',
+            name='admin_1_states_provinces_lines',
+            scale='10m',
+            facecolor='none')
+        countries = cfeature.NaturalEarthFeature(
+            category='cultural',
+            name='admin_0_countries',
+            scale='10m',
+            facecolor='none')
+
+    # if proj == 'polar':
+
+    # grvars = [i[var2plot] for i in rscans_vars]
+
+    if var2plot.endswith('[dBZ]'):
+        cmap = mpl.colormaps['tpylsc_ref']
+    elif var2plot.endswith('[dB]') or var2plot.endswith('[deg/km]'):
+        cmap = mpl.colormaps['tpylsc_2slope']
+    elif var2plot.endswith('[mm/hr]'):
+        cmap = mpl.colormaps['tpylsc_rainrt']
+    elif var2plot.endswith('[m/s]'):
+        cmap = mpl.colormaps['tpylsc_dbu_rd']
+    else:
+        cmap = mpl.colormaps['tpylsc_pvars']
+    pttl = [f"{p['elev_ang [deg]']:{2}.{3}} Deg. "
+            + f"{p['datetime']:%Y-%m-%d %H:%M:%S}"
+            for p in rscans_params]
+    if proj == 'rect' and cpy_features['status'] is False:
+        fig = plt.figure(figsize=(15, 5),
+                         # constrained_layout=True
+                         )
+        grgeor = [[i['xgrid'], i['ygrid']] for i in rscans_georef]
+        if nrows is None and ncols is None:
+            if len(rscans_vars) <= 3:
+                nrw = 1
+                ncl = len(rscans_vars)
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = 3
+        elif nrows is not None and ncols is None:
+            if len(rscans_vars) <= 3:
+                nrw = nrows
+                ncl = len(rscans_vars)
+            else:
+                nrw = nrows
+                ncl = 3
+        elif ncols is not None and nrows is None:
+            if len(rscans_vars) <= 3:
+                nrw = 1
+                ncl = ncols
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = ncols
+        else:
+            nrw = nrows
+            ncl = ncols
+        grid2 = ImageGrid(fig, 111, nrows_ncols=(nrw, ncl),
+                          axes_pad=0.05, label_mode="L", share_all=True,
+                          cbar_location="right", cbar_mode="single",
+                          cbar_size="10%", cbar_pad=0.25)
+        for ax, z, g, pr, pt in zip(grid2, [i[var2plot] for i in rscans_vars],
+                                    grgeor, rscans_params, pttl):
+            f1 = ax.pcolormesh(g[0], g[1], z, shading='auto', cmap=cmap,
+                               norm=normp)
+            ax.set_title(f"{pt} \n {pr['site_name']} - PPI {var2plot}",
+                         fontsize=12)
+            ax.set_xlabel('Distance from the radar [km]', fontsize=12)
+            ax.set_ylabel('Distance from the radar [km]', fontsize=12)
+            ax.grid(True)
+            ax.axes.set_aspect('equal')
+            ax.tick_params(axis='both', which='major', labelsize=12)
+        # With cbar_mode="single", cax attribute of all axes are identical.
+
+        if var2plot == 'rhoHV [-]':
+            ax.cax.colorbar(f1, ticks=tcks, format=f'%.{cbtks_fmt}f')
+        else:
+            ax.cax.colorbar(f1)
+        ax.cax.tick_params(direction='in', which='both', labelsize=12)
+        ax.cax.toggle_label(True)
+        ax.cax.set_title(var2plot[var2plot .find('['):], fontsize=12)
+        # for ax, im_title in zip(grid2, ["(a)", "(b)", "(c)"]):
+        #     t = add_inner_title(ax, im_title, loc='upper left')
+        #     t.patch.set_ec("none")
+        #     t.patch.set_alpha(0.5)
+        if len(rscans_vars) >= 3 and len(rscans_vars) % 2 == 0 and ncols is None and ncols is None:
+            grid2[-1].remove()
+        plt.tight_layout()
+        # plt.show()
+    elif proj == 'rect' and cpy_features['status']:
+        fig = plt.figure(figsize=(16, 6),
+                         constrained_layout=True
+                         )
+        projection = ccrs.PlateCarree()
+        axes_class = (GeoAxes, dict(map_projection=projection))
+        grgeor = [[i['xgrid_proj'], i['ygrid_proj']] for i in rscans_georef]
+        if nrows is None and ncols is None:
+            if len(rscans_vars) <= 2:
+                nrw = 1
+                ncl = len(rscans_vars)
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = 2
+        elif nrows is not None and ncols is None:
+            if len(rscans_vars) <= 2:
+                nrw = nrows
+                ncl = len(rscans_vars)
+            else:
+                nrw = nrows
+                ncl = 2
+        elif ncols is not None and nrows is None:
+            if len(rscans_vars) <= 2:
+                nrw = 1
+                ncl = ncols
+            else:
+                nrw = int(np.ceil(len(rscans_vars)/2))
+                ncl = ncols
+        else:
+            nrw = nrows
+            ncl = ncols
+        grid2 = ImageGrid(fig, 111, nrows_ncols=(nrw, ncl),
+                          axes_pad=1.5, label_mode="keep",
+                          cbar_location="right", cbar_mode="single",
+                          cbar_size="9%", cbar_pad=0.75,
+                          axes_class=axes_class)
+        if data_proj:
+            proj2 = data_proj
+        else:
+            raise TowerpyError('User must specify the projected coordinate'
+                               ' system of the radar data e.g.'
+                               ' ccrs.OSGB(approx=False) or ccrs.UTM(zone=32)')
+
+        for ax1, z, g, pr, pt in zip(grid2, [i[var2plot] for i in rscans_vars],
+                                     grgeor, rscans_params, pttl):
+            ax1.set_title(f"{pt} \n {pr['site_name']} - PPI {var2plot}",
+                          fontsize=12)
+            if xlims and ylims:
+                extx = xlims
+                exty = ylims
+                ax1.set_extent(extx+exty, crs=projection)
+            if cpy_features['tiles']:
+                if (cpy_features['tiles_source'] is None
+                        or cpy_features['tiles_source'] == 'OSM'):
+                    imtiles = cimgt.OSM()
+                    ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                  interpolation='spline36',
+                                  alpha=cpy_features['alpha_tiles'])
+                elif cpy_features['tiles_source'] == 'GoogleTiles':
+                    if cpy_features['tiles_style'] is None:
+                        imtiles = cimgt.GoogleTiles(style='street')
+                        ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                      interpolation='spline36',
+                                      alpha=cpy_features['alpha_tiles'])
+                    else:
+                        imtiles = cimgt.GoogleTiles(style=cpy_features['tiles_style'])
+                        ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                      # interpolation='spline36',
+                                      alpha=cpy_features['alpha_tiles'])
+                elif cpy_features['tiles_source'] == 'Stamen':
+                    if cpy_features['tiles_style'] is None:
+                        imtiles = cimgt.Stamen(style='toner')
+                        ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                      interpolation='spline36',
+                                      alpha=cpy_features['alpha_tiles'])
+                    else:
+                        imtiles = cimgt.Stamen(style=cpy_features['tiles_style'])
+                        ax1.add_image(imtiles, cpy_features['tiles_res'],
+                                      interpolation='spline36',
+                                      alpha=cpy_features['alpha_tiles'])
+            if cpy_features['add_land']:
+                ax1.add_feature(cfeature.LAND)
+            if cpy_features['add_ocean']:
+                ax1.add_feature(cfeature.OCEAN)
+            if cpy_features['add_coastline']:
+                ax1.add_feature(cfeature.COASTLINE)
+            if cpy_features['add_borders']:
+                ax1.add_feature(cfeature.BORDERS,
+                                linestyle=cpy_features['borders_ls'])
+            if cpy_features['add_lakes']:
+                ax1.add_feature(cfeature.LAKES,
+                                alpha=cpy_features['lakes_transparency'])
+            if cpy_features['add_rivers']:
+                ax1.add_feature(cfeature.RIVERS)
+            if cpy_features['add_countries']:
+                ax1.add_feature(states_provinces, edgecolor='black', ls=":")
+            if cpy_features['add_provinces']:
+                ax1.add_feature(countries, edgecolor='black', )
+
+            data_source = 'Natural Earth'
+            data_license = 'public domain'
+            # Add a text annotation for the license information to the
+            # the bottom right corner.
+            # text = AnchoredText(r'$\copyright$ {}; license: {}'
+            #                     ''.format(SOURCE, LICENSE),
+            #                     loc=4, prop={'size': 12}, frameon=True)
+            # ax1.add_artist(text)
+            print('\N{COPYRIGHT SIGN}'
+                  + f'{data_source}; license: {data_license}')
+            if cpy_features['tiles_source'] == 'Stamen':
+                print('\N{COPYRIGHT SIGN}' + 'Map tiles by Stamen Design, '
+                      + 'under CC BY 3.0. Data by OpenStreetMap, under ODbL.')
+            gl = ax1.gridlines(draw_labels=True, dms=False,
+                               x_inline=False, y_inline=False)
+            gl.xlabel_style = {'size': 11}
+            gl.ylabel_style = {'size': 11}
+            # ax1.set_title(f'{ptitle} \n' + f'PPI {var2plot}', fontsize=14)
+            # lon_formatter = LongitudeFormatter(number_format='.4f',
+            #                                 degree_symbol='',
+            #                                dateline_direction_label=True)
+            # lat_formatter = LatitudeFormatter(number_format='.0f',
+            #                                    degree_symbol=''
+            #                                   )
+            # ax1.xaxis.set_major_formatter(lon_formatter)
+            # ax1.yaxis.set_major_formatter(lat_formatter)
+            # plotunits = [i[i.find('['):]
+            #              for i in rad_vars.keys() if var2plot == i][0]
+            mappable = ax1.pcolormesh(g[0], g[1], z, transform=proj2,
+                                      shading='auto', cmap=cmaph, norm=normp,
+                                      alpha=cpy_features['alpha_rad'])
+            grid2.cbar_axes[0].colorbar(mappable)
+            ax1.cax.set_title(var2plot[var2plot .find('['):], fontsize=12)
+            ax1.axes.set_aspect('equal')
+            plt.show()
+        if len(rscans_vars) > 2 and len(rscans_vars) % 2 != 0 and ncols is None and ncols is None:
+            grid2[-1].remove()
+
+
 def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
                        vars_bounds=None, xlims=None, ylims=None, zlims=[0, 8],
                        limh=8, ucmap=None, unorm=None):
@@ -1937,6 +2360,11 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
 
     Parameters
     ----------
+    rscans_georef : List
+        List of eoreferenced data containing descriptors of the azimuth, gates
+        and beam height, amongst others, corresponding to each QVP.
+    rscans_params : List
+        List of radar technical details corresponding to each QVP.
     tp_rdqvp : PolarimetricProfiles Class
         Outputs of the RD-QVPs function.
     mlyr : MeltingLayer Class, optional

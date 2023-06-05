@@ -4,7 +4,6 @@ import warnings
 import datetime as dt
 from zoneinfo import ZoneInfo
 import pickle
-import math
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -14,6 +13,7 @@ from matplotlib.backend_bases import MouseButton
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from matplotlib.offsetbox import AnchoredText
 from matplotlib.widgets import RadioButtons, Slider
+from scipy import spatial
 from ..utils import radutilities as rut
 from ..base import TowerpyError
 
@@ -46,54 +46,88 @@ def format_coord(x, y):
         angle and range of a given pixel.
 
     """
-    gres_m = intradparams['gateres [m]']
-    ngates_m = intradparams['ngates']
     if gcoord_sys == 'rect':
-        q, r = quadangle(x, y, gres_m)
-        if q >= 360:
-            q = 0
-        if r < ngates_m:
+        xy = [(x, y)]
+        distance, index = spatial.KDTree(gflat_coords).query(xy)
+        id1 = np.unravel_index(index, (intradparams['nrays'],
+                                       intradparams['ngates']))
+        q = id1[0][0]
+        r = id1[1][0]
+        z = mrv[id1[0][0], id1[1][0]]
+        if r < intradparams['ngates']-1:
             z = mrv[q, r]
             return f'x={x:1.4f}, y={y:1.4f}, z={z:1.4f} [{q},{r}]'
         else:
             return f'x={x:1.4f}, y={y:1.4f}'
 
 
-def quadangle(x, y, gater):
-    """
-    Compute the range and angle of a given pixel.
+# def format_coord2(x, y):
+#     """
+#     Format the coordinates used in plots.
 
-    Parameters
-    ----------
-    x : float
-        x-coordinates.
-    y : float
-        y-coordinates.
-    gater : float
-        Gate resolution, in m.
+#     Parameters
+#     ----------
+#     x : float
+#         x-coordinates.
+#     y : float
+#         y-coordinates.
 
-    Returns
-    -------
-    theta : int
-        Angle of a given pixel.
-    nrange : int
-        Range of a given pixel
+#     Returns
+#     -------
+#     z: str
+#         Value of a given pixel.
+#     [q, r] : list
+#         angle and range of a given pixel.
 
-    """
-    if intradparams['range_start [m]'] == 0:
-        quaddmmy = 0.5
-    else:
-        quaddmmy = 0
-    if x > 0 and y > 0:
-        theta = 89 - int(np.degrees(np.arctan(y/x)))
-    elif x < 0 and y > 0:
-        theta = abs(int(np.degrees(np.arctan(y/x))))+270
-    elif x < 0 and y < 0:
-        theta = abs(int(np.degrees(np.arctan(x/y))))+180
-    else:
-        theta = abs(int(np.degrees(np.arctan(y/x))))+90
-    nrange = abs(int(math.hypot(x, y) / (gater/1000)+quaddmmy))
-    return theta, nrange
+#     """
+#     gres_m = intradparams['gateres [m]']
+#     ngates_m = intradparams['ngates']
+#     if gcoord_sys == 'rect':
+#         q, r = quadangle(x, y, gres_m)
+#         if q >= 360:
+#             q = 0
+#         if r < ngates_m:
+#             z = mrv[q, r]
+#             return f'x={x:1.4f}, y={y:1.4f}, z={z:1.4f} [{q},{r}]'
+#         else:
+#             return f'x={x:1.4f}, y={y:1.4f}'
+
+
+# def quadangle(x, y, gater):
+#     """
+#     Compute the range and angle of a given pixel.
+
+#     Parameters
+#     ----------
+#     x : float
+#         x-coordinates.
+#     y : float
+#         y-coordinates.
+#     gater : float
+#         Gate resolution, in m.
+
+#     Returns
+#     -------
+#     theta : int
+#         Angle of a given pixel.
+#     nrange : int
+#         Range of a given pixel
+
+#     """
+#     if intradparams['range_start [m]'] == 0:
+#         quaddmmy = 0.5
+#     else:
+#         quaddmmy = 0
+#     if x > 0 and y > 0:
+#         theta = 89 - int(np.degrees(np.arctan(y/x)))
+#     elif x < 0 and y > 0:
+#         theta = abs(int(np.degrees(np.arctan(y/x))))+270
+#     elif x < 0 and y < 0:
+#         theta = abs(int(np.degrees(np.arctan(x/y))))+180
+#     else:
+#         theta = abs(int(np.degrees(np.arctan(y/x))))+90
+#     nrange = abs(int(math.hypot(x, y) / (gater/1000)+quaddmmy))
+#     return theta, nrange
 
 
 class PPI_Int:
@@ -119,7 +153,7 @@ class PPI_Int:
             Right or left click from the mouse.
 
         """
-        gres_m = intradparams['gateres [m]']
+        # gres_m = intradparams['gateres [m]']
         if gcoord_sys == 'polar':
             if event.button is MouseButton.LEFT:
                 if event.inaxes != f3_axvar2plot:
@@ -138,10 +172,16 @@ class PPI_Int:
             if event.button is MouseButton.RIGHT:
                 if event.inaxes != f3_axvar2plot:
                     return True
-                nangle, nrange = quadangle(event.xdata, event.ydata,
-                                           gres_m)
-                if nangle >= 360:
-                    nangle = 0
+                # nangle, nrange = quadangle(event.xdata, event.ydata,
+                #                            gres_m)
+                # if nangle >= 360:
+                #     nangle = 0
+                xy = [(event.xdata, event.ydata)]
+                distance, index = spatial.KDTree(gflat_coords).query(xy)
+                id1 = np.unravel_index(index, (intradparams['nrays'],
+                                               intradparams['ngates']))
+                nangle = id1[0][0]
+                nrange = id1[1][0]
                 cdt = [nangle, nrange]
                 print(f'azimuth {abs(nangle)}',
                       f'gate {int(np.round(nrange))}')
@@ -181,10 +221,16 @@ class PPI_Int:
             Record the coordinates when user press any number from 0 to 9.
 
         """
-        gres_m = intradparams['gateres [m]']
+        # gres_m = intradparams['gateres [m]']
         keynum = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
         if event.key in keynum and event.inaxes == f3_axvar2plot:
-            nangle, nrange = quadangle(event.xdata, event.ydata, gres_m)
+            # nangle, nrange = quadangle(event.xdata, event.ydata, gres_m)
+            xy = [(event.xdata, event.ydata)]
+            distance, index = spatial.KDTree(gflat_coords).query(xy)
+            id1 = np.unravel_index(index, (intradparams['nrays'],
+                                           intradparams['ngates']))
+            nangle = id1[0][0]
+            nrange = id1[1][0]
             print('you pressed', event.key, nangle, nrange)
             self.clickcoords.append((nangle, nrange, event.key))
 
@@ -385,8 +431,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
 
     # global figradint, intradgs, f3_axvar2plot, f3_axhbeam, heightbeamint
     global figradint, intradgs, f3_axvar2plot, f3_axhbeam, gcoord_sys
-    global intradgeoref, intradparams, intradvars
-    global intradaxs, mrv, vars_xlim, vars_ylim, rbeamh_b, rbeamh_t
+    global intradgeoref, intradparams, intradvars, intradaxs
+    global mrv, vars_xlim, vars_ylim, rbeamh_b, rbeamh_t, gflat_coords
 
     if isinstance(rad_georef['beambottom_height [km]'], np.ndarray):
         rbeamh_b = rad_georef['beambottom_height [km]']
@@ -538,6 +584,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
               '  ppiexplorer.clickcoords                                    \n'
               ' =============================================================')
         # if coastl is not True:
+        gflat_coords = [[j for j in i]
+                        for i in zip(rad_georef['xgrid'].flat,
+                                     rad_georef['ygrid'].flat)]
         f3_axvar2plot = figradint.add_subplot(intradgs[0:-1, 0:2])
         f3_axvar2plot.pcolormesh(rad_georef['xgrid'],
                                  rad_georef['ygrid'],

@@ -96,7 +96,7 @@ class Rad_scan:
                                  ctp.c_char_p(emptyarr1[7]))
         nrays, ngates = int(emptyarr1[6][2]), int(emptyarr1[6][1])
 
-        # read all polarimetric variables
+        # read all radar variables
         if get_polvar == 'all' or get_polvar is None:
             emptyarr2 = [np.empty(20) for i in range(8)]
             emptyarr2[0] = np.array([0, nrays, ngates], dtype=float)
@@ -135,7 +135,7 @@ class Rad_scan:
                 if emptyarr[0][0] == 0:
                     outpar = np.array(emptyarr[6])
         else:
-            # read pol variable defined by user
+            # read rad variable defined by user
             emptyarr = [np.empty(20) for i in range(8)]
             emptyarr[0] = np.array([0, nrays, ngates], dtype=float)
             emptyarr[1] = np.empty((nrays, ngates))
@@ -177,9 +177,25 @@ class Rad_scan:
             vardat[nvar] = np.array(emptyarr[1])
             dicaxs[nvar] = [emptyarr[6][4], emptyarr[6][5]]
             outpar = np.array(emptyarr[6])
-
-        # Create dicts to store pol data
         poldata = {varnam[i]: j for (i, j) in vardat.items()}
+        if any(v.startswith('Zh') for k, v in varnam.items()):
+            poldata['ZH [dBZ]'] = poldata.pop('Zh [dBZ]')
+        if any(v.startswith('Zdr') for k, v in varnam.items()):
+            poldata['ZDR [dB]'] = poldata.pop('Zdr [dB ]')
+        if any(v.startswith('RhoHV') for k, v in varnam.items()):
+            poldata['rhoHV [-]'] = poldata.pop('RhoHV [   ]')
+        if any(v.startswith('LDR') for k, v in varnam.items()):
+            poldata['LDR [dB]'] = poldata.pop('LDR [dB ]')
+        if any(v.startswith('Phi') for k, v in varnam.items()):
+            poldata['PhiDP [deg]'] = poldata.pop('Phidp [deg]')
+        if any(not v for k, v in varnam.items()):
+            poldata['Absphase_V [ ]'] = poldata.pop('')
+        poldata = dict(sorted(poldata.items(), reverse=True))
+        if exclude_vars is not None:
+            evars = exclude_vars
+            poldata = {k: val for k, val in poldata.items() if k not in evars}
+
+        # Create dict to store radparameters
         dttime = dt.datetime(int(emptyarr[5][0]), int(emptyarr[5][1]),
                              int(emptyarr[5][2]), int(emptyarr[5][3]),
                              int(emptyarr[5][4]), int(emptyarr[5][5]),
@@ -206,48 +222,43 @@ class Rad_scan:
         if 'metoffice' in self.file_name:
             parameters['beamwidth [deg]'] = 1.
         parameters['site_name'] = self.site_name
-        if any(v.startswith('Zh') for k, v in varnam.items()):
-            poldata['ZH [dBZ]'] = poldata.pop('Zh [dBZ]')
-        if any(v.startswith('Zdr') for k, v in varnam.items()):
-            poldata['ZDR [dB]'] = poldata.pop('Zdr [dB ]')
-        if any(v.startswith('RhoHV') for k, v in varnam.items()):
-            poldata['rhoHV [-]'] = poldata.pop('RhoHV [   ]')
-        if any(v.startswith('LDR') for k, v in varnam.items()):
-            poldata['LDR [dB]'] = poldata.pop('LDR [dB ]')
-        if any(v.startswith('Phi') for k, v in varnam.items()):
-            poldata['PhiDP [deg]'] = poldata.pop('Phidp [deg]')
-        if any(not v for k, v in varnam.items()):
-            poldata['Absphase_V [ ]'] = poldata.pop('')
-        poldata = dict(sorted(poldata.items(), reverse=True))
-        if exclude_vars is not None:
-            evars = exclude_vars
-            poldata = {k: val for k, val in poldata.items() if k not in evars}
+        parameters['range_start [m]'] = emptyarr[4][0]
+
+        # Create dict to store geospatial data
         rh, th = np.meshgrid(emptyarr[4]/1000, emptyarr[2])
-        xgrid, ygrid = geo.pol2cart(rh, np.pi/2-th)
         geogrid = {'range [m]': emptyarr[4], 'elev [rad]': emptyarr[3],
                    'azim [rad]': emptyarr[2], 'rho': rh, 'theta': th,
-                   'xgrid': xgrid, 'ygrid': ygrid}
-        parameters['range_start [m]'] = emptyarr[4][0]
-        bh = np.array([geo.height_beamc(ray, emptyarr[4]/1000,
-                                        # rad_height=outpar[13]/1000
-                                        )
-                       for ray in np.rad2deg(emptyarr[3])])
-        bhb = np.array([geo.height_beamc(ray-parameters['beamwidth [deg]']/2,
-                                         emptyarr[4]/1000,
-                                         # rad_height=outpar[13]/1000
-                                         )
-                        for ray in np.rad2deg(emptyarr[3])])
-        bht = np.array([geo.height_beamc(ray+parameters['beamwidth [deg]']/2,
-                                         emptyarr[4]/1000,
-                                         # rad_height=outpar[13]/1000
-                                         )
-                        for ray in np.rad2deg(emptyarr[3])])
-        geogrid['beam_height [km]'] = bh
-        geogrid['beambottom_height [km]'] = bhb
-        geogrid['beamtop_height [km]'] = bht
+                   # 'xgrid': xgrid, 'ygrid': ygrid
+                   }
 
         self.elev_angle = parameters['elev_ang [deg]']
         self.scandatetime = parameters['datetime']
         self.georef = geogrid
         self.params = parameters
         self.vars = poldata
+
+    def ppi_ukmogeoref(self):
+        """Create georeferenced data from the UKMO PPI scan."""
+        # xgrid, ygrid = geo.pol2cart(self.georef['rho'],
+        #                             np.pi/2-self.georef['theta'])
+        bhkm = np.array([geo.height_beamc(ray, self.georef['range [m]']/1000)
+                         for ray in np.rad2deg(self.georef['elev [rad]'])])
+        bhbkm = np.array([geo.height_beamc(ray
+                                           - self.params['beamwidth [deg]']/2,
+                                           self.georef['range [m]']/1000)
+                          for ray in np.rad2deg(self.georef['elev [rad]'])])
+        bhtkm = np.array([geo.height_beamc(ray
+                                           + self.params['beamwidth [deg]']/2,
+                                           self.georef['range [m]']/1000)
+                          for ray in np.rad2deg(self.georef['elev [rad]'])])
+        s = np.array([geo.cartesian_distance(ray,
+                                             self.georef['range [m]']/1000,
+                                             bhkm[0])
+                      for i,
+                      ray in enumerate(np.rad2deg(self.georef['elev [rad]']))])
+        a = [geo.pol2cart(arcl, self.georef['azim [rad]']) for arcl in s.T]
+        self.georef['xgrid'] = np.array([i[1] for i in a]).T
+        self.georef['ygrid'] = np.array([i[0] for i in a]).T
+        self.georef['beam_height [km]'] = bhkm
+        self.georef['beambottom_height [km]'] = bhbkm
+        self.georef['beamtop_height [km]'] = bhtkm

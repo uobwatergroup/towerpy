@@ -115,8 +115,24 @@ class Rad_scan:
         azim = np.deg2rad(np.arange(self.params['nrays']))
         rng = np.arange(gate0, self.params['ngates']*gateres,
                         self.params['gateres [m]'], dtype=float)
+        bhkm = np.array([geo.height_beamc(ray, rng/1000)
+                         for ray in np.rad2deg(elev)])
+        bhbkm = np.array([geo.height_beamc(ray
+                                           - self.params['beamwidth [deg]']/2,
+                                           rng/1000)
+                          for ray in np.rad2deg(elev)])
+        bhtkm = np.array([geo.height_beamc(ray
+                                           + self.params['beamwidth [deg]']/2,
+                                           rng/1000)
+                          for ray in np.rad2deg(elev)])
+
         rh, th = np.meshgrid(rng/1000, azim)
-        xgrid, ygrid = geo.pol2cart(rh, np.pi/2-th)
+        # xgrid, ygrid = geo.pol2cart(rh, np.pi/2-th)
+        s = np.array([geo.cartesian_distance(ray, rng/1000, bhkm[0])
+                      for i, ray in enumerate(np.rad2deg(elev))])
+        a = [geo.pol2cart(arcl, azim) for arcl in s.T]
+        xgrid = np.array([i[1] for i in a]).T
+        ygrid = np.array([i[0] for i in a]).T
         geogrid = {'azim [rad]': azim,
                    'elev [rad]': elev,
                    'range [m]': rng,
@@ -125,23 +141,8 @@ class Rad_scan:
                    'xgrid': xgrid,
                    'ygrid': ygrid}
         self.params['gateres [m]'] = gateres
-        alt = self.params['altitude [m]']
-        bh = np.array([geo.height_beamc(ray, rng/1000,
-                                        # rad_height=alt/1000
-                                        )
-                       for ray in np.rad2deg(elev)])
-        bhb = np.array([geo.height_beamc(ray-self.params['beamwidth [deg]']/2,
-                                         rng/1000,
-                                         # rad_height=alt/1000
-                                         )
-                        for ray in np.rad2deg(elev)])
-        bht = np.array([geo.height_beamc(ray+self.params['beamwidth [deg]']/2,
-                                         rng/1000,
-                                         # rad_height=alt/1000
-                                         )
-                        for ray in np.rad2deg(elev)])
-
-        geogrid['beam_height [km]'] = bh
-        geogrid['beambottom_height [km]'] = bhb
-        geogrid['beamtop_height [km]'] = bht
+        # alt = self.params['altitude [m]']
+        geogrid['beam_height [km]'] = bhkm
+        geogrid['beambottom_height [km]'] = bhbkm
+        geogrid['beamtop_height [km]'] = bhtkm
         self.georef = geogrid
