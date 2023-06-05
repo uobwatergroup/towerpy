@@ -19,7 +19,7 @@ working with polarimetric weather radar data.
 If you find our work useful for your research, please consider citing our
 following publication:
 
-
+https://doi.org/10.1016/j.envsoft.105746.2023
 """
 
 print(_welcome_text)
