@@ -36,15 +36,15 @@ You can find more details about _Towerpy_ [here](https://towerpy.readthedocs.io/
 If you find _towerpy_ useful for a scientific publication, please consider citing the [towerpy paper](https://doi.org/10.1016/j.envsoft.2023.105746):
 
 @article{sanchezrivas2023,
-title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}},
-journal = {Environmental Modelling & Software},
-pages = {105746},
-year = {2023},
-issn = {1364-8152},
-doi = {https://doi.org/10.1016/j.envsoft.2023.105746},
-author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez},
-keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source},
-}
+	title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}},
+	journal = {Environmental Modelling & Software},
+	pages = {105746},
+	year = {2023},
+	issn = {1364-8152},
+	doi = {https://doi.org/10.1016/j.envsoft.2023.105746},
+	author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez},
+	keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source}
+	}
 
 # :hammer: Installing towerpy
 To ensure a smooth installation of towerpy, we strongly recommend using **conda**, the open-source Python package management system. [Download](https://www.anaconda.com/) and install Anaconda to get conda and other essential data science and machine learning packages.
