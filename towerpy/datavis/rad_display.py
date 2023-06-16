@@ -2688,4 +2688,4 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
                           prop=dict(size=18, color='white'), frameon=False)
         cax.add_artist(at)
         a.legend(fontsize=14)
-        f.tight_layout()
+    f.tight_layout()
