@@ -79,8 +79,8 @@ class RadarQPE:
         r = {'Rainfall [mm/hr]': ((10**(zh/10))/a)**(1/b)}
         self.r_z = r
 
-    def z_zdr_to_r1(self, zh, zdr, a=0.01583, b=0.8349, c=-0.3732,
-                    beam_height=None, mlyr=None):
+    def z_zdr_to_r(self, zh, zdr, a=0.0058, b=0.91, c=-2.09,
+                   beam_height=None, mlyr=None):
         """
         Calculate the rain rate (R) from Zh (mm^6/m^3) and ZDR (dB).
 
@@ -139,70 +139,8 @@ class RadarQPE:
             zh[nanidx] = np.nan
             # zdr[:, mlidx:] = 0
             # zdr[nanidx] = np.nan
-        r = {'Rainfall [mm/hr]': a*zh**b*10**(c*zdr)}
+        r = {'Rainfall [mm/hr]': a*zh**b*10**(0.1*c*zdr)}
         self.r_z_zdr = r
-
-    def z_zdr_to_r2(self, zh, zdr, a=0.00403, b=0.8787, c=-0.8077,
-                    beam_height=None, mlyr=None):
-        """
-        Calculate the rain rate (R) from Zh (mm^6/m^3) and Zdr (linear scale).
-
-        Parameters
-        ----------
-        zh : float or array
-            Floats that corresponds to reflectivity, in dBZ.
-        zdr : float or array
-            Floats that corresponds to differential reflectivity, in dB.
-        a, b, c : floats
-            Parameters of the :math:`R(Z_H, Z_{dr})` relationship
-        beam_height : array, optional
-            Height of the centre of the radar beam, in km.
-        mlyr : class, optional
-            Melting layer class containing the top and bottom boundaries of the
-            ML. Only gates below the melting layer bottom (i.e. the rain region
-            below the melting layer) are included in the correction. If None,
-            the default values of the melting level and the thickness of the
-            melting layer are set to 5 and 0.5, respectively.
-
-        Returns
-        -------
-        r_z_zdrl : dict
-            Computed rain rates (in mm h^-1).
-
-        Notes
-        -----
-        .. math::  R = aZ_h^bZ_{dr}^c
-        where:
-        R in mm hr^{-1}, Zh in mm^6 m^{-3}, Zdr in linear scale.
-
-        Standard values according to [1]_.
-
-        References
-        ----------
-        .. [1] Rico-ramirez, M.A., Cluckie, I.D., 2006.
-            Assessment of polarimetric rain rate algorithms at C-band
-            frequencies. In: Fourth European Conference on Radar in Meteorology
-            and Hydrology, Universitat Politecnica de Catalunya, Barcelona,
-            Spain. pp. 221 – 224.
-
-        """
-        zh = 10**(np.array(zh)/10)
-        zdr = np.array(10**(0.1*zdr))
-        if mlyr is None:
-            mlvl = 5.
-            mlyr_thickness = 0.5
-            # mlyr_bottom = mlvl - mlyr_thickness
-        else:
-            mlvl = mlyr.ml_top
-            mlyr_thickness = mlyr.ml_thickness
-            # mlyr_bottom = mlyr.ml_bottom
-        if beam_height is not None:
-            mlidx = find_nearest(beam_height, mlvl-mlyr_thickness)
-            nanidx = np.where(np.isnan(zh))
-            zh[:, mlidx:] = 0
-            zh[nanidx] = np.nan
-        r = {'Rainfall [mm/hr]': a*zh**b*zdr**c}
-        self.r_z_zdrl = r
 
     def kdp_to_r(self, kdp, a=24.68, b=0.81, beam_height=None, mlyr=None):
         """
