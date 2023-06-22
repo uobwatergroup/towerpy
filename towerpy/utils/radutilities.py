@@ -374,7 +374,7 @@ def xdb2x(xdb):
 
     Notes
     -----
-    .. math::  x = 10^{dBx/10}
+    .. math::  x = 10^{0.1*dBx}
 
     Examples
     --------
@@ -386,5 +386,5 @@ def xdb2x(xdb):
     Out[0]: 100000.0
     """
     xdb = np.array(xdb)
-    xls = 10 ** (xdb/10.)
+    xls = 10 ** (0.1*xdb)
     return xls
