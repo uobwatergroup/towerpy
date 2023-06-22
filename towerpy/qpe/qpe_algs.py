@@ -1,7 +1,8 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import numpy as np
-from ..utils import radutilities as tpu
+from ..utils import radutilities as tput
+from ..utils import unit_conversion as tpuc
 
 
 class RadarQPE:
@@ -68,7 +69,7 @@ class RadarQPE:
             https://doi.org/10.1175/1520-0469(1948)005<0165:TDORWS>2.0.CO;2
 
         """
-        zh = tpu.xdb2x(zh)
+        zh = tpuc.xdb2x(zh)
         if mlyr is None:
             mlvl = 5.
             mlyr_thickness = 0.5
@@ -78,7 +79,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zh))
             zh[:, mlidx:] = 0
             zh[nanidx] = np.nan
@@ -130,8 +131,8 @@ class RadarQPE:
             Weather Radar. Cambridge University Press, Cambridge, New York,
             http://dx.doi.org/10.1017/cbo9780511541094.
         """
-        zhl = tpu.xdb2x(zh)
-        zdrl = tpu.xdb2x(zdr)
+        zhl = tpuc.xdb2x(zh)
+        zdrl = tpuc.xdb2x(zdr)
         if mlyr is None:
             mlvl = 5.
             mlyr_thickness = 0.5
@@ -141,7 +142,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zhl))
             zhl[:, mlidx:] = 0
             zhl[nanidx] = np.nan
@@ -202,7 +203,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
             kdp[:, mlidx:] = 0
             kdp[nanidx] = np.nan
@@ -256,7 +257,7 @@ class RadarQPE:
 
         """
         kdp = np.array(kdp)
-        zdrl = tpu.xdb2x(zdr)
+        zdrl = tpuc.xdb2x(zdr)
         if mlyr is None:
             mlvl = 5.
             mlyr_thickness = 0.5
@@ -266,7 +267,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(kdp))
             kdp[:, mlidx:] = 0
             kdp[nanidx] = np.nan
@@ -326,7 +327,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(ah))
             ah[:, mlidx:] = 0
             ah[nanidx] = np.nan
@@ -391,7 +392,7 @@ class RadarQPE:
             https://doi.org/10.1175/JHM-D-10-05013.1
         """
         zh = np.array(zh)
-        zhl = tpu.xdb2x(zh)
+        zhl = tpuc.xdb2x(zh)
         kdp = np.array(kdp)
         if mlyr is None:
             mlvl = 5.
@@ -402,7 +403,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zhl))
             zhl[:, mlidx:] = 0
             zhl[nanidx] = np.nan
@@ -469,7 +470,7 @@ class RadarQPE:
             599-619. https://doi.org/10.1175/JTECH-D-13-00038.1
         """
         zh = np.array(zh)
-        zhl = tpu.xdb2x(zh)
+        zhl = tpuc.xdb2x(zh)
         ah = np.array(ah)
         if mlyr is None:
             mlvl = 5.
@@ -480,7 +481,7 @@ class RadarQPE:
             mlyr_thickness = mlyr.ml_thickness
             # mlyr_bottom = mlyr.ml_bottom
         if beam_height is not None:
-            mlidx = tpu.find_nearest(beam_height, mlvl-mlyr_thickness)
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
             nanidx = np.where(np.isnan(zhl))
             zhl[:, mlidx:] = 0
             zhl[nanidx] = np.nan
