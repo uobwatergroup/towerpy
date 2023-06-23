@@ -67,6 +67,6 @@ def xdb2x(xdb):
     return xls
 
 
-def a2z(xdb):
-    """
-    Computes log scale (dB) values to linear-scale.
+# def a2z(xdb):
+#     """
+    # Computes log scale (dB) values to linear-scale.

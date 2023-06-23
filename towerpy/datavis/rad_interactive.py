@@ -684,7 +684,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     f3_axhbeam.set_ylabel('Beam height [Km]', fontsize=14)
     f3_axhbeam.tick_params(axis='both', labelsize=12)
 
-    intradaxs = {f'f3_ax{i+2}': figradint.add_subplot(intradgs[i:i+1, 2:])
+    intradaxs = {f'f3_ax{i+2}': figradint.add_subplot(intradgs[i:i+1, 2:],
+                                                      sharex=f3_axhbeam)
                  for i, j in enumerate(rad_vars)}
 
     for i in intradaxs:
