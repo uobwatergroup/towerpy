@@ -65,8 +65,3 @@ def xdb2x(xdb):
     xdb = np.array(xdb)
     xls = 10 ** (0.1*xdb)
     return xls
-
-
-# def a2z(xdb):
-#     """
-    # Computes log scale (dB) values to linear-scale.
