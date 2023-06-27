@@ -5,9 +5,9 @@ import towerpy as tp
 import cartopy.crs as ccrs
 # from wradlib.dp import process_raw_phidp_vulpiani as kdpvpi
 
-rsite = 'chenies'
+rsite = 'jersey'
 fdir = f'../datasets/{rsite}/y2020/lpel0/'
-fname = (f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-'
+fname = (f'metoffice-c-band-rain-radar_{rsite}_202010030735_raw-dual-polar-'
          + 'augzdr-lp-el0.dat')
 
 # =============================================================================
@@ -15,6 +15,7 @@ fname = (f'metoffice-c-band-rain-radar_{rsite}_202010032105_raw-dual-polar-'
 # =============================================================================
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
+rdata.ppi_ukmogeoref()
 
 # Plot the radar PPI
 tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rdata.vars)
@@ -35,8 +36,8 @@ clmap = f'../towerpy/eclass/ukmo_cmaps/{rsite}/chenies_cluttermap_el0.dat'
 # tp.datavis.rad_display.plot_mfs(f'../towerpy/eclass/mfs_cband/')
 
 rnme = tp.eclass.nme.NME_ID(rsnr)
-rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
-                min_snr=rsnr.min_snr, clmap=np.loadtxt(clmap),
+rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223-64,
+                min_snr=rsnr.min_snr, clmap=None,
                 data2correct=rdata.vars, plot_method=True)
 # %%
 # =============================================================================
@@ -52,7 +53,7 @@ rmlyr.ml_thickness = 0.5
 # =============================================================================
 rczdr = tp.calib.calib_zdr.ZDR_Calibration(rdata)
 rczdr.offset_correction(rnme.vars['ZDR [dB]'],
-                        zdr_offset=-0.28,
+                        zdr_offset=-0.708,
                         data2correct=rnme.vars)
 # %%
 # =============================================================================
@@ -61,17 +62,14 @@ rczdr.offset_correction(rnme.vars['ZDR [dB]'],
 rattc = tp.attc.attc_zhzdr.AttenuationCorrection(rdata)
 rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
                     rnme.nme_classif['classif'], attc_method='ABRI',
-                    mlyr=rmlyr, pdp_pxavr_azm=1, pdp_dmin=10,
+                    mlyr=rmlyr, pdp_pxavr_azm=1, pdp_dmin=10, plot_method=True,
                     pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars, rattc.vars,
                      rnme.nme_classif['classif'], mlyr=rmlyr, rhv_thld=0.98,
-                     minbins=10, mov_avrgf_len=5, p2avrf=3,
+                     minbins=10, mov_avrgf_len=5, p2avrf=3, plot_method=True,
                      beta_alpha_ratio=.2)
 
-tp.datavis.rad_display.plot_attcorrection(rdata.georef, rdata.params,
-                                          rczdr.vars,
-                                          rattc.vars)
 # %%
 # =============================================================================
 # KDP Derivation
@@ -105,16 +103,16 @@ rqpe.z_to_r(rattc.vars['ZH [dBZ]'], a=200, b=1.6, mlyr=rmlyr,
             beam_height=rdata.georef['beam_height [km]'])
 rqpe.ah_to_r(rattc.vars['AH [dB/km]'], mlyr=rmlyr,
              beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_zdr_to_r1(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
-                 beam_height=rdata.georef['beam_height [km]'])
-rqpe.z_zdr_to_r2(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
-                 a=0.0121, b=0.822, c=-1.7486,
-                 beam_height=rdata.georef['beam_height [km]'])
+rqpe.z_zdr_to_r(rattc.vars['ZH [dBZ]'], rattc.vars['ZDR [dB]'], mlyr=rmlyr,
+                beam_height=rdata.georef['beam_height [km]'])
+rqpe.z_ah_to_r(rattc.vars['ZH [dBZ]'], rattc.vars['AH [dB/km]'], z_thld=40,
+               mlyr=rmlyr, beam_height=rdata.georef['beam_height [km]'])
 # rqpe.kdp_to_r(rkdpv['KDP [deg/km]'], beam_height=rdata.georef['beam_height [km]'],
 #               mlyr_b=rmlyr.ml_bottom)
 # rqpe.kdp_zdr_to_r(rkdpv['KDP [deg/km]'], rattc.vars['ZDR [dB]'],
 #                   mlyr_b=rmlyr.ml_bottom,
 #                   beam_height=rdata.georef['beam_height [km]'])
+
 
 # %%
 # =============================================================================
@@ -131,10 +129,16 @@ rdata.georef['ygrid_proj'] = ygridp
 
 rdata.georef['xgrid_proj'] *= 1000
 rdata.georef['ygrid_proj'] *= 1000
-
-tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rqpe.r_z,
+#%%
+tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params,
+                                # rqpe.r_z,
+                                rqpe.r_z_zdr,
+                                # rqpe.r_z_ah,
+                                # rqpe.r_ah,
                                 data_proj=ccrs.OSGB(approx=False),
-                                cpy_feats={'status': True})
+                                cpy_feats={'status': True},
+                                xlims=[-4., -0.5], ylims=[50.5, 48.])
+#%%
 # Plot all the radar variables
 tp.datavis.rad_display.plot_setppi(rdata.georef, rdata.params, rdata.vars)
 

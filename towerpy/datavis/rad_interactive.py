@@ -480,8 +480,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    if vars_bounds is None:
+        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20,
+                                             24, 32, 48, 64, 100])
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -528,7 +529,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             cmaph = tpycm_plv
             normp = dnorm.get('n'+polradv)
             mrv = rad_vars[polradv]
-            fcb = 0
+            # fcb = 0
             if '[-]' in polradv:
                 cbtks_fmt = 2
                 cmaph = tpycm_plv
@@ -544,7 +545,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                 cmaph = tpycm_rnr
                 # tpycm.set_under(color='#D2ECFA', alpha=0)
                 # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
-                cbtks_fmt = 1
+                fcb = 2
     else:
         polradv = var2plot
         mrv = rad_vars[polradv]
@@ -560,6 +561,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             cmaph = tpycm_dv
         if '[dV/dh]' in polradv:
             cmaph = tpycm_dv
+            fcb = 2
+        if '[mm/hr]' in polradv:
+            cmaph = tpycm_rnr
+            # tpycm.set_under(color='#D2ECFA', alpha=0)
+            # tpycm_rnr.set_bad(color='#D2ECFA', alpha=0)
             fcb = 2
         if polradv in lpv:
             if lpv.get(polradv)[0] > -1 and lpv.get(polradv)[1] < 1:
@@ -678,7 +684,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     f3_axhbeam.set_ylabel('Beam height [Km]', fontsize=14)
     f3_axhbeam.tick_params(axis='both', labelsize=12)
 
-    intradaxs = {f'f3_ax{i+2}': figradint.add_subplot(intradgs[i:i+1, 2:])
+    intradaxs = {f'f3_ax{i+2}': figradint.add_subplot(intradgs[i:i+1, 2:],
+                                                      sharex=f3_axhbeam)
                  for i, j in enumerate(rad_vars)}
 
     for i in intradaxs:
