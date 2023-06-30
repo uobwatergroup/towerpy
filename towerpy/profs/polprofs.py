@@ -360,13 +360,17 @@ class PolarimetricProfiles:
         #             raise TowerpyError('Length of values rf does not match'
         #                                ' length of elevation index'
         #                                ' (rscans_vars)')
-        rf = [find_nearest(i['range [m]'], spec_range*1000)
-              for i in rscans_georef]
+        # rf = [find_nearest(i['range [m]'], spec_range*1000)
+        #       for i in rscans_georef]
+        rf = [i['ngates'] for i in rscans_params]
 
-        dh1 = [v['beam_height [km]'][0]+np.diff(v['range [m]']/1000, prepend=0) * np.sin(np.deg2rad(rscans_params[c]['elev_ang [deg]']))
+        dh1 = [v['beam_height [km]'][0]+np.diff(v['range [m]']/1000, prepend=0)
+               * np.sin(np.deg2rad(rscans_params[c]['elev_ang [deg]']))
                for c, v in enumerate(rscans_georef)]
 
-        dh2 = [v['beam_height [km]'][0]+v['beam_height [km]'][0] * np.deg2rad(rscans_params[c]['beamwidth [deg]']) * (1/np.tan(np.deg2rad(rscans_params[c]['elev_ang [deg]'])))
+        dh2 = [v['beam_height [km]'][0]+v['beam_height [km]'][0]
+               * np.deg2rad(rscans_params[c]['beamwidth [deg]'])
+               * (1/np.tan(np.deg2rad(rscans_params[c]['elev_ang [deg]'])))
                for c, v in enumerate(rscans_georef)]
 
         dh = [np.array([dhi if dhi > dh2[c1][c2] else dh2[c1][c2]
@@ -433,11 +437,13 @@ class PolarimetricProfiles:
         rng_itp = [np.linspace(rng[0], rng[-1], len(yaxis))
                    for c, rng in enumerate(rng_d)]
 
-        w_func = np.array([np.array([1/(abs(rngi-(spec_range-1))**power_param1)
+        w_func = np.array([np.array([1 if spec_range-1 < rngi <= spec_range
+                                     else
+                                     1/(abs(rngi-(spec_range-1))**power_param1)
                                      if rngi <= spec_range-1 else
                                      1/(abs(rngi-(spec_range-1))**power_param2)
-                                     if rngi > spec_range-1
-                                     else 1
+                                     if rngi > spec_range-1 else
+                                     np.nan
                                      for rngi in rngelv])
                            for rngelv in rng_itp]).T
 
@@ -455,7 +461,8 @@ class PolarimetricProfiles:
                                             * rdqvps_vidx[pvar][row]))
                                   / np.nansum((w_func[row]
                                               * rdqvps_vidx[pvar][row]))
-                                  if np.count_nonzero(rdqvps_vidx[pvar][row]) > 1
+                                  if
+                                  np.count_nonzero(rdqvps_vidx[pvar][row]) >= 1
                                   else np.nan for row in range(len(yaxis))])
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps

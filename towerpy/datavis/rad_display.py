@@ -184,6 +184,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         if '[dB]' in var2plot:
             cmaph = mpl.colormaps['tpylsc_2slope']
             cbtks_fmt = 1
+        if '[dBZ]' in var2plot:
+            cmaph = mpl.colormaps['tpylsc_ref']
+            cbtks_fmt = 1
         if '[deg/km]' in var2plot:
             cmaph = mpl.colormaps['tpylsc_2slope']
         if '[m/s]' in var2plot:
@@ -2421,7 +2424,7 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
     for c, i in enumerate(tp_rdqvp.qvps_itp):
         for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
             axd[a].plot(value, tp_rdqvp.georef['profiles_height [km]'],
-                        label=(f"{rscans_params[c]['elev_ang [deg]']}"
+                        label=(f"{rscans_params[c]['elev_ang [deg]']:.1f}"
                                + r"$^{\circ}$"), color=cmaph[c], ls='--')
             axd[a].set_xlabel(f'{key}', fontsize=fontsizelabels)
             if n == 0:
