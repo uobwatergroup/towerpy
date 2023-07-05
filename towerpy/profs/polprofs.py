@@ -467,7 +467,7 @@ class PolarimetricProfiles:
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps
         self.qvps_itp = qvps_itp
-        self.profs_type = 'quasi-vertical profiles'
+        self.profs_type = 'range-defined quasi-vertical profiles'
         self.georef = {}
         self.georef['profiles_height [km]'] = yaxis
         self.elev_angle = [i['elev_ang [deg]'] for i in rscans_params]

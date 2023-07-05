@@ -2412,27 +2412,28 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
     dt2 = max([i['datetime'] for i in rscans_params])
     ttxt = (f"{dt1:%Y-%m-%d %H:%M:%S} - {dt2:%H:%M:%S}")
 
-    fig = plt.figure(layout="constrained")
-    fig.suptitle('RD-quasi-vertical profiles of polarimetric variables \n'
-                 f'{ttxt}', fontsize=fontsizetitle)
+    mosaic = [chr(ord('@')+c+1) for c in range(len(tp_rdqvp.rd_qvps)+1)]
+    mosaic = f'{"".join(mosaic)}'
 
-    axd = fig.subplot_mosaic("""
-                             ABCD
-                             EEEE
-                             """, sharey=True, height_ratios=[5, 1])
+    fig = plt.figure(layout="constrained")
+    fig.suptitle('RD-QVPs of polarimetric variables \n' f'{ttxt}',
+                 fontsize=fontsizetitle)
+
+    axd = fig.subplot_mosaic(mosaic, sharey=True, height_ratios=[5])
 
     for c, i in enumerate(tp_rdqvp.qvps_itp):
         for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
             axd[a].plot(value, tp_rdqvp.georef['profiles_height [km]'],
+                        color=cmaph[c], ls='--',
                         label=(f"{rscans_params[c]['elev_ang [deg]']:.1f}"
-                               + r"$^{\circ}$"), color=cmaph[c], ls='--')
+                               + r"$^{\circ}$"))
             axd[a].set_xlabel(f'{key}', fontsize=fontsizelabels)
             if n == 0:
                 axd[a].set_ylabel('Height [km]', fontsize=fontsizelabels,
                                   labelpad=10)
             axd[a].tick_params(axis='both', labelsize=fontsizetick)
             axd[a].grid(True)
-            axd[a].legend(loc='upper right')
+            # axd[a].legend(loc='upper right')
     for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
         axd[a].plot(tp_rdqvp.rd_qvps[key],
                     tp_rdqvp.georef['profiles_height [km]'], 'k', lw=3,
@@ -2451,19 +2452,20 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
         if ylims:
             axd[a].set_ylim(ylims)
 
-    scan_st = axd['E']
+    scan_st = axd[mosaic[-1]]
     for c, i in enumerate(rscans_georef):
         scan_st.plot(i['range [m]']/1000, i['beam_height [km]'][0],
                      color=cmaph[c], ls='--',
-                     label=(f"{rscans_params[c]['elev_ang [deg]']}"
+                     label=(f"{rscans_params[c]['elev_ang [deg]']:.1f}"
                             + r"$^{\circ}$"))
-        scan_st.plot(i['range [m]']/-1000, i['beam_height [km]'][0],
-                     color=cmaph[c], ls='--')
-
-    scan_st.tick_params(axis='both', labelsize=fontsizetick-5)
+        # scan_st.plot(i['range [m]']/-1000, i['beam_height [km]'][0],
+        #               color=cmaph[c], ls='--')
+    scan_st.set_xlabel('Range [km]', fontsize=fontsizelabels)
+    scan_st.tick_params(axis='both', labelsize=fontsizetick)
+    scan_st.grid(True)
+    scan_st.legend(loc='upper right')
     if spec_range:
         scan_st.axvline(spec_range, c='k', lw=3)
-        scan_st.axvline(-spec_range, c='k', lw=3)
 
 
 def plot_rhocalibration(hists, histmax, idxminstd, rng_ite):

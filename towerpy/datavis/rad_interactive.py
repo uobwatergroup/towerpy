@@ -1113,7 +1113,7 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     hb_lim_it1 = heightbeam[idxml_btm_it1:idxml_top_it1]
 
     resimp1d = np.gradient(comb_mult_w[comb_idpy])
-    resimp2d = -np.gradient(np.gradient(comb_mult_w[comb_idpy]))
+    resimp2d = np.gradient(np.gradient(comb_mult_w[comb_idpy]))
 
     fig, axs = plt.subplots(1, 3, sharey=True, figsize=(12, 10))
     plt.subplots_adjust(left=0.096, right=0.934, top=0.986, bottom=0.091)
@@ -1132,9 +1132,10 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
                 marker="X", c='tab:orange', label='$P_{{peak}}$')
     # ax1.axhline(peakcombzh_rhv+.75, c='gray', ls='dashed', lw=lw, alpha=.5,
     #             label=r'$U_{{L}}$')
-    ax1.axvline(param_k, c='k', ls=':', lw=2.5, label='param_k')
+    ax1.axvline(param_k, c='k', ls=':', lw=2.5, label='k')
     ax1.set_xlim([-0.05, 1.05])
-    ax1.set_ylim([1, 5])
+    # ax1.set_ylim([heightbeam[min_hidx], heightbeam[max_hidx]])
+    ax1.set_ylim([0, heightbeam[max_hidx]])
     ax1.tick_params(axis='both', labelsize=tks_fs)
     ax1.set_xlabel('(norm)', fontsize=lbl_fs, labelpad=10)
     ax1.set_ylabel('Height [km]', fontsize=lbl_fs, labelpad=10)
@@ -1162,12 +1163,16 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
 
     ax2.plot(comb_mult[comb_idpy], hb_lim_it1,
              label=f'$P^*_{{{comb_idpy+1}}}$', lw=1.5, c='tab:blue')
-    ax2.plot(resimp1d, hb_lim_it1,
-             label=f"$P_{{{comb_idpy+1}}}^*'$", lw=3., c='tab:gray', alpha=ac)
-    ax2.plot(resimp2d, hb_lim_it1,
+    # ax2.plot(resimp1d, hb_lim_it1,
+    #           label=f"$P_{{{comb_idpy+1}}}^*'$", lw=3., c='tab:gray',
+    #           alpha=ac)
+    ax2.plot(-resimp2d, hb_lim_it1,
              label=f"$-P_{{{comb_idpy+1}}}^*''$", lw=3., c='gold', alpha=ac)
     ax2.plot(comb_mult_w[comb_idpy], hb_lim_it1,
-             label=f'$P_{{{comb_idpy+1}}}$', lw=3., c='tab:green', alpha=ac)
+             # label=(f'$P^*_{{{comb_idpy+1}}}$-'+r'(w $\cdot$'
+             #        + f"$P_{{{comb_idpy+1}}}^*''$)"),
+             label=f'$P_{{{comb_idpy+1}}}$',
+             lw=3., c='tab:green', alpha=ac)
     if ~np.isnan(mlrand[comb_idpy]['idxtop']):
         ax2.scatter(comb_mult_w[comb_idpy][mlrand[comb_idpy]['idxtop']],
                     hb_lim_it1[mlrand[comb_idpy]['idxtop']],
@@ -1227,11 +1232,11 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     if ~np.isnan(mlrand[init_comb]['idxtop']):
         mlts = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxtop']],
                            c='slateblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{top}$')
+                           label=r'$MLyr_{(T)}$')
     if ~np.isnan(mlrand[init_comb]['idxbot']):
         mlbs = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxbot']],
                            c='steelblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{bottom}$')
+                           label=r'$MLyr_{(B)}$')
     ax3.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
     ax3.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
     ax3.legend(fontsize=lgn_fs)
