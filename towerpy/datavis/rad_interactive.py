@@ -277,10 +277,10 @@ class PPI_Int:
                                               np.flipud(intradvars[j])[nangle,
                                                                        :],
                                               marker='.', markersize=3)
-                intradaxs[f'f3_ax{i+2}'].axvline(nrange, alpha=.2)
-                if 'ZDR' in j:
+                if '[dB]' in j:
                     intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.2, c='gray')
                 intradaxs[f'f3_ax{i+2}'].set_title(j)
+                intradaxs[f'f3_ax{i+2}'].axvline(nrange, alpha=.2)
         if gcoord_sys == 'rect' and nrange < ngates_m:
             for i, j in enumerate(intradvars):
                 intradaxs[f'f3_ax{i+2}'].plot(intradarrange/1000,
@@ -288,8 +288,10 @@ class PPI_Int:
                                               marker='.', markersize=3)
                 intradaxs[f'f3_ax{i+2}'].axvline(intradarrange[int(np.round(nrange))]/1000,
                                                  alpha=.2)
-                if 'ZDR' in j:
-                    intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.2, c='gray')
+                if '[dB]' in j:
+                    intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.8, c='gray')
+                if '[-]' in j:
+                    intradaxs[f'f3_ax{i+2}'].axhline(1., alpha=.8, c='thistle')
                 intradaxs[f'f3_ax{i+2}'].set_title(j)
         if vars_ylim is not None:
             for i, j in enumerate(intradvars):
@@ -481,8 +483,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20,
-                                             24, 32, 48, 64, 100])
+        bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                             28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -892,8 +894,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20, 28,
+                                         36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -1232,11 +1234,11 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     if ~np.isnan(mlrand[init_comb]['idxtop']):
         mlts = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxtop']],
                            c='slateblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{(T)}$')
+                           label=r'$Top_{(ML)}$')
     if ~np.isnan(mlrand[init_comb]['idxbot']):
         mlbs = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxbot']],
                            c='steelblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{(B)}$')
+                           label=r'$Bottom_{(ML)}$')
     ax3.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
     ax3.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
     ax3.legend(fontsize=lgn_fs)

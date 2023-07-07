@@ -106,8 +106,8 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16,
-                                             20, 24, 28, 32, 48, 64])
+        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
+                                             60, 70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
@@ -489,8 +489,8 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
+                                         70, 80, 90, 100))
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
                                                extend='both')
@@ -687,8 +687,8 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16,
-                                             20, 24, 28, 32, 48, 64])
+        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
+                                             60, 70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
@@ -1085,8 +1085,8 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
+                                         70, 80, 90, 100))
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, mpl.colormaps['tpylsc_ref'].N,
                                                extend='both')
              for key, value in bnd.items()}
@@ -1443,8 +1443,8 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
+                                         70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -1701,8 +1701,8 @@ def plot_zdrattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
+                                         70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -1879,8 +1879,8 @@ def plot_attcorrection2(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
+                                         70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -2203,8 +2203,8 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16,
-                                             20, 24, 28, 32, 48, 64])
+        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
+                                             60, 70, 80, 90, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
