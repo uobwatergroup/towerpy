@@ -35,6 +35,7 @@ class MeltingLayer:
         self.file_name = radobj.file_name
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
+        self.profs_type = radobj.profs_type
 
     def findpeaksboundaries(profile, pheight, param_k=0):
         """
@@ -196,7 +197,8 @@ class MeltingLayer:
         else:
             comb_idpy = None
 
-        if self.elev_angle > 89:
+        # if self.elev_angle > 89:
+        if self.profs_type == 'VPs':
             if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.vps:
                 profzh = pol_profs.vps['ZH [dBZ]'].copy()
                 profrhv = pol_profs.vps['rhoHV [-]'].copy()
@@ -217,7 +219,7 @@ class MeltingLayer:
                 elif phidp_peak == 'right':
                     profpdp = pol_profs.vps['PhiDP [deg]'].copy()
                     profpdp *= -1
-        else:
+        elif self.profs_type == 'QVPs':
             if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.qvps:
                 profzh = pol_profs.qvps['ZH [dBZ]'].copy()
                 profrhv = pol_profs.qvps['rhoHV [-]'].copy()
@@ -231,6 +233,21 @@ class MeltingLayer:
                     profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
                 elif phidp_peak == 'right':
                     profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
+                    profpdp *= -1
+        elif self.profs_type == 'RD-QVPs':
+            if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.rd_qvps:
+                profzh = pol_profs.rd_qvps['ZH [dBZ]'].copy()
+                profrhv = pol_profs.rd_qvps['rhoHV [-]'].copy()
+            else:
+                raise TowerpyError(r'At least $Z_H$ and $\rho_{HV}$ are '
+                                   + 'required to run this function')
+            if 'ZDR [dB]' in pol_profs.rd_qvps:
+                profzdr = pol_profs.rd_qvps['ZDR [dB]'].copy()
+            if 'PhiDP [deg]' in pol_profs.rd_qvps:
+                if phidp_peak == 'left':
+                    profpdp = pol_profs.rd_qvps['PhiDP [deg]'].copy()
+                elif phidp_peak == 'right':
+                    profpdp = pol_profs.rd_qvps['PhiDP [deg]'].copy()
                     profpdp *= -1
 
         # Normalise ZH and rhoHV
@@ -269,7 +286,7 @@ class MeltingLayer:
             # else:
                 # min_hidx = idxml_btm_it1
             if idxml_top_it1 > min_hidx:
-                if self.elev_angle > 89:
+                if self.profs_type == 'VPs':
                     n = 5
                     ncomb = [1-rut.normalisenan(profdvel[idxml_btm_it1:idxml_top_it1]),
                              profzh_norm[idxml_btm_it1:idxml_top_it1],

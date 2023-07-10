@@ -143,7 +143,7 @@ class PolarimetricProfiles:
                 self.vps_stats['max']['gradV [dV/dh]'][:] = np.nan
                 self.vps_stats['sem']['gradV [dV/dh]'][:] = np.nan
             self.vps = vppol
-            self.profs_type = 'birdbath_scan'
+            self.profs_type = 'VPs'
             self.georef = {}
             profh = np.array([np.mean(rays)
                               for rays in rad_georef['beam_height [km]'].T])
@@ -264,7 +264,7 @@ class PolarimetricProfiles:
         # qvppol['gradV [dV/dh]'] = qvppol['ZH [dBZ]']*np.nan
 
         self.qvps = qvppol
-        self.profs_type = 'quasi-vertical profiles'
+        self.profs_type = 'QVPs'
         self.georef = {}
         self.georef['profiles_height [km]'] = qvps_h
 
@@ -467,7 +467,7 @@ class PolarimetricProfiles:
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps
         self.qvps_itp = qvps_itp
-        self.profs_type = 'range-defined quasi-vertical profiles'
+        self.profs_type = 'RD-QVPs'
         self.georef = {}
         self.georef['profiles_height [km]'] = yaxis
         self.elev_angle = [i['elev_ang [deg]'] for i in rscans_params]
