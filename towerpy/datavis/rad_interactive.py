@@ -369,7 +369,7 @@ class PPI_Int:
 
 def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              vars_bounds=None, ppi_xlims=None, ppi_ylims=None, ucmap=None,
-             radial_xlims=None, radial_ylims=None, mlyr=None):
+             radial_xlims=None, radial_ylims=None, mlyr=None, fig_size=None):
     """
     Create the base display for the interactive PPI explorer.
 
@@ -469,8 +469,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         vars_ylim = radial_ylims
     else:
         vars_ylim = None
-
-    figradint = plt.figure(figsize=(16, 9))
+    if fig_size is None:
+        fig_size = (16, 9)
+    figradint = plt.figure(figsize=fig_size)
     # plt.tight_layout()
     if len(rad_vars) > 3:
         intradgs = figradint.add_gridspec(len(rad_vars), 4)
@@ -753,10 +754,10 @@ class HTI_Int:
                                 label='std')
         if mlyrt is not None:
             hviax.axhline(mlyrt[idxdt], c='k', ls='dashed', lw=2, alpha=.75,
-                          label='$ML_{e}$')
+                          label='$MLyr_{(T)}$')
         if mlyrb is not None:
             hviax.axhline(mlyrb[idxdt], c='gray', ls='dashed', lw=2, alpha=.75,
-                          label='$BB_{bottom}$')
+                          label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
@@ -817,10 +818,10 @@ class HTI_Int:
                                 label='min/max')
         if mlyrt is not None:
             hviax.axhline(mlyrt[idxdt], c='k', ls='dashed', lw=2, alpha=.75,
-                          label='$ML_{e}$')
+                          label='$MLyr_{(T)}$')
         if mlyrb is not None:
             hviax.axhline(mlyrb[idxdt], c='gray', ls='dashed', lw=2, alpha=.75,
-                          label='$BB_{bottom}$')
+                          label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
@@ -830,9 +831,9 @@ class HTI_Int:
         figprofsint.canvas.draw()
 
 
-def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
-             vars_bounds=None, ucmap=None, ptype='pseudo', contourl=None,
-             htixlim=None, htiylim=None, tz='Europe/London'):
+def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
+             vars_bounds=None, ptype='pseudo', contourl=None, htixlim=None,
+             htiylim=None, tz='Europe/London', fig_size=None):
     """
     Create the base display for the HTI.
 
@@ -894,8 +895,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20, 28,
-                                         36, 48, 64, 80, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -1005,11 +1006,13 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
     mlyrt, mlyrb = mlyrtop, mlyrbot
 
     tzi = tz
-
+    if fig_size is None:
+        fig_size = (16, 9)
     figprofsint, axd = plt.subplot_mosaic(
         """
         AAAB
-        """)
+        """,
+        figsize=fig_size)
 
     htiplt = axd['A']
     if ptype is None or ptype == 'pseudo':
@@ -1152,9 +1155,9 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     cax.get_yaxis().set_visible(False)
     cax.set_facecolor('slategrey')
     at = AnchoredText('Initial identification of the \n' +
-                      'ML signatures combining\n'
-                      'the normalised profiles of\n' +
-                      r'$Z_H$ and $\rho_{HV}$',
+                      'Melting Layer signatures \n'
+                      'combining the normalised \n' +
+                      r'profiles of $Z_H$ and $\rho_{HV}$',
                       loc=10, prop=dict(size=12, color='white'), frameon=False)
     cax.add_artist(at)
 
@@ -1234,11 +1237,11 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     if ~np.isnan(mlrand[init_comb]['idxtop']):
         mlts = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxtop']],
                            c='slateblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$Top_{(ML)}$')
+                           label=r'$MLyr_{(T)}$')
     if ~np.isnan(mlrand[init_comb]['idxbot']):
         mlbs = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxbot']],
                            c='steelblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$Bottom_{(ML)}$')
+                           label=r'$MLyr_{(B)}$')
     ax3.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
     ax3.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
     ax3.legend(fontsize=lgn_fs)

@@ -29,7 +29,7 @@ from ..base import TowerpyError
 def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              vars_bounds=None, xlims=None, ylims=None, data_proj=None,
              ucmap=None, unorm=None, ring=None, range_rings=None,
-             cpy_feats=None):
+             cpy_feats=None, fig_size=None):
     """
     Display a radar PPI scan.
 
@@ -106,8 +106,8 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
-                                             60, 70, 80, 90, 100))
+        bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                             28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
@@ -232,7 +232,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
 
     if proj == 'polar':
         ptitle = dtdes1 + dtdes2
-        fig, ax1 = plt.subplots(figsize=(6, 6.15),
+        if fig_size is None:
+            fig_size = (6, 6.15)
+        fig, ax1 = plt.subplots(figsize=fig_size,
                                 subplot_kw=dict(projection='polar'))
         f1 = ax1.pcolormesh(rad_georef['theta'], rad_georef['rho'],
                             np.flipud(rad_vars[var2plot]), shading='auto',
@@ -263,7 +265,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
 
     elif proj == 'rect' and cpy_features['status'] is False:
         ptitle = dtdes1 + dtdes2
-        fig, ax1 = plt.subplots(figsize=(6, 6.75))
+        if fig_size is None:
+            fig_size = (6, 6.75)
+        fig, ax1 = plt.subplots(figsize=fig_size)
         f1 = ax1.pcolormesh(rad_georef['xgrid'], rad_georef['ygrid'],
                             rad_vars[var2plot], shading='auto',
                             cmap=cmaph,
@@ -328,13 +332,15 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     elif proj == 'rect' and cpy_features['status']:
         ptitle = dtdes1 + dtdes2
         proj = ccrs.PlateCarree()
+        if fig_size is None:
+            fig_size = (9, 6)
         if data_proj:
             proj2 = data_proj
         else:
             raise TowerpyError('User must specify the projected coordinate'
                                ' system of the radar data e.g.'
                                ' ccrs.OSGB(approx=False) or ccrs.UTM(zone=32)')
-        fig = plt.figure(figsize=(9, 6), constrained_layout=True)
+        fig = plt.figure(figsize=fig_size, constrained_layout=True)
         plt.subplots_adjust(left=0.05, right=0.99, top=0.981, bottom=0.019,
                             wspace=0, hspace=1
                             )
@@ -445,7 +451,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
 
 
 def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
-                vars_bounds=None, mlyr=None):
+                vars_bounds=None, mlyr=None, fig_size=None):
     """
     Plot a set of PPIs of polarimetric variables.
 
@@ -489,8 +495,8 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
-                                         70, 80, 90, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
                                                extend='both')
@@ -546,8 +552,9 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
         nc = int(len(rad_vars)/2)
     if len(rad_vars) > 3 and len(rad_vars) % 2:
         nc = int((len(rad_vars)//2)+1)
-
-    f, ax = plt.subplots(nr, nc, sharex=True, sharey=True, figsize=(16, 9))
+    if fig_size is None:
+        fig_size = (16, 9)
+    f, ax = plt.subplots(nr, nc, sharex=True, sharey=True, figsize=fig_size)
     f.suptitle(f'{ptitle}', fontsize=16)
 
     for a, (key, var2plot) in zip(ax.flatten(), rad_vars.items()):
@@ -607,7 +614,7 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
 def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
                proj='rect', vars_bounds=None, xlims=None, ylims=None,
                data_proj=None, ucmap=None, unorm=None, cpy_feats=None,
-               ncols=None, nrows=None):
+               ncols=None, nrows=None, fig_size=None):
     """
     Graph multiple PPI scans into a grid.
 
@@ -687,8 +694,8 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
-                                             60, 70, 80, 90, 100))
+        bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                             28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
@@ -829,9 +836,9 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
             + f"{p['datetime']:%Y-%m-%d %H:%M:%S}"
             for p in rscans_params]
     if proj == 'rect' and cpy_features['status'] is False:
-        fig = plt.figure(figsize=(15, 5),
-                         # constrained_layout=True
-                         )
+        if fig_size is None:
+            fig_size = (15, 5)
+        fig = plt.figure(figsize=fig_size)
         grgeor = [[i['xgrid'], i['ygrid']] for i in rscans_georef]
         if nrows is None and ncols is None:
             if len(rscans_vars) <= 3:
@@ -890,9 +897,9 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
         plt.tight_layout()
         # plt.show()
     elif proj == 'rect' and cpy_features['status']:
-        fig = plt.figure(figsize=(16, 6),
-                         constrained_layout=True
-                         )
+        if fig_size is None:
+            fig_size = (16, 6)
+        fig = plt.figure(figsize=fig_size, constrained_layout=True)
         projection = ccrs.PlateCarree()
         axes_class = (GeoAxes, dict(map_projection=projection))
         grgeor = [[i['xgrid_proj'], i['ygrid_proj']] for i in rscans_georef]
@@ -1029,7 +1036,7 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
 
 def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
                        vars_bounds=None, xlims=None, ylims=None, zlims=[0, 8],
-                       limh=8, ucmap=None, unorm=None):
+                       limh=8, ucmap=None, unorm=None, fig_size=None):
     """
     Display a 3-D representation of the radar cone coverage.
 
@@ -1085,8 +1092,8 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
-                                         70, 80, 90, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, mpl.colormaps['tpylsc_ref'].N,
                                                extend='both')
              for key, value in bnd.items()}
@@ -1186,8 +1193,9 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     ls = LightSource(0, 0)
 
     rgb = ls.shade(R, cmap=cmaph, norm=normp, vert_exag=0.1, blend_mode='soft')
-
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(11, 9))
+    if fig_size is None:
+        fig_size = (11, 9)
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=fig_size)
 
     # Plot the surface.
     ax.plot_surface(X, Y, Z, cmap=cmaph, norm=normp, facecolors=rgb,
@@ -1217,7 +1225,7 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     plt.show()
 
 
-def plot_snr(rad_georef, rad_params, snr_data, proj='rect'):
+def plot_snr(rad_georef, rad_params, snr_data, proj='rect', fig_size=None):
     """
     Display the results of the SNR classification.
 
@@ -1236,8 +1244,10 @@ def plot_snr(rad_georef, rad_params, snr_data, proj='rect'):
     dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
+    if fig_size is None:
+        fig_size = (10.5, 6.15)
     if proj == 'polar':
-        fig, (ax2, ax3) = plt.subplots(1, 2, figsize=(10.5, 6.15),
+        fig, (ax2, ax3) = plt.subplots(1, 2, figsize=fig_size,
                                        subplot_kw=dict(projection='polar'))
 
         f2 = ax2.pcolormesh(rad_georef['theta'], rad_georef['rho'],
@@ -1267,7 +1277,7 @@ def plot_snr(rad_georef, rad_params, snr_data, proj='rect'):
         plt.show()
 
     elif proj == 'rect':
-        fig, (ax2, ax3) = plt.subplots(1, 2, figsize=(10.5, 6.15),
+        fig, (ax2, ax3) = plt.subplots(1, 2, figsize=fig_size,
                                        sharex=True, sharey=True)
         f2 = ax2.pcolormesh(rad_georef['xgrid'], rad_georef['ygrid'],
                             snr_data['snr [dB]'], shading='auto',
@@ -1307,7 +1317,7 @@ def plot_snr(rad_georef, rad_params, snr_data, proj='rect'):
 
 
 def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
-                    xlims=None, ylims=None):
+                    xlims=None, ylims=None, fig_size=None):
     """
     Plot a set of PPIs of polarimetric variables.
 
@@ -1336,7 +1346,9 @@ def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
     # =========================================================================
     #   Plot the Clutter classification
     # =========================================================================
-    fig, axs = plt.subplots(figsize=(6, 6.15))
+    if fig_size is None:
+        fig_size = (6, 6.15)
+    fig, axs = plt.subplots(figsize=fig_size)
     ax = axs
     ax.set_title(f'{ptitle} \n' + 'Clutter classification \n' +
                  '[Precipitation = Blue; Clutter = Yellow; Noise = Gray]')
@@ -1364,7 +1376,9 @@ def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
     if clutter_map is not None:
         norm = mcolors.BoundaryNorm(boundaries=np.linspace(0, 100, 11),
                                     ncolors=256)
-        fig, axs = plt.subplots(figsize=(6, 6.5))
+        if fig_size is None:
+            fig_size = (6, 6.5)
+        fig, axs = plt.subplots(figsize=fig_size)
         ax = axs
         f1 = ax.pcolormesh(rad_georef['xgrid'], rad_georef['ygrid'],
                            clutter_map*100, shading='auto',
@@ -1397,7 +1411,8 @@ def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
 
 
 def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
-                   vars_bounds=None, mlyr=None, xlims=None, ylims=None):
+                   vars_bounds=None, mlyr=None, xlims=None, ylims=None,
+                   fig_size1=None, fig_size2=None):
     """
     Plot the results of the ZH attenuation correction method.
 
@@ -1443,8 +1458,8 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
-                                         70, 80, 90, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -1494,10 +1509,12 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     # Creates plots for ZH attenuation correction results.
     # =========================================================================
     mosaic = 'ABC'
-    fig_size = (16, 5)
-    fig_size2 = (6, 5)
+    if fig_size1 is None:
+        fig_size1 = (16, 5)
+    if fig_size2 is None:
+        fig_size2 = (6, 5)
 
-    fig_mos1 = plt.figure(figsize=fig_size, constrained_layout=True)
+    fig_mos1 = plt.figure(figsize=fig_size1, constrained_layout=True)
     ax_idx = fig_mos1.subplot_mosaic(mosaic, sharex=True, sharey=True)
     for key, value in rad_vars_att.items():
         if '[dBZ]' in key:
@@ -1559,7 +1576,7 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     # =========================================================================
     # Creates plots for PHIDP attenuation correction results.
     # =========================================================================
-    fig_mos2 = plt.figure(figsize=fig_size, constrained_layout=True)
+    fig_mos2 = plt.figure(figsize=fig_size1, constrained_layout=True)
     ax_idx2 = fig_mos2.subplot_mosaic(mosaic, sharex=True, sharey=True)
     for key, value in rad_vars_att.items():
         if '[deg]' in key:
@@ -1655,7 +1672,8 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
 
 
 def plot_zdrattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
-                    vars_bounds=None, mlyr=None, xlims=None, ylims=None):
+                    vars_bounds=None, mlyr=None, xlims=None, ylims=None,
+                    fig_size1=None, fig_size2=None):
     """
     Plot the results of the ZDR attenuation correction method.
 
@@ -1701,8 +1719,8 @@ def plot_zdrattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
-                                         70, 80, 90, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -1752,10 +1770,12 @@ def plot_zdrattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     # Creates plots for ZDR attenuation correction results.
     # =========================================================================
     mosaic = 'DEF'
-    fig_size = (16, 5)
-    fig_size2 = (6, 5)
+    if fig_size1 is None:
+        fig_size1 = (16, 5)
+    if fig_size2 is None:
+        fig_size2 = (6, 5)
 
-    fig_mos1 = plt.figure(figsize=fig_size, constrained_layout=True)
+    fig_mos1 = plt.figure(figsize=fig_size1, constrained_layout=True)
     ax_idx = fig_mos1.subplot_mosaic(mosaic, sharex=True, sharey=True)
     for key, value in rad_vars_att.items():
         if '[dB]' in key:
@@ -1879,8 +1899,8 @@ def plot_attcorrection2(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50, 60,
-                                         70, 80, 90, 100))
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_ref'].N,
@@ -2156,7 +2176,7 @@ def plot_attcorrection2(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
 
 def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
                      vars_bounds=None, stats=None, colours=False, unorm=None,
-                     ucmap=None):
+                     ucmap=None, fig_size=None):
     """
     Display a set of profiles of polarimetric variables.
 
@@ -2203,8 +2223,8 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array((0.1, 1, 5, 10, 15, 20, 30, 40, 50,
-                                             60, 70, 80, 90, 100))
+        bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                             28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value,
                                                mpl.colormaps['tpylsc_pvars'].N,
@@ -2244,6 +2264,9 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
     ttxt_elev = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
     ttxt_dt = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ttxt = ttxt_elev+ttxt_dt
+    if fig_size is None:
+        fig_size = (14, 10)
+
     def make_colorbar(ax1, mappable, **kwargs):
         ax1_divider = make_axes_locatable(ax1)
         orientation = kwargs.pop('orientation', 'vertical')
@@ -2261,12 +2284,14 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
         cax.tick_params(direction='in', labelsize=10, rotation=90)
         cax.xaxis.set_ticks_position('bottom')
     if rad_params['elev_ang [deg]'] > 89:
-        fig, ax = plt.subplots(1, len(rad_profs),  sharey=True)
+        fig, ax = plt.subplots(1, len(rad_profs), figsize=fig_size,
+                               sharey=True)
         fig.suptitle(f'Vertical profiles of polarimetric variables'
                      '\n' f'{ttxt}',
                      fontsize=fontsizetitle)
     else:
-        fig, ax = plt.subplots(1, len(rad_profs), sharey=True)
+        fig, ax = plt.subplots(1, len(rad_profs), figsize=fig_size,
+                               sharey=True)
         fig.suptitle('Quasi-Vertical profiles of polarimetric variables \n'
                      f'{ttxt}',
                      fontsize=fontsizetitle)
@@ -2356,8 +2381,8 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
     plt.tight_layout()
 
 
-def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
-                vars_bounds=None, ylims=None, ucmap=None, spec_range=None):
+def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
+                spec_range=None, vars_bounds=None, ylims=None, fig_size=None):
     """
     Display a set of RD-QVPS of polarimetric variables.
 
@@ -2390,6 +2415,8 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
         Range from the radar within which the data was used.
     """
     tpcm = 'tpylsc_pvars_r'
+    if fig_size is None:
+        fig_size = (14, 10)
     cmaph = mpl.colormaps[tpcm](np.linspace(0., .8,
                                             len(tp_rdqvp.qvps_itp)))
     if ucmap is not None:
@@ -2415,7 +2442,7 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
     mosaic = [chr(ord('@')+c+1) for c in range(len(tp_rdqvp.rd_qvps)+1)]
     mosaic = f'{"".join(mosaic)}'
 
-    fig = plt.figure(layout="constrained")
+    fig = plt.figure(layout="constrained", figsize=fig_size)
     fig.suptitle('RD-QVPs of polarimetric variables \n' f'{ttxt}',
                  fontsize=fontsizetitle)
 
@@ -2468,7 +2495,7 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None,
         scan_st.axvline(spec_range, c='k', lw=3)
 
 
-def plot_rhocalibration(hists, histmax, idxminstd, rng_ite):
+def plot_rhocalibration(hists, histmax, idxminstd, rng_ite, fig_size=None):
     """
     S.
 
@@ -2500,8 +2527,10 @@ def plot_rhocalibration(hists, histmax, idxminstd, rng_ite):
     # f, ax = plt.subplots(nr, nc, sharex=True, sharey=True)
     # f.suptitle(f'{ptitle}', fontsize=16)
     # for a, (key, value) in zip(ax.flatten(), rad_vars.items()):
+    if fig_size is None:
+        fig_size = (16, 9)
     fig, axes = plt.subplots(sharex=True, sharey=True, nrows=nr, ncols=nc,
-                             figsize=(16, 9), constrained_layout=True)
+                             figsize=fig_size, constrained_layout=True)
     for i, ax in enumerate(axes.flat):
         if i < len(hists):
             if i == idxminstd:
@@ -2520,7 +2549,7 @@ def plot_rhocalibration(hists, histmax, idxminstd, rng_ite):
             ax.tick_params(axis='both', which='major', labelsize=10)
 
 
-def plot_offsetcorrection(rad_georef, rad_params, rad_var,
+def plot_offsetcorrection(rad_georef, rad_params, rad_var, fig_size=None,
                           var_name='PhiDP [deg]', cmap='tpylsc_dbu_w_rd'):
     """
     Plot the offset detection method from ZDR/PhiDP_Calibration Class.
@@ -2552,9 +2581,11 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var,
         labelo = r'$Z_{DR}}$ offset'
         dval = 0.1
         dof = 1
+    if fig_size is None:
+        fig_size = (8, 8)
 
-    fig, ax = plt.subplots(figsize=(8, 8),
-                           subplot_kw={'projection': 'polar', })
+    fig, ax = plt.subplots(figsize=fig_size,
+                           subplot_kw={'projection': 'polar'})
     ax.set_theta_direction(-1)
     dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
@@ -2604,7 +2635,7 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var,
     plt.tight_layout()
 
 
-def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
+def plot_mfs(path_mfs, norm=True, vars_bounds=None, fig_size=None):
     """
     Plot the membership functions used in clutter classification.
 
@@ -2618,7 +2649,7 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
     vars_bounds : dict containing key and 3-element tuple or list, optional
         Boundaries [min, max, LaTeX Varnames] between which radar variables are
         to be mapped.
-    figsize : list or tuple containing 2-element numbers, optional
+    fig_size : list or tuple containing 2-element numbers, optional
         Width, height in inches. The default is None.
     """
     import os
@@ -2653,14 +2684,16 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
     if len(varsp) % 2 == 0:
         ncols = int(len(varsp) / 2)
         nrows = len(varsp) // ncols
-        fig_size = (18, 5)
+        if fig_size is None:
+            fig_size = (18, 5)
     else:
         ncols = 3
         if len(varsp) % 3 == 0:
             nrows = (len(varsp) // ncols)
         else:
             nrows = (len(varsp) // ncols)+1
-        fig_size = (18, 7.5)
+        if fig_size is None:
+            fig_size = (18, 7.5)
 
     if varsp != varsc:
         raise TowerpyError('Oops!... The number of membership functions for'
@@ -2672,8 +2705,7 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, figsize=None):
                       for k, val in mfsp.items()}
         mfs_clnorm = {k: np.array([val[:, 0], rut.normalisenan(val[:, 1])]).T
                       for k, val in mfsc.items()}
-    if figsize is not None:
-        fig_size = figsize
+
     f, ax = plt.subplots(nrows, ncols, sharey=True, figsize=fig_size)
     for a, (key, value) in zip(ax.flatten(), mfs_prnorm.items()):
         a.plot(value[:, 0], value[:, 1], c='tab:blue', label='PR')

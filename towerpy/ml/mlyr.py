@@ -35,7 +35,10 @@ class MeltingLayer:
         self.file_name = radobj.file_name
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
-        self.profs_type = radobj.profs_type
+        if hasattr(radobj, "profs_type"):
+            self.profs_type = radobj.profs_type
+        else:
+            self.profs_type = 'user-defined'
 
     def findpeaksboundaries(profile, pheight, param_k=0):
         """
@@ -90,7 +93,7 @@ class MeltingLayer:
             else:
                 idx_peak = peaks['prfpks'][1]['peak_heights'].argmax()
                 if maxpeakh >= 0.5:
-                    param_k = 0.8
+                    param_k = 0.6
                 else:
                     param_k *= 2
                 aux = [-i if maxpeakh+i >= param_k else np.nan
