@@ -42,10 +42,11 @@ class PolarimetricProfiles:
     """
 
     def __init__(self, radobj):
-        self.elev_angle = radobj.elev_angle
-        self.file_name = radobj.file_name
-        self.scandatetime = radobj.scandatetime
-        self.site_name = radobj.site_name
+        if not isinstance(radobj, list):
+            self.elev_angle = radobj.elev_angle
+            self.file_name = radobj.file_name
+            self.scandatetime = radobj.scandatetime
+            self.site_name = radobj.site_name
 
     def pol_vps(self, rad_georef, rad_params, rad_vars, thlds=None,
                 valid_gates=0, stats=False):
@@ -143,7 +144,7 @@ class PolarimetricProfiles:
                 self.vps_stats['max']['gradV [dV/dh]'][:] = np.nan
                 self.vps_stats['sem']['gradV [dV/dh]'][:] = np.nan
             self.vps = vppol
-            self.profs_type = 'birdbath_scan'
+            self.profs_type = 'VPs'
             self.georef = {}
             profh = np.array([np.mean(rays)
                               for rays in rad_georef['beam_height [km]'].T])
@@ -264,7 +265,7 @@ class PolarimetricProfiles:
         # qvppol['gradV [dV/dh]'] = qvppol['ZH [dBZ]']*np.nan
 
         self.qvps = qvppol
-        self.profs_type = 'quasi-vertical profiles'
+        self.profs_type = 'QVPs'
         self.georef = {}
         self.georef['profiles_height [km]'] = qvps_h
 
@@ -467,14 +468,20 @@ class PolarimetricProfiles:
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps
         self.qvps_itp = qvps_itp
-        self.profs_type = 'quasi-vertical profiles'
+        self.profs_type = 'RD-QVPs'
         self.georef = {}
         self.georef['profiles_height [km]'] = yaxis
+
         self.elev_angle = [i['elev_ang [deg]'] for i in rscans_params]
+        self.file_name = 'RD-QVPs'
         self.scandatetime = [i['datetime'] for i in rscans_params]
+        snames_list = [i['site_name'] for i in rscans_params]
+        if snames_list.count(snames_list[0]) == len(snames_list):
+            self.site_name = snames_list[0]
+        else:
+            self.site_name = [i['site_name'] for i in rscans_params]
         toc = time.time()
         if plot_method:
             rad_display.plot_rdqvps(rscans_georef, rscans_params, self,
                                     spec_range=spec_range)
         print(f'RD-QVPS running time: {toc-tic:.3f} sec.')
-

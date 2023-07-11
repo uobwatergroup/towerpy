@@ -277,10 +277,10 @@ class PPI_Int:
                                               np.flipud(intradvars[j])[nangle,
                                                                        :],
                                               marker='.', markersize=3)
-                intradaxs[f'f3_ax{i+2}'].axvline(nrange, alpha=.2)
-                if 'ZDR' in j:
+                if '[dB]' in j:
                     intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.2, c='gray')
                 intradaxs[f'f3_ax{i+2}'].set_title(j)
+                intradaxs[f'f3_ax{i+2}'].axvline(nrange, alpha=.2)
         if gcoord_sys == 'rect' and nrange < ngates_m:
             for i, j in enumerate(intradvars):
                 intradaxs[f'f3_ax{i+2}'].plot(intradarrange/1000,
@@ -288,8 +288,10 @@ class PPI_Int:
                                               marker='.', markersize=3)
                 intradaxs[f'f3_ax{i+2}'].axvline(intradarrange[int(np.round(nrange))]/1000,
                                                  alpha=.2)
-                if 'ZDR' in j:
-                    intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.2, c='gray')
+                if '[dB]' in j:
+                    intradaxs[f'f3_ax{i+2}'].axhline(0, alpha=.8, c='gray')
+                if '[-]' in j:
+                    intradaxs[f'f3_ax{i+2}'].axhline(1., alpha=.8, c='thistle')
                 intradaxs[f'f3_ax{i+2}'].set_title(j)
         if vars_ylim is not None:
             for i, j in enumerate(intradvars):
@@ -367,7 +369,7 @@ class PPI_Int:
 
 def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              vars_bounds=None, ppi_xlims=None, ppi_ylims=None, ucmap=None,
-             radial_xlims=None, radial_ylims=None, mlyr=None):
+             radial_xlims=None, radial_ylims=None, mlyr=None, fig_size=None):
     """
     Create the base display for the interactive PPI explorer.
 
@@ -467,8 +469,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         vars_ylim = radial_ylims
     else:
         vars_ylim = None
-
-    figradint = plt.figure(figsize=(16, 9))
+    if fig_size is None:
+        fig_size = (16, 9)
+    figradint = plt.figure(figsize=fig_size)
     # plt.tight_layout()
     if len(rad_vars) > 3:
         intradgs = figradint.add_gridspec(len(rad_vars), 4)
@@ -481,8 +484,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
     if vars_bounds is None:
-        bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20,
-                                             24, 32, 48, 64, 100])
+        bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                             28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -751,10 +754,10 @@ class HTI_Int:
                                 label='std')
         if mlyrt is not None:
             hviax.axhline(mlyrt[idxdt], c='k', ls='dashed', lw=2, alpha=.75,
-                          label='$ML_{e}$')
+                          label='$MLyr_{(T)}$')
         if mlyrb is not None:
             hviax.axhline(mlyrb[idxdt], c='gray', ls='dashed', lw=2, alpha=.75,
-                          label='$BB_{bottom}$')
+                          label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
@@ -815,10 +818,10 @@ class HTI_Int:
                                 label='min/max')
         if mlyrt is not None:
             hviax.axhline(mlyrt[idxdt], c='k', ls='dashed', lw=2, alpha=.75,
-                          label='$ML_{e}$')
+                          label='$MLyr_{(T)}$')
         if mlyrb is not None:
             hviax.axhline(mlyrb[idxdt], c='gray', ls='dashed', lw=2, alpha=.75,
-                          label='$BB_{bottom}$')
+                          label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
@@ -828,9 +831,9 @@ class HTI_Int:
         figprofsint.canvas.draw()
 
 
-def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
-             vars_bounds=None, ucmap=None, ptype='pseudo', contourl=None,
-             htixlim=None, htiylim=None, tz='Europe/London'):
+def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
+             vars_bounds=None, ptype='pseudo', contourl=None, htixlim=None,
+             htiylim=None, tz='Europe/London', fig_size=None):
     """
     Create the base display for the HTI.
 
@@ -892,8 +895,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    bnd['bRainfall [mm/hr]'] = np.array([0.01, 0.5, 1, 2, 4, 8, 12, 16, 20, 24,
-                                         28, 32, 48, 64])
+    bnd['bRainfall [mm/hr]'] = np.array((0.01, 0.5, 1, 2, 4, 8, 12, 20,
+                                         28, 36, 48, 64, 80, 100))
 
     dnorm = {'n'+key[1:]: mcolors.BoundaryNorm(value, tpycm_plv.N,
                                                extend='both')
@@ -1003,11 +1006,13 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None,
     mlyrt, mlyrb = mlyrtop, mlyrbot
 
     tzi = tz
-
+    if fig_size is None:
+        fig_size = (16, 9)
     figprofsint, axd = plt.subplot_mosaic(
         """
         AAAB
-        """)
+        """,
+        figsize=fig_size)
 
     htiplt = axd['A']
     if ptype is None or ptype == 'pseudo':
@@ -1113,7 +1118,7 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     hb_lim_it1 = heightbeam[idxml_btm_it1:idxml_top_it1]
 
     resimp1d = np.gradient(comb_mult_w[comb_idpy])
-    resimp2d = -np.gradient(np.gradient(comb_mult_w[comb_idpy]))
+    resimp2d = np.gradient(np.gradient(comb_mult_w[comb_idpy]))
 
     fig, axs = plt.subplots(1, 3, sharey=True, figsize=(12, 10))
     plt.subplots_adjust(left=0.096, right=0.934, top=0.986, bottom=0.091)
@@ -1132,9 +1137,10 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
                 marker="X", c='tab:orange', label='$P_{{peak}}$')
     # ax1.axhline(peakcombzh_rhv+.75, c='gray', ls='dashed', lw=lw, alpha=.5,
     #             label=r'$U_{{L}}$')
-    ax1.axvline(param_k, c='k', ls=':', lw=2.5, label='param_k')
+    ax1.axvline(param_k, c='k', ls=':', lw=2.5, label='k')
     ax1.set_xlim([-0.05, 1.05])
-    ax1.set_ylim([1, 5])
+    # ax1.set_ylim([heightbeam[min_hidx], heightbeam[max_hidx]])
+    ax1.set_ylim([0, heightbeam[max_hidx]])
     ax1.tick_params(axis='both', labelsize=tks_fs)
     ax1.set_xlabel('(norm)', fontsize=lbl_fs, labelpad=10)
     ax1.set_ylabel('Height [km]', fontsize=lbl_fs, labelpad=10)
@@ -1149,9 +1155,9 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     cax.get_yaxis().set_visible(False)
     cax.set_facecolor('slategrey')
     at = AnchoredText('Initial identification of the \n' +
-                      'ML signatures combining\n'
-                      'the normalised profiles of\n' +
-                      r'$Z_H$ and $\rho_{HV}$',
+                      'Melting Layer signatures \n'
+                      'combining the normalised \n' +
+                      r'profiles of $Z_H$ and $\rho_{HV}$',
                       loc=10, prop=dict(size=12, color='white'), frameon=False)
     cax.add_artist(at)
 
@@ -1162,12 +1168,16 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
 
     ax2.plot(comb_mult[comb_idpy], hb_lim_it1,
              label=f'$P^*_{{{comb_idpy+1}}}$', lw=1.5, c='tab:blue')
-    ax2.plot(resimp1d, hb_lim_it1,
-             label=f"$P_{{{comb_idpy+1}}}^*'$", lw=3., c='tab:gray', alpha=ac)
-    ax2.plot(resimp2d, hb_lim_it1,
+    # ax2.plot(resimp1d, hb_lim_it1,
+    #           label=f"$P_{{{comb_idpy+1}}}^*'$", lw=3., c='tab:gray',
+    #           alpha=ac)
+    ax2.plot(-resimp2d, hb_lim_it1,
              label=f"$-P_{{{comb_idpy+1}}}^*''$", lw=3., c='gold', alpha=ac)
     ax2.plot(comb_mult_w[comb_idpy], hb_lim_it1,
-             label=f'$P_{{{comb_idpy+1}}}$', lw=3., c='tab:green', alpha=ac)
+             # label=(f'$P^*_{{{comb_idpy+1}}}$-'+r'(w $\cdot$'
+             #        + f"$P_{{{comb_idpy+1}}}^*''$)"),
+             label=f'$P_{{{comb_idpy+1}}}$',
+             lw=3., c='tab:green', alpha=ac)
     if ~np.isnan(mlrand[comb_idpy]['idxtop']):
         ax2.scatter(comb_mult_w[comb_idpy][mlrand[comb_idpy]['idxtop']],
                     hb_lim_it1[mlrand[comb_idpy]['idxtop']],
@@ -1227,11 +1237,11 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     if ~np.isnan(mlrand[init_comb]['idxtop']):
         mlts = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxtop']],
                            c='slateblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{top}$')
+                           label=r'$MLyr_{(T)}$')
     if ~np.isnan(mlrand[init_comb]['idxbot']):
         mlbs = ax3.axhline(hb_lim_it1[mlrand[init_comb]['idxbot']],
                            c='steelblue', ls='dashed', lw=lw, alpha=0.5,
-                           label=r'$MLyr_{bottom}$')
+                           label=r'$MLyr_{(B)}$')
     ax3.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
     ax3.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
     ax3.legend(fontsize=lgn_fs)
