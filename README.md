@@ -65,6 +65,10 @@ Finally, install the latest version of towerpy using:
 
 ``python -m pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main``
 
+or
+
+``python -m pip install towerpy-rd``
+
 ## Installing from source
 
 Optionally, you can get the towerpy source code from the [GitHub repository](https://github.com/uobwatergroup/towerpy). 
