@@ -953,8 +953,11 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
 
     profsheight = np.array([nprof.georef['profiles_height [km]']
                             for nprof in pol_profs]).T
-    profsdt = [nprof.scandatetime for nprof in pol_profs]
-    if pol_profs[0].profs_type == 'birdbath_scan':
+    if pol_profs[0].profs_type == 'RD-QVPs':
+        profsdt = [nprof.scandatetime[0] for nprof in pol_profs]
+    else:
+        profsdt = [nprof.scandatetime for nprof in pol_profs]
+    if pol_profs[0].profs_type == 'VPs':
         profsvars = {k: np.array([nprof.vps[k] for nprof in pol_profs]).T
                      for k in pol_profs[0].vps.keys()}
         if stats == 'std_dev' or stats == 'sem':
@@ -965,7 +968,7 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
             profsstat = None
         # elif:
 
-    elif pol_profs[0].profs_type == 'quasi-vertical profiles':
+    elif pol_profs[0].profs_type == 'QVPs':
         profsvars = {k: np.array([nprof.qvps[k] for nprof in pol_profs]).T
                      for k in pol_profs[0].qvps.keys()}
         # TODO add max/min visualisation
@@ -975,6 +978,10 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
                          for k in pol_profs[0].qvps_stats[stats].keys()}
         else:
             profsstat = None
+    elif pol_profs[0].profs_type == 'RD-QVPs':
+        profsvars = {k: np.array([nprof.rd_qvps[k] for nprof in pol_profs]).T
+                     for k in pol_profs[0].rd_qvps.keys()}
+        profsstat = None
     if mlyrs:
         mlyrtop = [mlyr.ml_top if isinstance(mlyr.ml_top, float) else np.nan
                    for mlyr in mlyrs]

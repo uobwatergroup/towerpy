@@ -2,7 +2,8 @@
 
 import numpy as np
 import time
-import copy
+# import copy
+from datetime import datetime
 from ..base import TowerpyError
 from ..datavis import rad_display
 from ..utils.radutilities import find_nearest
@@ -131,9 +132,6 @@ class PolarimetricProfiles:
             if 'V [m/s]' in rad_vars.keys() and isinstance(vppol['V [m/s]'],
                                                            np.ndarray):
                 vppol['gradV [dV/dh]'] = np.array(np.gradient(vppol['V [m/s]'])).T
-            elif 'VV [m/s]' in rad_vars.keys() and isinstance(vppol['VV [m/s]'],
-                                                              np.ndarray):
-                vppol['gradV [dV/dh]'] = np.array(np.gradient(vppol['VV [m/s]'])).T
             if 'gradV [dV/dh]' in vppol.keys() and stats:
                 self.vps_stats['std_dev']['gradV [dV/dh]'] = np.empty_like(self.vps_stats['std_dev']['V [m/s]'])
                 self.vps_stats['min']['gradV [dV/dh]'] = np.empty_like(self.vps_stats['min']['V [m/s]'])
@@ -151,7 +149,8 @@ class PolarimetricProfiles:
             self.georef['profiles_height [km]'] = profh
 
     def pol_qvps(self, rad_georef, rad_params, rad_vars, thlds='default',
-                 valid_gates=30, stats=False, qvps_height_method='bh'):
+                 valid_gates=30, stats=False, exclude_vars=['V [m/s]'],
+                 qvps_height_method='bh'):
         r"""
         Generate QVPs of polarimetric variables.
 
@@ -180,6 +179,9 @@ class PolarimetricProfiles:
                 'max': Max values
 
                 'sem': Standard Error of the Mean
+        exclude_vars : list, optional
+            Name of the variables that will not be used to compute the QVPs.
+            The default is ['V [m/s]'].
 
         Notes
         -----
@@ -229,8 +231,10 @@ class PolarimetricProfiles:
                     for k, kv in rad_vars.items()}
 
         validgates = valid_gates
-        qvpvar = ['ZH [dBZ]', 'ZDR [dB]', 'rhoHV [-]', 'PhiDP [deg]',
-                  'KDP [deg/km]']
+        # vars_nu = ['V [m/s]']  # Modify to compute QVPs of V.
+        qvpvar = sorted(list(set([k for k in rad_vars.keys()
+                                  if k not in exclude_vars])),
+                        reverse=True)
 
         qvpdata = {key: values
                    for key, values in rad_vars.items() if key in qvpvar}
@@ -269,10 +273,11 @@ class PolarimetricProfiles:
         self.georef = {}
         self.georef['profiles_height [km]'] = qvps_h
 
-    def pol_rdqvps(self, rscans_georef, rscans_params, rscans_vars,
-                   valid_gates=30, thlds='default', power_param1=0,
-                   power_param2=2, spec_range=50, vert_res=2, r0=None,
-                   qvps_height_method='bh', plot_method=False):
+    def pol_rdqvps(self, rscans_georef, rscans_params, rscans_vars, r0=None,
+                   valid_gates=30, thlds='default', power_param1=0, vert_res=2,
+                   power_param2=2, spec_range=50, all_desc=True,
+                   exclude_vars=['V [m/s]'], qvps_height_method='bh',
+                   plot_method=False):
         r"""
         Generate RD-QVPs of polarimetric variables.
 
@@ -285,6 +290,9 @@ class PolarimetricProfiles:
         rscans_vars : lost
             List of objects containing radar variables used to generate the
             RD-QVPs.
+        r0 : float or list of floats, optional
+            Initial range within the PPI scans to build the QVPS, in km.
+            The default is None.
         valid_gates : int, optional
             Number of valid gates (or azimuths) along the radial.
             The default is 30, according to [1]_.
@@ -295,17 +303,21 @@ class PolarimetricProfiles:
         power_param1 : float, optional
             Power parameter for :math:`r_i \leq d-1`. The default is 0,
             according to [2]_.
+        vert_res : float, optional
+            Resolution of the common vertical axis, in m. The default is 2.
         power_param2 : float, optional
             Power parameter for :math:`r_i > d-1`. The default is 2,
             according to [2]_.
         spec_range : int, optional
             Range from the radar within which the data will be used.
             The default is 50.
-        vert_res : float, optional
-            Resolution of the common vertical axis, in m. The default is 2.
-        r0 : float or list of floats, optional
-            Initial range within the PPI scans to build the QVPS, in km.
-            The default is None.
+        all_desc : bool, optional
+            If False, the function provides descriptors using an average of
+            datetime and elevations and will not give the initial QVPs used
+            to compute the RD-QPVs. The default is True.
+        exclude_vars : list, optional
+            Name of the variables that will not be used to compute the QVPs.
+            The default is ['V [m/s]'].
         qvps_height_method : str, optional
             'bh' or 'vr'
         plot_method : bool, optional
@@ -405,7 +417,11 @@ class PolarimetricProfiles:
                 validxs = validxs * elevsc[i]
             valid_idx.append(validxs)
 
-        qvpvar = ['ZH [dBZ]', 'ZDR [dB]', 'rhoHV [-]', 'PhiDP [deg]']
+        # vars_nu = ['V [m/s]']  # Modify to compute QVPs of V.
+        qvpvar = sorted(list(set([k for robj in rscans_vars
+                                  for k in robj.keys()
+                                  if k not in exclude_vars])),
+                        reverse=True)
 
         rscans_vc = [{k: np.where(valid_idx[c], kv, np.nan)
                       for k, kv in rad_vars.items() if k in qvpvar}
@@ -467,14 +483,22 @@ class PolarimetricProfiles:
                                   else np.nan for row in range(len(yaxis))])
                   for pvar in qvpvar}
         self.rd_qvps = rdqvps
-        self.qvps_itp = qvps_itp
         self.profs_type = 'RD-QVPs'
         self.georef = {}
         self.georef['profiles_height [km]'] = yaxis
-
-        self.elev_angle = [i['elev_ang [deg]'] for i in rscans_params]
+        if all_desc:
+            self.qvps_itp = qvps_itp
+            self.elev_angle = np.array([i['elev_ang [deg]']
+                                        for i in rscans_params])
+            self.scandatetime = [i['datetime'] for i in rscans_params]
+        else:
+            self.elev_angle = np.average(np.array([i['elev_ang [deg]']
+                                                   for i in rscans_params]))
+            dmmydt = [i['datetime'] for i in rscans_params]
+            self.scandatetime = datetime.fromtimestamp(sum(d.timestamp()
+                                                           for d in dmmydt)
+                                                       / len(dmmydt))
         self.file_name = 'RD-QVPs'
-        self.scandatetime = [i['datetime'] for i in rscans_params]
         snames_list = [i['site_name'] for i in rscans_params]
         if snames_list.count(snames_list[0]) == len(snames_list):
             self.site_name = snames_list[0]
@@ -483,5 +507,5 @@ class PolarimetricProfiles:
         toc = time.time()
         if plot_method:
             rad_display.plot_rdqvps(rscans_georef, rscans_params, self,
-                                    spec_range=spec_range)
+                                    spec_range=spec_range, all_desc=all_desc)
         print(f'RD-QVPS running time: {toc-tic:.3f} sec.')
