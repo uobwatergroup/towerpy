@@ -16,8 +16,7 @@ setup(
       package_data={'towerpy': ['io/lnxlibreadpolarradardata.so', 'eclass/lnxlibclutterclassifier.so', 'attc/lnxlibattenuationcorrection.so',
       				'io/w64libreadpolarradardata.dll', 'eclass/w64libclutterclassifier.dll', 'attc/w64libattenuationcorrection.dll']},
       include_package_data=True,
-      install_requires=["numpy", "matplotlib>=3.5.2", "cartopy>=0.21",
-                        "scipy", "netCDF4"],
+      install_requires=["numpy", "matplotlib>=3.5.2", "scipy", "cartopy", "netcdf4"],
       classifiers=(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

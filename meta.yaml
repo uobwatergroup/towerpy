@@ -15,10 +15,10 @@ requirements:
   run:
     - python
     - numpy
-    - scipy
-    - netCDF4
     - matplotlib >=3.5.2
+    - scipy
     - cartopy
+    - netcdf4
 
 about:
   home: https://doi.org/10.1016/j.envsoft.2023.105746
