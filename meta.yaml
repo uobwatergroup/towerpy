@@ -18,7 +18,7 @@ requirements:
     - matplotlib >=3.5.2
     - scipy
     - cartopy
-    - netcdf4
+    - netCDF4
 
 about:
   home: https://doi.org/10.1016/j.envsoft.2023.105746
