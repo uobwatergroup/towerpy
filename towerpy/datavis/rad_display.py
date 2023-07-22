@@ -2382,7 +2382,8 @@ def plot_radprofiles(rad_params, beam_height, rad_profs, mlyr=None, ylims=None,
 
 
 def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
-                spec_range=None, vars_bounds=None, ylims=None, fig_size=None):
+                spec_range=None, vars_bounds=None, ylims=None, all_desc=False,
+                fig_size=None):
     """
     Display a set of RD-QVPS of polarimetric variables.
 
@@ -2417,11 +2418,12 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
     tpcm = 'tpylsc_pvars_r'
     if fig_size is None:
         fig_size = (14, 10)
+
     cmaph = mpl.colormaps[tpcm](np.linspace(0., .8,
-                                            len(tp_rdqvp.qvps_itp)))
+                                            len(rscans_params)))
     if ucmap is not None:
         cmaph = mpl.colormaps[ucmap](np.linspace(0, 1,
-                                                 len(tp_rdqvp.qvps_itp)))
+                                                 len(rscans_params)))
 
     fontsizelabels = 20
     fontsizetitle = 25
@@ -2445,22 +2447,18 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
     fig = plt.figure(layout="constrained", figsize=fig_size)
     fig.suptitle('RD-QVPs of polarimetric variables \n' f'{ttxt}',
                  fontsize=fontsizetitle)
-
     axd = fig.subplot_mosaic(mosaic, sharey=True, height_ratios=[5])
 
-    for c, i in enumerate(tp_rdqvp.qvps_itp):
-        for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
-            axd[a].plot(value, tp_rdqvp.georef['profiles_height [km]'],
-                        color=cmaph[c], ls='--',
-                        label=(f"{rscans_params[c]['elev_ang [deg]']:.1f}"
-                               + r"$^{\circ}$"))
-            axd[a].set_xlabel(f'{key}', fontsize=fontsizelabels)
-            if n == 0:
-                axd[a].set_ylabel('Height [km]', fontsize=fontsizelabels,
-                                  labelpad=10)
-            axd[a].tick_params(axis='both', labelsize=fontsizetick)
-            axd[a].grid(True)
-            # axd[a].legend(loc='upper right')
+    if all_desc:
+        for c, i in enumerate(tp_rdqvp.qvps_itp):
+            for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
+                axd[a].plot(value, tp_rdqvp.georef['profiles_height [km]'],
+                            color=cmaph[c], ls='--',
+                            label=(f"{rscans_params[c]['elev_ang [deg]']:.1f}"
+                                   + r"$^{\circ}$"))
+                # axd[a].legend(loc='upper right')
+    if not all_desc:
+        i = tp_rdqvp.rd_qvps
     for n, (a, (key, value)) in enumerate(zip(axd, i.items())):
         axd[a].plot(tp_rdqvp.rd_qvps[key],
                     tp_rdqvp.georef['profiles_height [km]'], 'k', lw=3,
@@ -2478,6 +2476,12 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
                            alpha=.5, label='$ML_{bottom}$')
         if ylims:
             axd[a].set_ylim(ylims)
+        axd[a].set_xlabel(f'{key}', fontsize=fontsizelabels)
+        if n == 0:
+            axd[a].set_ylabel('Height [km]', fontsize=fontsizelabels,
+                              labelpad=10)
+        axd[a].tick_params(axis='both', labelsize=fontsizetick)
+        axd[a].grid(True)
 
     scan_st = axd[mosaic[-1]]
     for c, i in enumerate(rscans_georef):

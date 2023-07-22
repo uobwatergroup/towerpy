@@ -95,7 +95,7 @@ class MeltingLayer:
                 if maxpeakh >= 0.5:
                     param_k = 0.6
                 else:
-                    param_k *= 2
+                    param_k = 0.1
                 aux = [-i if maxpeakh+i >= param_k else np.nan
                        for i in peaks['prfbnd'][1]['peak_heights']]
                 if len(aux[idx_peak+1:]) < 1:
