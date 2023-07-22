@@ -19,7 +19,6 @@ requirements:
     - netCDF4
     - matplotlib >=3.5.2
     - cartopy
-    - tqdm
 
 about:
   home: https://doi.org/10.1016/j.envsoft.2023.105746
@@ -32,4 +31,5 @@ about:
 extra:
   recipe-maintainers:
     - towerpy
+    - enchiladaszen
 
