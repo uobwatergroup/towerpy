@@ -8,12 +8,12 @@ source:
 
 requirements:
   host:
-    - python
-    - setuptools
+    - python >=3.9
+    - setuptools >=45
   build:
     - python
   run:
-    - python
+    - python >=3.9
     - numpy
     - matplotlib >=3.5.2
     - scipy
@@ -26,7 +26,14 @@ about:
   license_familY: GNU General Public License
   license_file: LICENSE
   summary: "Towerpy: an open-source toolbox for processing polarimetric radar data"
-  doc_url: https://doi.org/10.1016/j.envsoft.2023.105746
+  doc_url: https://towerpy.readthedocs.io/en/latest/
+  
+  description:
+    "Towerpy is a cross-platform package written in Python capable of processing raw
+    polarimetric radar measurements collected by weather radars. Towerpy provides 
+    libraries that are indispensable for quality- checking and generating radar
+    rainfall products. However, its use is not necessarily limited to meteorological
+    or hydrological applications."
 
 extra:
   recipe-maintainers:
