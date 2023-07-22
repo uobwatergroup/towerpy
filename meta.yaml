@@ -22,7 +22,7 @@ requirements:
 
 about:
   home: https://doi.org/10.1016/j.envsoft.2023.105746
-  license: GPLv3
+  license: GPL-3.0-or-later
   license_familY: GNU General Public License
   license_file: LICENSE
   summary: "Towerpy: an open-source toolbox for processing polarimetric radar data"
