@@ -27,7 +27,7 @@ classifiers=[
 dynamic = ["version", "dependencies", "optional-dependencies", "readme"]
 
 [project.urls]
-homepage = "https://doi.org/10.1016/j.envsoft.2023.105746"
+article = "https://doi.org/10.1016/j.envsoft.2023.105746"
 documentation = "https://towerpy.readthedocs.io/en/latest/"
 repository = "https://github.com/uobwatergroup/towerpy"
 

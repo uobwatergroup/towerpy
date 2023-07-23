@@ -1,42 +1,56 @@
+{% set name = "towerpy" %}
+{% set version = "1.0.1" %}
+
 package:
-  name: "towerpy"
-  version: "1.0.1"
+  name: {{ name|lower }}
+  version: {{ version }}
 
 source:
-  git_rev: v1.0.1
-  git_url: https://github.com/uobwatergroup/towerpy
+  url: https://github.com/uobwatergroup/towerpy/archive/v{{ version }}.tar.gz
+  sha256: 3cd56cde7c4194c39c0e6661dda26439ef94653614f7951d64795483013b5102
+
+build:
+  noarch: python
+  number: 0
+  script: {{ PYTHON }} -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
+  binary_relocation: False
 
 requirements:
   host:
-    - python >=3.9
-    - setuptools >=45
-  build:
-    - python
+    - python >=3
+    - pip
+    - setuptools_scm
   run:
     - python >=3.9
     - numpy
-    - matplotlib >=3.5.2
+    - matplotlib-base >=3.5.2
     - scipy
     - cartopy
     - netCDF4
 
+test:
+  imports:
+    - towerpy
+  commands:
+    - pip check
+  requires:
+    - pip
+
 about:
-  home: https://doi.org/10.1016/j.envsoft.2023.105746
+  home: https://github.com/uobwatergroup/towerpy
+  summary: 'Towerpy, an open-source toolbox for processing polarimetric radar data'
   license: GPL-3.0-or-later
-  license_familY: GNU General Public License
   license_file: LICENSE
-  summary: "Towerpy: an open-source toolbox for processing polarimetric radar data"
-  doc_url: https://towerpy.readthedocs.io/en/latest/
   
-  description:
-    "Towerpy is a cross-platform package written in Python capable of processing raw
-    polarimetric radar measurements collected by weather radars. Towerpy provides 
-    libraries that are indispensable for quality- checking and generating radar
-    rainfall products. However, its use is not necessarily limited to meteorological
-    or hydrological applications."
+  description: |
+    Towerpy is a Python toolbox designed to read, process and display polarimetric radar data.
+    Towerpy provides robust algorithms for radar data quality control and radar QPE.
+    However, its use is not necessarily limited to meteorological or hydrological applications.
+  dev_url: https://doi.org/10.1016/j.envsoft.2023.105746
+  doc_url: https://towerpy.readthedocs.io/en/latest/
 
 extra:
   recipe-maintainers:
-    - towerpy
-    - enchiladaszen
+    - uobwatergroup
+    - enchilaDaSzen
 
