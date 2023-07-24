@@ -25,7 +25,7 @@ extensions = [
     'nbsphinx',
     'myst_nb',
     'autoapi.extension',
-    'sphinx_copybutton'
+    'sphinx_copybutton',
 ]
 
 # Document Python Code
