@@ -35,55 +35,66 @@ You can find more details about _Towerpy_ [here](https://towerpy.readthedocs.io/
 # :speech_balloon: Citing
 If you find _towerpy_ useful for a scientific publication, please consider citing the [towerpy paper](https://doi.org/10.1016/j.envsoft.2023.105746):
 
-@article{sanchezrivas2023,
-	title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}},
-	journal = {Environmental Modelling & Software},
-	pages = {105746},
-	year = {2023},
-	issn = {1364-8152},
-	doi = {https://doi.org/10.1016/j.envsoft.2023.105746},
-	author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez},
-	keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source}
-	}
+BibTeX:
+
+       @article{sanchezrivas2023, title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}},
+       journal = {Environmental Modelling & Software}, pages= {105746}, year = {2023}, issn = {1364-8152},
+       doi = {https://doi.org/10.1016/j.envsoft.2023.105746}, author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez},
+       keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source}}
 
 # :hammer: Installing towerpy
 To ensure a smooth installation of towerpy, we strongly recommend using **conda**, the open-source Python package management system. [Download](https://www.anaconda.com/) and install Anaconda to get conda and other essential data science and machine learning packages.
 
-Once Anaconda is installed and working, create a new environment to install towerpy:
+Once Anaconda is installed and working, we recommend adding the [conda-forge channel](https://conda-forge.org/) to the top of the channel list::
 
-``conda create -n towerpy python=3.10``
+    conda config --add channels conda-forge
 
-Activate the new environment: 
+Strict channel priority can dramatically speed up conda operations and also reduce package incompatibility problems. We recommend setting channel priority to "strict" using::
 
-``conda activate towerpy``
+    conda config --set channel_priority strict
 
-Then install the required dependencies and additional dependencies helpful for scientific computing:
+Create a new environment to install towerpy::
+    
+    conda create -n towerpy python=3.10
 
-``conda install -c conda-forge numpy matplotlib scipy ipython jupyter pandas netcdf4 sympy nose spyder cartopy metpy scikit-learn``
+Activate the new environment::
 
-Finally, install the latest version of towerpy using:
+    conda activate towerpy
 
-``python -m pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main``
+Install the latest version of Towerpy by choosing ONE of the following options:
 
-or
+(1) Downloading and installing Towerpy from Anaconda.org::
+    
+    conda install -c towerpy towerpy
 
-``python -m pip install towerpy-rd``
+(2) Downloading and installing Towerpy from GitHub (here we have the latest release)::    
+
+    python -m pip install --upgrade git+https://github.com/uobwatergroup/towerpy.git@main
+
+(3) Downloading and installing Towerpy from the Python Package Index (PyPI)::
+    
+    python -m pip install towerpy-rd
+
+Finally, install other additional dependencies helpful for scientific computing::
+
+    conda install -c conda-forge ipython jupyter sympy spyder scikit-learn wradlib
+
 
 ## Installing from source
 
 Optionally, you can get the towerpy source code from the [GitHub repository](https://github.com/uobwatergroup/towerpy). 
 
-Either download and unpack the zip file of the source code or use git to clone the repository:
+Either download and unpack the zip file of the source code or use git to clone the repository::
 
-``git clone https://github.com/uobwatergroup/towerpy.git``
+    git clone https://github.com/uobwatergroup/towerpy.git
 
-Once inside the folder where _towerpy_ was downloaded, it can be installed by using pip:
+Once inside the folder where _towerpy_ was downloaded, it can be installed by using pip::
 
-`` python -m pip install . ``
+    python -m pip install .
 
-Or install Towerpy in “editable” mode.
+Or install Towerpy in “editable” mode::
 
-`` python -m pip install -e . ``
+    python -m pip install -e .
 
 # :snake: Dependencies
 

@@ -1,5 +1,5 @@
 {% set name = "towerpy" %}
-{% set version = "1.0.1" %}
+{% set version = "1.0.2" %}
 
 package:
   name: {{ name|lower }}
@@ -54,4 +54,3 @@ extra:
   recipe-maintainers:
     - uobwatergroup
     - enchilaDaSzen
-

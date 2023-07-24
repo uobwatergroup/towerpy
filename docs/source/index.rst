@@ -37,7 +37,13 @@ Citing
 ------
 If you find towerpy useful for a scientific publication, please consider citing the towerpy paper:
 
-@article{sanchezrivas2023, title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}}, journal = {Environmental Modelling & Software}, pages = {105746}, year = {2023}, issn = {1364-8152}, doi = {https://doi.org/10.1016/j.envsoft.2023.105746}, author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez}, keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source}}
+.. code-block::
+   :caption: BibTeX
+
+       @article{sanchezrivas2023, title = {{Towerpy: An open-source toolbox for processing polarimetric weather radar data}},
+       journal = {Environmental Modelling & Software}, pages= {105746}, year = {2023}, issn = {1364-8152},
+       doi = {https://doi.org/10.1016/j.envsoft.2023.105746}, author = {Daniel Sanchez-Rivas and Miguel Angel Rico-Ramirez},
+       keywords = {Weather radar, Polarimetry, Radar QPE, Radar research applications, Open source}}
 
 Contributing
 ------------

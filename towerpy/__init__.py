@@ -25,4 +25,4 @@ https://doi.org/10.1016/j.envsoft.105746.2023
 print(_welcome_text)
 
 name = 'towerpy'
-__version__ = "v1.0.1"
+__version__ = "v1.0.2"
