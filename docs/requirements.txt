@@ -1,7 +1,8 @@
-sphinx>=1.4
 nbconvert
 ipykernel
 nbsphinx
 myst_nb
+sphinx
 sphinx-autoapi
+sphinx_copybutton
 pydata-sphinx-theme
