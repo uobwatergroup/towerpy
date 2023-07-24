@@ -5,8 +5,8 @@ dependencies:
   - sphinx>=1.4
   - nbconvert
   - ipykernel
-  - nbsphinx
   - pip:
+    - nbsphinx
     - myst_nb
     - sphinx-autoapi
     - pydata-sphinx-theme
