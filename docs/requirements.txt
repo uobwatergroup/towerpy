@@ -1,5 +1,6 @@
-ipykernel
+sphinx>=1.4
 nbconvert
+ipykernel
 nbsphinx
 myst_nb
 sphinx-autoapi
