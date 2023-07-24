@@ -11,7 +11,7 @@ project = 'Towerpy'
 author = 'DSR-MARR-TowerpyCom'
 
 release = '2022'
-version = '1.0.0'
+version = '1.0.2'
 
 # -- General configuration
 
@@ -25,6 +25,7 @@ extensions = [
     'nbsphinx',
     'myst_nb',
     'autoapi.extension',
+    'sphinx_copybutton'
 ]
 
 # Document Python Code
