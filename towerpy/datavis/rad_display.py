@@ -307,7 +307,8 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
             cb1.ax.tick_params(direction='in', labelsize=12)
         # cb1 = fig.colorbar(f1, cax=cax1, orientation='horizontal')
-        cb1.ax.set_title(f'{ptitle} \n' + f'PPI {var2plot}', fontsize=14)
+        # cb1.ax.set_title(f'{ptitle} \n' + f'PPI {var2plot}', fontsize=14)
+        fig.suptitle(f'{ptitle} \n' + f'PPI {var2plot}', fontsize=14)
         # cb1.ax.minorticks_on()
         # cb1.ax.xaxis.set_ticks(bnd['brhoHV [-]'], minor=True)
         cax1.xaxis.set_ticks_position('top')
@@ -448,7 +449,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             cax.set_title(plotunits, fontsize=14)
         make_colorbar(ax1, mappable, orientation='vertical')
         plt.show()
-
+    return fig, ax1
 
 def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
                 vars_bounds=None, mlyr=None, fig_size=None):
