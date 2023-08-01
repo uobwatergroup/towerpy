@@ -449,7 +449,8 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             cax.set_title(plotunits, fontsize=14)
         make_colorbar(ax1, mappable, orientation='vertical')
         plt.show()
-    return fig, ax1
+    # return fig, ax1, normp, cmaph
+
 
 def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
                 vars_bounds=None, mlyr=None, fig_size=None):
