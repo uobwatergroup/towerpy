@@ -127,7 +127,7 @@ class Rad_scan:
                           for ray in np.rad2deg(elev)])
 
         rh, th = np.meshgrid(rng/1000, azim)
-        # xgrid, ygrid = geo.pol2cart(rh, np.pi/2-th)
+
         s = np.array([geo.cartesian_distance(ray, rng/1000, bhkm[0])
                       for i, ray in enumerate(np.rad2deg(elev))])
         a = [geo.pol2cart(arcl, azim) for arcl in s.T]
@@ -138,8 +138,8 @@ class Rad_scan:
                    'range [m]': rng,
                    'rho': rh,
                    'theta': th,
-                   'xgrid': xgrid,
-                   'ygrid': ygrid}
+                   'grid_rectx': xgrid,
+                   'grid_recty': ygrid}
         self.params['gateres [m]'] = gateres
         # alt = self.params['altitude [m]']
         geogrid['beam_height [km]'] = bhkm

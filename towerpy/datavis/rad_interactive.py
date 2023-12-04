@@ -19,12 +19,12 @@ from ..base import TowerpyError
 
 # warnings.filterwarnings("ignore", category=UserWarning)
 
-tpycm_ref = mpl.colormaps['tpylsc_ref']
-tpycm_plv = mpl.colormaps['tpylsc_pvars']
-tpycm_rnr = mpl.colormaps['tpylsc_rainrt']
-tpycm_2slope = mpl.colormaps['tpylsc_2slope']
-tpycm_dv = mpl.colormaps['tpylsc_dbu_rd']
-tpycm_3c = mpl.colormaps['tpylc_yw_gy_bu']
+tpycm_ref = mpl.colormaps['tpylsc_rad_ref']
+tpycm_plv = mpl.colormaps['tpylsc_rad_pvars']
+tpycm_rnr = mpl.colormaps['tpylsc_rad_rainrt']
+tpycm_2slope = mpl.colormaps['tpylsc_rad_2slope']
+tpycm_dv = mpl.colormaps['tpylsc_div_dbu_rd']
+tpycm_3c = mpl.colormaps['tpylc_div_yw_gy_bu']
 
 
 def format_coord(x, y):
@@ -445,11 +445,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         d1 = rad_georef['beam_height [km]']
         d2 = mlyr.ml_bottom
         d3 = mlyr.ml_top
-        dx_mlb = rad_georef['xgrid'][:, rut.find_nearest(d1, d2)]
-        dy_mlb = rad_georef['ygrid'][:, rut.find_nearest(d1, d2)]
+        dx_mlb = rad_georef['grid_rectx'][:, rut.find_nearest(d1, d2)]
+        dy_mlb = rad_georef['grid_recty'][:, rut.find_nearest(d1, d2)]
         dz_mlb = np.ones(dx_mlb.shape)
-        dx_mlt = rad_georef['xgrid'][:, rut.find_nearest(d1, d3)]
-        dy_mlt = rad_georef['ygrid'][:, rut.find_nearest(d1, d3)]
+        dx_mlt = rad_georef['grid_rectx'][:, rut.find_nearest(d1, d3)]
+        dy_mlt = rad_georef['grid_recty'][:, rut.find_nearest(d1, d3)]
         dz_mlt = np.ones(dx_mlt.shape)
 
     gcoord_sys = proj
@@ -594,11 +594,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
               ' =============================================================')
         # if coastl is not True:
         gflat_coords = [[j for j in i]
-                        for i in zip(rad_georef['xgrid'].flat,
-                                     rad_georef['ygrid'].flat)]
+                        for i in zip(rad_georef['grid_rectx'].flat,
+                                     rad_georef['grid_recty'].flat)]
         f3_axvar2plot = figradint.add_subplot(intradgs[0:-1, 0:2])
-        f3_axvar2plot.pcolormesh(rad_georef['xgrid'],
-                                 rad_georef['ygrid'],
+        f3_axvar2plot.pcolormesh(rad_georef['grid_rectx'],
+                                 rad_georef['grid_recty'],
                                  mrv, shading='auto',
                                  cmap=cmaph, norm=normp)
         clb = plt.colorbar(mpl.cm.ScalarMappable(norm=normp, cmap=cmaph),
@@ -620,8 +620,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         #     f3_axvar2plot.set_extent([-10.5, 3.5, 60, 49],
         #                              crs=ccrs.PlateCarree())
         #     f3_axvar2plot.coastlines()
-        #     f3_axvar2plot.pcolormesh(rad_georef['xgrid']*1000,
-        #                              rad_georef['ygrid']*1000,
+        #     f3_axvar2plot.pcolormesh(rad_georef['grid_rectx']*1000,
+        #                              rad_georef['grid_recty']*1000,
         #                              mrv, shading='auto',
         #                              cmap=cmaph, norm=normp,
         #                              transform=ccrs.OSGB(approx=False))
@@ -1100,11 +1100,11 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
     cax2 = ax2_divider.append_axes("top", size="10%", pad="7%",
                                    facecolor='lightsteelblue')
     # cax2.remove()
-    radio = RadioButtons(cax2, tuple(intpvars.keys()), activecolor='gold')
-    # for circle in radio.circles:
-    #     circle.set_radius(0.05)
+    radio = RadioButtons(cax2, tuple(intpvars.keys()), activecolor='gold',
+                         active=list(intpvars.keys()).index(f'{prflv}'),
+                         radio_props={'s': [45]})
     for txtr in radio.labels:
-        txtr.set_fontsize(8)
+        txtr.set_fontsize(9)
 
     plt.show()
 

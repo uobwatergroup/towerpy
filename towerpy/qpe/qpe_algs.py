@@ -281,7 +281,7 @@ class RadarQPE:
         Parameters
         ----------
         ah : float or array
-            Floats that corresponds to specific attenuation, in dB/km.
+            Floats that corresponds to the specific attenuation, in dB/km.
         a, b : floats
             Parameters of the :math:`R(A_{H})` relationship
         beam_height : array, optional
@@ -333,6 +333,66 @@ class RadarQPE:
             ah[nanidx] = np.nan
         r = {'Rainfall [mm/hr]': a*ah**b}
         self.r_ah = r
+
+    def adp_to_r(self, adp, a=393, b=0.93, beam_height=None, mlyr=None):
+        r"""
+        Compute rain rates using the :math:`R(A_{DP})` estimator [Eq.1]_.
+
+        Parameters
+        ----------
+        adp : float or array
+            Floats that corresponds to the differential attenuation, in dB/km.
+        a, b : floats
+            Parameters of the :math:`R(A_{DP})` relationship
+        beam_height : array, optional
+            Height of the centre of the radar beam, in km.
+        mlyr : class, optional
+            Melting layer class containing the top and bottom boundaries of the
+            ML. Only gates below the melting layer bottom (i.e. the rain region
+            below the melting layer) are included in the correction. If None,
+            the default values of the melting level and the thickness of the
+            melting layer are set to 5 and 0.5, respectively.
+
+        Returns
+        -------
+        R : dict
+            Computed rain rates, in mm/hr.
+
+        Math
+        ----
+        .. [Eq.1]
+        .. math::  R = aA_{DP}^b
+        where R in mm/hr, ADP in dB/km
+
+        Notes
+        -----
+        Standard values according to [1]_.
+
+        References
+        ----------
+        .. [1] Ryzhkov, A., Diederich, M., Zhang, P., & Simmer, C. (2014).
+            "Potential Utilization of Specific Attenuation for Rainfall
+            Estimation, Mitigation of Partial Beam Blockage, and Radar
+            Networking" Journal of Atmospheric and Oceanic Technology, 31(3),
+            599-619. https://doi.org/10.1175/JTECH-D-13-00038.1
+
+        """
+        adp = np.array(adp)
+        if mlyr is None:
+            mlvl = 5.
+            mlyr_thickness = 0.5
+            # mlyr_bottom = mlvl - mlyr_thickness
+        else:
+            mlvl = mlyr.ml_top
+            mlyr_thickness = mlyr.ml_thickness
+            # mlyr_bottom = mlyr.ml_bottom
+        if beam_height is not None:
+            mlidx = tput.find_nearest(beam_height, mlvl-mlyr_thickness)
+            nanidx = np.where(np.isnan(adp))
+            adp[:, mlidx:] = 0
+            adp[nanidx] = np.nan
+        r = {'Rainfall [mm/hr]': a*adp**b}
+        self.r_adp = r
 
     def z_kdp_to_r(self, zh, kdp, a1=200, b1=1.6, a2=24.68, b2=0.81,
                    z_thld=40, beam_height=None, mlyr=None):

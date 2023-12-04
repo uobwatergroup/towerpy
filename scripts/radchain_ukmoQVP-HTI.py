@@ -13,6 +13,9 @@ with open(fdir+'qvps.tpy', 'rb') as f:
 with open(fdir+'mlyrsqvps.tpy', 'rb') as f:
     rmlyr = pickle.load(f)
 
+for i in rprofs:
+    i.profs_type = 'QVPs'
+
 radb = tp.datavis.rad_interactive.hti_base(rprofs, mlyrs=rmlyr, stats='std',
                                            ptype='fcontour',
                                            var2plot='rhoHV [-]',
