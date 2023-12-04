@@ -227,9 +227,7 @@ class Rad_scan:
         # Create dict to store geospatial data
         rh, th = np.meshgrid(emptyarr[4]/1000, emptyarr[2])
         geogrid = {'range [m]': emptyarr[4], 'elev [rad]': emptyarr[3],
-                   'azim [rad]': emptyarr[2], 'rho': rh, 'theta': th,
-                   # 'xgrid': xgrid, 'ygrid': ygrid
-                   }
+                   'azim [rad]': emptyarr[2], 'rho': rh, 'theta': th}
 
         self.elev_angle = parameters['elev_ang [deg]']
         self.scandatetime = parameters['datetime']
@@ -257,8 +255,8 @@ class Rad_scan:
                       for i,
                       ray in enumerate(np.rad2deg(self.georef['elev [rad]']))])
         a = [geo.pol2cart(arcl, self.georef['azim [rad]']) for arcl in s.T]
-        self.georef['xgrid'] = np.array([i[1] for i in a]).T
-        self.georef['ygrid'] = np.array([i[0] for i in a]).T
+        self.georef['grid_rectx'] = np.array([i[1] for i in a]).T
+        self.georef['grid_recty'] = np.array([i[0] for i in a]).T
         self.georef['beam_height [km]'] = bhkm
         self.georef['beambottom_height [km]'] = bhbkm
         self.georef['beamtop_height [km]'] = bhtkm

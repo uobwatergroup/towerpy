@@ -155,7 +155,7 @@ class ZDR_Calibration:
                 rad_display.plot_offsetcorrection(rad_georef, rad_params,
                                                   rad_var, var_name=var)
 
-    def offsetdetection_qvps(self, pol_profs, mlyr=None, min_h=0., max_h=5.,
+    def offsetdetection_qvps(self, pol_profs, mlyr=None, min_h=0., max_h=3.,
                              zhmin=0, zhmax=20, rhvmin=0.985, minbins=4,
                              zdr_0=0.182, stats=False):
         r"""

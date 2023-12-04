@@ -22,6 +22,20 @@ Towerpy
 
    notebooks/gallery.rst
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Datavis/Colormaps Gallery
+
+   dvcmaps/cmgallery.rst
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Summary – Release highlights
+
+   rnotes/release_notes.rst
+
 Welcome to Towerpy's documentation!
 -----------------------------------
 
@@ -35,7 +49,7 @@ Check out the :ref:`installation` section for further information about how to i
 
 Citing
 ------
-If you find towerpy useful for a scientific publication, please consider citing the towerpy paper:
+If you find towerpy useful for a scientific publication, please consider citing the Towerpy `paper <https://www.sciencedirect.com/science/article/pii/S1364815223001329>`  . BibTeX:
 
 .. code-block::
    :caption: BibTeX
