@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/uobwatergroup/towerpy/archive/v{{ version }}.tar.gz
-  sha256: a0ae5ac7711fea3bc3ef0ecf2928ce32bc8f4032f0eb4271c33df2e2893a3e35
+  sha256: 0a9796a736c7eb12221c2be5ae9f90eeecd5b4f5943e799304c581399efc5ec9
 
 build:
   noarch: python

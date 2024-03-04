@@ -57,12 +57,12 @@ tp.datavis.rad_display.plot_cone_coverage(rdata.georef, rdata.params,
 
 # Plot the radar data in a map
 xgridp = rdata.georef['xgrid'] + rdata.params['easting [km]']
-rdata.georef['xgrid_proj'] = xgridp
+rdata.georef['grid_osgbx'] = xgridp
 ygridp = rdata.georef['ygrid'] + rdata.params['northing [km]']
-rdata.georef['ygrid_proj'] = ygridp
+rdata.georef['grid_osgby'] = ygridp
 
-rdata.georef['xgrid_proj'] *= 1000
-rdata.georef['ygrid_proj'] *= 1000
+rdata.georef['grid_osgbx'] *= 1000
+rdata.georef['grid_osgby'] *= 1000
 
 tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rsnr.vars,
                                 data_proj=ccrs.OSGB(approx=False),
