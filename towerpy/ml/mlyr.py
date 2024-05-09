@@ -40,7 +40,7 @@ class MeltingLayer:
         else:
             self.profs_type = 'user-defined'
 
-    def findpeaksboundaries(profile, pheight, param_k=0):
+    def findpeaksboundaries(profile, pheight, param_w=0):
         """
         Find peaks inside a profile using signal processing.
 
@@ -65,18 +65,19 @@ class MeltingLayer:
                                           width=(None, None), rel_height=1,
                                           prominence=(None, None)),
                  }
-        peaks['prfpks'][1]['left_ips'] = np.interp(peaks['prfpks'][1]['left_ips'],
-                                                   np.arange(0, len(profile)),
-                                                   pheight)
-        peaks['prfpks'][1]['right_ips'] = np.interp(peaks['prfpks'][1]['right_ips'],
-                                                    np.arange(0, len(profile)),
-                                                    pheight)
+        peaks['prfpks'][1]['left_ips'] = np.interp(
+            peaks['prfpks'][1]['left_ips'], np.arange(0, len(profile)),
+            pheight)
+        peaks['prfpks'][1]['right_ips'] = np.interp(
+            peaks['prfpks'][1]['right_ips'], np.arange(0, len(profile)),
+            pheight)
         if not peaks['prfpks'][0].size:
             pkprf = np.nan
             maxpeakh = np.nan
         else:
             # Locate peaks maxima
-            pkprf = peaks['prfpks'][0][peaks['prfpks'][1]['peak_heights'].argmax()]
+            pkprf = (peaks['prfpks']
+                     [0][peaks['prfpks'][1]['peak_heights'].argmax()])
             maxpeakh = peaks['prfpks'][1]['peak_heights'].max()
         if not peaks['prfbnd'][0].size or not peaks['prfpks'][0].size:
             buprf = np.nan
@@ -92,20 +93,25 @@ class MeltingLayer:
                 btprf = peaks['prfbnd'][0][-1]
             else:
                 idx_peak = peaks['prfpks'][1]['peak_heights'].argmax()
-                if maxpeakh >= 0.5:
-                    param_k = 0.6
-                else:
-                    param_k = 0.1
-                aux = [-i if maxpeakh+i >= param_k else np.nan
+                if param_w == 0:
+                    param_w = 0.05
+                elif param_w >= 0.3:
+                    param_w = 0.3
+                param_w2 = maxpeakh * param_w
+                aux = [-i if -i <= param_w2 else np.nan
                        for i in peaks['prfbnd'][1]['peak_heights']]
                 if len(aux[idx_peak+1:]) < 1:
-                    buprf = peaks['prfbnd'][0][np.searchsorted(peaks['prfbnd'][0], pkprf)]
+                    buprf = peaks['prfbnd'][0][np.searchsorted(
+                        peaks['prfbnd'][0], pkprf)]
                 else:
-                    buprf = peaks['prfbnd'][0][idx_peak + (np.isnan(aux[idx_peak+1:]).argmin(axis=0))+1]
+                    buprf = peaks['prfbnd'][0][idx_peak + (
+                        np.isnan(aux[idx_peak+1:]).argmin(axis=0))+1]
                 if len(aux[:idx_peak-1]) < 1:
-                    btprf = peaks['prfbnd'][0][np.searchsorted(peaks['prfbnd'][0], pkprf)-1]
+                    btprf = peaks['prfbnd'][0][np.searchsorted(
+                        peaks['prfbnd'][0], pkprf)-1]
                 else:
-                    btprf = peaks['prfbnd'][0][idx_peak-1-np.isnan(np.flip(aux[:idx_peak-1])).argmin(axis=0)-1]
+                    btprf = peaks['prfbnd'][0][idx_peak-1-np.isnan(
+                        np.flip(aux[:idx_peak-1])).argmin(axis=0)-1]
             if buprf <= pkprf:
                 buprf = np.nan  # check
                 flprf = np.nan
@@ -140,7 +146,8 @@ class MeltingLayer:
             Minimum height of usable data within the polarimetric profiles.
             The default is 0.
         max_h : float, optional
-            Maximum height to search for the ML. The default is 5.
+            Maximum height to search for the bright band peak.
+            The default is 5.
         zhnorm_min : float, optional
             Min value of :math:`Z_{H}` to use for the min-max normalisation.
             The default is 5.
@@ -191,7 +198,7 @@ class MeltingLayer:
         min_hidx = rut.find_nearest(pol_profs.georef['profiles_height [km]'],
                                     min_h)
         max_hidx = rut.find_nearest(pol_profs.georef['profiles_height [km]'],
-                                    max_h)+1
+                                    max_h)
 
         # The user shall use the combID described in the paper, thus it is
         # necessary to adjust to python indexing.
@@ -200,43 +207,62 @@ class MeltingLayer:
         else:
             comb_idpy = None
 
-        # if self.elev_angle > 89:
         if self.profs_type == 'VPs':
             if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.vps:
                 profzh = pol_profs.vps['ZH [dBZ]'].copy()
                 profrhv = pol_profs.vps['rhoHV [-]'].copy()
             else:
-                raise TowerpyError(r'At least $Z_H$ and $\rho_{HV}$ are '
-                                   + 'required to run this function')
-            if 'gradV [dV/dh]' in pol_profs.vps:
-                if gradv_peak == 'left':
-                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
-                elif gradv_peak == 'right':
-                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
-                    profdvel *= -1
+                raise TowerpyError(r'Profiles of $Z_H$ and $\rho_{HV}$ are '
+                                   'required to run this function')
             if 'ZDR [dB]' in pol_profs.vps:
                 profzdr = pol_profs.vps['ZDR [dB]'].copy()
+            else:
+                print(r'$Z_{DR}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profzdr = np.ones_like(profzh)
             if 'PhiDP [deg]' in pol_profs.vps:
                 if phidp_peak == 'left':
                     profpdp = pol_profs.vps['PhiDP [deg]'].copy()
                 elif phidp_peak == 'right':
                     profpdp = pol_profs.vps['PhiDP [deg]'].copy()
                     profpdp *= -1
+            else:
+                print(r'$Phi_{DP}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profpdp = np.ones_like(profzh)
+            if 'gradV [dV/dh]' in pol_profs.vps:
+                if gradv_peak == 'left':
+                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
+                elif gradv_peak == 'right':
+                    profdvel = pol_profs.vps['gradV [dV/dh]'].copy()
+                    profdvel *= -1
+            else:
+                print('gradV [dV/dh] profile was not found. A dummy one was '
+                      'built to run the method.')
+                profdvel = np.ones_like(profzh)
         elif self.profs_type == 'QVPs':
             if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.qvps:
                 profzh = pol_profs.qvps['ZH [dBZ]'].copy()
                 profrhv = pol_profs.qvps['rhoHV [-]'].copy()
             else:
-                raise TowerpyError(r'At least $Z_H$ and $\rho_{HV}$ are '
-                                   + 'required to run this function')
+                raise TowerpyError(r'Profiles of $Z_H$ and $\rho_{HV}$ are '
+                                   'required to run this function')
             if 'ZDR [dB]' in pol_profs.qvps:
                 profzdr = pol_profs.qvps['ZDR [dB]'].copy()
+            else:
+                print(r'$Z_{DR}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profzdr = np.ones_like(profzh)
             if 'PhiDP [deg]' in pol_profs.qvps:
                 if phidp_peak == 'left':
                     profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
                 elif phidp_peak == 'right':
                     profpdp = pol_profs.qvps['PhiDP [deg]'].copy()
                     profpdp *= -1
+            else:
+                print(r'$Phi_{DP}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profpdp = np.ones_like(profzh)
         elif self.profs_type == 'RD-QVPs':
             if 'ZH [dBZ]' and 'rhoHV [-]' in pol_profs.rd_qvps:
                 profzh = pol_profs.rd_qvps['ZH [dBZ]'].copy()
@@ -246,12 +272,20 @@ class MeltingLayer:
                                    + 'required to run this function')
             if 'ZDR [dB]' in pol_profs.rd_qvps:
                 profzdr = pol_profs.rd_qvps['ZDR [dB]'].copy()
+            else:
+                print(r'$Z_{DR}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profzdr = np.ones_like(profzh)
             if 'PhiDP [deg]' in pol_profs.rd_qvps:
                 if phidp_peak == 'left':
                     profpdp = pol_profs.rd_qvps['PhiDP [deg]'].copy()
                 elif phidp_peak == 'right':
                     profpdp = pol_profs.rd_qvps['PhiDP [deg]'].copy()
                     profpdp *= -1
+            else:
+                print(r'$Phi_{DP}$ profile was not found. A dummy one was '
+                      'built to run the method.')
+                profpdp = np.ones_like(profzh)
 
         # Normalise ZH and rhoHV
         profzh[profzh < zhnorm_min] = zhnorm_min
@@ -263,25 +297,31 @@ class MeltingLayer:
                                               rhvnorm_max)
 
         # Combine ZH and rhoHV (norm) to create a new profile
-        profcombzh_rhv = profzh_norm[min_hidx:max_hidx]*(1-profrhv_norm[min_hidx:max_hidx])
+        profcombzh_rhv = profzh_norm[min_hidx:max_hidx]*(
+            1-profrhv_norm[min_hidx:max_hidx])
 
         # Detect peaks within the new profile
-        pkscombzh_rhv = MeltingLayer.findpeaksboundaries(profcombzh_rhv,
-                                                         pol_profs.georef['profiles_height [km]'][min_hidx:max_hidx],
-                                                         param_k=param_k)
+        pkscombzh_rhv = MeltingLayer.findpeaksboundaries(
+            profcombzh_rhv,
+            pol_profs.georef['profiles_height [km]'][min_hidx:max_hidx],
+            param_w=param_w)
 
         # If no peaks were found, the profile is classified as No ML signatures
-        if all(value is np.nan for value in pkscombzh_rhv.values()) or pkscombzh_rhv['peakmaxvalue'] < param_k:
-            mlrand = np.nan
-            combin = np.nan
+        if (all(value is np.nan for value in pkscombzh_rhv.values())
+           or pkscombzh_rhv['peakmaxvalue'] < param_k):
+            ttxt_dt = f"{self.scandatetime:%Y-%m-%d %H:%M:%S}"
+            print(f'ML signatures could not be found at {ttxt_dt}')
             mlyr = np.nan
-            idxml_top_it1 = 0
+            # mlrand = np.nan
+            # combin = np.nan
+            # idxml_top_it1 = 0
         else:
-            peakcombzh_rhv = pol_profs.georef['profiles_height [km]'][min_hidx:max_hidx][pkscombzh_rhv['idxmax']]
-            idxml_btm_it1 = rut.find_nearest(pol_profs.georef['profiles_height [km]'],
-                                             peakcombzh_rhv-.75)+1
-            idxml_top_it1 = rut.find_nearest(pol_profs.georef['profiles_height [km]'],
-                                             peakcombzh_rhv+.75)+1
+            peakcombzh_rhv = (pol_profs.georef['profiles_height [km]']
+                              [min_hidx:max_hidx][pkscombzh_rhv['idxmax']])
+            idxml_btm_it1 = rut.find_nearest(
+                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv-.75)+1
+            idxml_top_it1 = rut.find_nearest(
+                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv+.75)+1
             if peakcombzh_rhv > 4.25:
                 idxml_top_it1 = 0
             if idxml_btm_it1 < min_hidx:
@@ -291,17 +331,22 @@ class MeltingLayer:
             if idxml_top_it1 > min_hidx:
                 if self.profs_type == 'VPs':
                     n = 5
-                    ncomb = [1-rut.normalisenan(profdvel[idxml_btm_it1:idxml_top_it1]),
+                    ncomb = [1-rut.normalisenan(
+                        profdvel[idxml_btm_it1:idxml_top_it1]),
                              profzh_norm[idxml_btm_it1:idxml_top_it1],
-                             rut.normalisenan(profzdr[idxml_btm_it1:idxml_top_it1]),
+                             rut.normalisenan(
+                                 profzdr[idxml_btm_it1:idxml_top_it1]),
                              1-profrhv_norm[idxml_btm_it1:idxml_top_it1],
-                             1-rut.normalisenan(profpdp[idxml_btm_it1:idxml_top_it1])]
+                             1-rut.normalisenan(
+                                 profpdp[idxml_btm_it1:idxml_top_it1])]
                 else:
                     n = 4
                     ncomb = [profzh_norm[idxml_btm_it1:idxml_top_it1],
-                             rut.normalisenan(profzdr[idxml_btm_it1:idxml_top_it1]),
+                             rut.normalisenan(
+                                 profzdr[idxml_btm_it1:idxml_top_it1]),
                              1-profrhv_norm[idxml_btm_it1:idxml_top_it1],
-                             rut.normalisenan(profpdp[idxml_btm_it1:idxml_top_it1])]
+                             rut.normalisenan(
+                                 profpdp[idxml_btm_it1:idxml_top_it1])]
                 combin = np.array(list(map(list, product([0, 1],
                                                          repeat=n)))[1:])
                 comb_mult = []
@@ -316,9 +361,9 @@ class MeltingLayer:
 
                 comb_mult_w = [i-(param_w*(np.gradient(np.gradient(i))))
                                for i in comb_mult]
-                mlrand = [MeltingLayer.findpeaksboundaries(i,
-                                                           pol_profs.georef['profiles_height [km]'][idxml_btm_it1:idxml_top_it1],
-                                                           param_k=param_k)
+                mlrand = [MeltingLayer.findpeaksboundaries(
+                    i, pol_profs.georef['profiles_height [km]'][idxml_btm_it1:idxml_top_it1],
+                    param_w=param_w)
                           for i in comb_mult_w]
                 for i, j in enumerate(mlrand):
                     if mlrand[i]['peakmaxvalue'] < param_k:
@@ -326,7 +371,8 @@ class MeltingLayer:
                 mlrandf = [{'ml_top': n['mltop'],
                             'ml_bottom': n['mlbtm'],
                             'ml_peak': n['mlpeak'],
-                            'ml_thickness': n['mltop']-n['mlbtm']}
+                            'ml_thickness': n['mltop']-n['mlbtm'],
+                            'ml_peakv': n['peakmaxvalue']}
                            for n in mlrand]
                 if comb_idpy is None:
                     mlyr = mlrandf
@@ -336,21 +382,22 @@ class MeltingLayer:
                 mlrand = np.nan
                 combin = np.nan
                 mlyr = np.nan
+                comb_mult = []
+
+            if plot_method:
+                rad_interactive.ml_detectionvis(
+                    pol_profs.georef['profiles_height [km]'], profzh_norm,
+                    profrhv_norm, profcombzh_rhv, pkscombzh_rhv, comb_mult,
+                    comb_mult_w, comb_idpy, mlrand, min_hidx, max_hidx,
+                    param_k, idxml_btm_it1, idxml_top_it1)
 
         if isinstance(mlyr, dict):
             self.ml_top = mlyr['ml_top']
             self.ml_bottom = mlyr['ml_bottom']
             self.ml_thickness = mlyr['ml_thickness']
+            self.profpeakv = mlyr['ml_peakv']
         else:
             self.ml_top = np.nan
             self.ml_bottom = np.nan
             self.ml_thickness = np.nan
-
-        if plot_method:
-            rad_interactive.ml_detectionvis(pol_profs.georef['profiles_height [km]'],
-                                            profzh_norm, profrhv_norm,
-                                            profcombzh_rhv, pkscombzh_rhv,
-                                            comb_mult, comb_mult_w, comb_idpy,
-                                            mlrand, min_hidx, max_hidx,
-                                            param_k, idxml_btm_it1,
-                                            idxml_top_it1)
+            self.profpeakv = np.nan

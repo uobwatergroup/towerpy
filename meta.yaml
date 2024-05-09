@@ -1,5 +1,5 @@
 {% set name = "towerpy" %}
-{% set version = "1.0.3" %}
+{% set version = "1.0.4" %}
 
 package:
   name: {{ name|lower }}
@@ -24,7 +24,7 @@ requirements:
   run:
     - python >=3.9
     - numpy
-    - matplotlib-base >=3.5.2
+    - matplotlib-base >=3.8.0
     - scipy
     - cartopy
     - netCDF4

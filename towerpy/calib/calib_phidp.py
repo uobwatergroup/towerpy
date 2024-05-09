@@ -143,8 +143,9 @@ class PhiDP_Calibration:
                 var = 'PhiDP [deg]'
                 rad_var = np.array([i[boundaries_idx[0]:boundaries_idx[1]]
                                     for i in rad_vars[var]])
-                rad_display.plot_offsetcorrection(rad_georef, rad_params,
-                                                  rad_var, var_name=var)
+                rad_display.plot_offsetcorrection(
+                    rad_georef, rad_params, rad_var,
+                    var_offset=self.phidp_offset, var_name=var)
 
     def offset_correction(self, phidp2calib, phidp_offset=0,
                           data2correct=None):

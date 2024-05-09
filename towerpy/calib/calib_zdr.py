@@ -73,13 +73,15 @@ class ZDR_Calibration:
         plot_method : Bool, optional
             Plot the offset detection method. The default is False.
         rad_georef : dict, optional
-            Georeferenced data containing descriptors of the azimuth, gates
-            and beam height, amongst others. The default is None.
-        rad_params : dict, optional
-            Radar technical details. The default is None.
-        rad_vars : dict, optional
-            Radar variables used for plotting the offset correction method.
+            Used only to depict the methodolgy. Georeferenced data containing
+            descriptors of the azimuth, gate and beam height, amongst others.
             The default is None.
+        rad_params : dict, optional
+            Used only to depict the methodolgy. Radar technical details.
+            The default is None.
+        rad_vars : dict, optional
+            Used only to depict the methodolgy. Radar variables used for
+            plotting the offset correction method. The default is None.
 
         Notes
         -----
@@ -105,13 +107,15 @@ class ZDR_Calibration:
             mlyr_thickness = mlyr.ml_thickness
             mlyr_bottom = mlyr.ml_bottom
         if np.isnan(mlyr_bottom):
-            boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
-                              find_nearest(pol_profs.georef['profiles_height [km]'],
-                                           mlvl-mlyr_thickness)]
+            boundaries_idx = [find_nearest(
+                pol_profs.georef['profiles_height [km]'], min_h),
+                find_nearest(pol_profs.georef['profiles_height [km]'],
+                             mlvl-mlyr_thickness)]
         else:
-            boundaries_idx = [find_nearest(pol_profs.georef['profiles_height [km]'], min_h),
-                              find_nearest(pol_profs.georef['profiles_height [km]'],
-                                           mlyr_bottom)]
+            boundaries_idx = [find_nearest(
+                pol_profs.georef['profiles_height [km]'], min_h),
+                find_nearest(pol_profs.georef['profiles_height [km]'],
+                             mlyr_bottom)]
         if boundaries_idx[1] <= boundaries_idx[0]:
             boundaries_idx = [np.nan]
         if np.isnan(mlvl) and np.isnan(mlyr_bottom):
@@ -136,7 +140,9 @@ class ZDR_Calibration:
                 calzdrvps_max = np.nanmax(calzdr_vps['ZDR [dB]'])
                 calzdrvps_min = np.nanmin(calzdr_vps['ZDR [dB]'])
                 calzdrvps_std = np.nanstd(calzdr_vps['ZDR [dB]'])
-                calzdrvps_sem = np.nanstd(calzdr_vps['ZDR [dB]']) / np.sqrt(len(calzdr_vps['ZDR [dB]']))
+                calzdrvps_sem = (np.nanstd(
+                    calzdr_vps['ZDR [dB]'])
+                    / np.sqrt(len(calzdr_vps['ZDR [dB]'])))
 
             if not np.isnan(calzdrvps_mean):
                 self.zdr_offset = calzdrvps_mean
@@ -152,8 +158,9 @@ class ZDR_Calibration:
                 var = 'ZDR [dB]'
                 rad_var = np.array([i[boundaries_idx[0]:boundaries_idx[1]]
                                     for i in rad_vars[var]])
-                rad_display.plot_offsetcorrection(rad_georef, rad_params,
-                                                  rad_var, var_name=var)
+                rad_display.plot_offsetcorrection(
+                    rad_georef, rad_params, rad_var,
+                    var_offset=self.zdr_offset, var_name=var)
 
     def offsetdetection_qvps(self, pol_profs, mlyr=None, min_h=0., max_h=3.,
                              zhmin=0, zhmax=20, rhvmin=0.985, minbins=4,

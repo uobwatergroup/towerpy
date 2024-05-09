@@ -166,7 +166,7 @@ def maf_radial(rad_vars, maf_len=3, maf_ignorenan=True, maf_extendvalid=False,
     lpv = {'ZH [dBZ]': [np.NINF, np.inf], 'ZDR [dB]': [np.NINF, np.inf],
            'PhiDP [deg]': [np.NINF, np.inf], 'rhoHV [-]': [np.NINF, np.inf],
            'V [m/s]': [np.NINF, np.inf], 'LDR [dB]': [np.NINF, np.inf],
-           'Rainfall [mm/hr]': [np.NINF, np.inf],
+           'Rainfall [mm/h]': [np.NINF, np.inf],
            'KDP [deg/km]': [np.NINF, np.inf]}
     for rkey in rad_vars.keys():
         if rkey not in lpv:

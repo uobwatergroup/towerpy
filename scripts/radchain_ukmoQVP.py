@@ -13,6 +13,8 @@ fname = (f'metoffice-c-band-rain-radar_{rsite}_202010030730_raw-dual-polar-'
 # =============================================================================
 rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
+rdata.ppi_ukmogeoref()
+
 
 # %%
 # =============================================================================
@@ -29,15 +31,15 @@ rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=55,
 rprofs = tp.profs.polprofs.PolarimetricProfiles(rdata)
 rprofs.pol_qvps(rdata.georef, rdata.params, rsnr.vars, stats=True)
 
-tp.datavis.rad_display.plot_radprofiles(rdata.params,
+tp.datavis.rad_display.plot_radprofiles(rprofs,
                                         rprofs.georef['profiles_height [km]'],
-                                        rprofs.qvps)
+                                        colours=True)
 
 # %%
 # =============================================================================
 # ML detection
 # =============================================================================
-rmlyr = tp.ml.mlyr.MeltingLayer(rdata)
+rmlyr = tp.ml.mlyr.MeltingLayer(rprofs)
 rmlyr.ml_detection(rprofs, min_h=1.1, comb_id=14, plot_method=True)
 
 # %%
@@ -56,14 +58,6 @@ tp.datavis.rad_display.plot_cone_coverage(rdata.georef, rdata.params,
                                           rsnr.vars)
 
 # Plot the radar data in a map
-xgridp = rdata.georef['xgrid'] + rdata.params['easting [km]']
-rdata.georef['grid_osgbx'] = xgridp
-ygridp = rdata.georef['ygrid'] + rdata.params['northing [km]']
-rdata.georef['grid_osgby'] = ygridp
-
-rdata.georef['grid_osgbx'] *= 1000
-rdata.georef['grid_osgby'] *= 1000
-
 tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rsnr.vars,
                                 data_proj=ccrs.OSGB(approx=False),
                                 cpy_feats={'status': True})

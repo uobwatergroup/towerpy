@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import ctypes as ctp
-import warnings
 import platform
 import time
 import numpy as np
@@ -11,8 +10,7 @@ from scipy import optimize
 from ..base import TowerpyError
 from ..utils.radutilities import find_nearest
 from ..datavis import rad_display
-
-# warnings.filterwarnings("ignore", category=RuntimeWarning)
+from ..ml.mlyr import MeltingLayer
 
 
 class AttenuationCorrection:
@@ -62,12 +60,15 @@ class AttenuationCorrection:
             Polarimetric variables used for the attenuation correction.
         cclass : array
             Clutter, noise and meteorological classification.
-        mlyr : class
-            Melting layer class containing the top and bottom boundaries of the
-            ML. Only gates below the melting layer bottom (i.e. the rain region
-            below the melting layer) are included in the correction. If None,
-            the default values of the melting level and the thickness of the
-            melting layer are set to 5 and 0.5, respectively.
+        mlyr : MeltingLayer Class, optional
+            Melting layer class containing the top of the melting layer, (i.e.,
+            the melting level) and its thickness, in km. Only gates below the
+            melting layer bottom (i.e. the rain region below the melting layer)
+            are included in the computation; ml_top and ml_thickness can be
+            either a single value (float, int), or an array (or list) of values
+            corresponding to each azimuth angle of the scan. If None, the
+            function is applied to the whole PPI scan, assuming a ml_thickness
+            of 0.5 km.
         attc_method : str
             Attenuation correction algorithm to be used. The default is 'ABRI':
 
@@ -89,9 +90,8 @@ class AttenuationCorrection:
             equivalent to about 4km, i.e. 4km/range_resolution. The default
             is 7.
         pdp_pxavr_azm : int
-            Pixels to average in :math:`\Phi_{DP}` along azimuth: Odd number
-            equivalent to about 4km, i.e. 4km/range_resolution. The default
-            is 1.
+            Pixels to average in :math:`\Phi_{DP}` along azimuth. Must be an
+            odd number. The default is 1.
         pdp_dmin : float
             Minimum total :math:`\Phi_{DP}` expected in a ray to perform
             attenuation correction (at least 20-30 degrees). The default is 20.
@@ -171,15 +171,19 @@ class AttenuationCorrection:
                                                 array2d, array2d, array2d,
                                                 array2d]
         if mlyr is None:
-            mlvl = 5
-            mlyr_thickness = 0.5
-            # mlyr_bottom = mlvl - mlyr_thickness
+            mlyr = MeltingLayer(self)
+            mlyr.ml_top = 5
+            mlyr.ml_thickness = 0.5
+            mlyr.ml_bottom = mlyr.ml_top - mlyr.ml_thickness
         else:
-            mlvl = mlyr.ml_top
-            mlyr_thickness = mlyr.ml_thickness
-            # mlyr_bottom = mlyr.ml_bottom
+            mlyr.ml_bottom = mlyr.ml_top - mlyr.ml_thickness
 
-        mlgrid = np.zeros_like(attvars['ZH [dBZ]']) + (mlvl) * 1000
+        if isinstance(mlyr.ml_top, (int, float)):
+            mlgrid = np.zeros_like(
+                attvars['ZH [dBZ]']) + (mlyr.ml_top) * 1000
+        elif isinstance(mlyr.ml_top, (np.ndarray, list, tuple)):
+            mlgrid = (np.ones_like(
+                attvars['ZH [dBZ]'].T) * mlyr.ml_top * 1000).T
         param_atc = np.zeros(15)
         nrays = len(rad_georef['azim [rad]'])
         ngates = len(rad_georef['range [m]'])
@@ -214,28 +218,22 @@ class AttenuationCorrection:
         param_atc[11] = coeff_alpha[0]  # minalpha
         param_atc[12] = coeff_alpha[1]  # maxalpha
         param_atc[13] = niter  # number of iterations
-        param_atc[14] = mlyr_thickness*1000  # BB thickness in meters
+        param_atc[14] = mlyr.ml_thickness * 1000  # BB thickness in meters
         zhh_Ac = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         Ah = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         phidp_m = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         phidp_c = np.full(attvars['ZH [dBZ]'].shape, np.nan)
         alpha = np.full(attvars['ZH [dBZ]'].shape, np.nan)
-        libac.attenuationcorrection(nrays,
-                                    ngates,
-                                    attvars['ZH [dBZ]'],
-                                    attvars['PhiDP [deg]'],
-                                    attvars['rhoHV [-]'],
-                                    mlgrid, cclass, rad_georef['range [m]'],
-                                    rad_georef['azim [rad]'],
-                                    rad_georef['elev [rad]'],
-                                    param_atc, zhh_Ac, Ah, phidp_m, phidp_c,
-                                    alpha)
-        attcorr = {'ZH [dBZ]': zhh_Ac, 'AH [dB/km]': Ah,
-                   'PhiDP [deg]': phidp_m,
-                   'PhiDP* [deg]': phidp_c, 'alpha [-]': alpha}
+        libac.attenuationcorrection(
+            nrays, ngates, attvars['ZH [dBZ]'], attvars['PhiDP [deg]'],
+            attvars['rhoHV [-]'], mlgrid, cclass, rad_georef['range [m]'],
+            rad_georef['azim [rad]'], rad_georef['elev [rad]'],
+            param_atc, zhh_Ac, Ah, phidp_m, phidp_c, alpha)
+        attcorr = {'ZH [dBZ]': zhh_Ac, 'AH [dB/km]': Ah, 'alpha [-]': alpha,
+                   'PhiDP [deg]': phidp_m, 'PhiDP* [deg]': phidp_c}
         attcorr['PIA [dB]'] = attcorr['PhiDP* [deg]'] * attcorr['alpha [-]']
-        attcorr['KDP [deg/km]'] = np.nan_to_num(attcorr['AH [dB/km]'] /
-                                                attcorr['alpha [-]'])
+        attcorr['KDP [deg/km]'] = np.nan_to_num(
+            attcorr['AH [dB/km]'] / attcorr['alpha [-]'])
 
         alphacopy = np.zeros_like(attcorr['alpha [-]']) + attcorr['alpha [-]']
         for i in range(nrays):
@@ -243,9 +241,9 @@ class AttenuationCorrection:
             if idmx != 0:
                 attcorr['PIA [dB]'][i][idmx+1:] = attcorr['PIA [dB]'][i][idmx]
 
-        # ======================================================================
+        # =====================================================================
         # Filter non met values
-        # ======================================================================
+        # =====================================================================
         for key, values in attcorr.items():
             values[cclass != 0] = np.nan
 
@@ -258,15 +256,10 @@ class AttenuationCorrection:
                                        attcorr)
 
     def zdr_correction(self, rad_georef, rad_params, attvars, attcorr_vars,
-                       cclass, mlyr=None, rhv_thld=0.98, mov_avrgf_len=5,
-                       minbins=10, p2avrf=3, beta_alpha_ratio=0.1,
-                       method='linear', params={'ZH-ZDR relation': 'linear',
-                                                'ZH_lower_lim': 20,
-                                                'ZH_upper_lim': 45,
-                                                'model': 'a1*ZH-b1',
-                                                'zdr_max': 1.4,
-                                                'a1': 0.048, 'b1': 0.774},
-                       descr=False, plot_method=False):
+                       cclass, mlyr=None, coeff_beta=[0.002, 0.04, 0.02],
+                       rhv_thld=0.98, mov_avrgf_len=5, minbins=10,
+                       p2avrf=3, beta_alpha_ratio=0.265, method='linear',
+                       rparams=None, descr=False, plot_method=False):
         r"""
         Calculate the attenuation of :math:`Z_{DR}`.
 
@@ -284,14 +277,17 @@ class AttenuationCorrection:
             variables used for calculations.
         cclass : array
             Clutter and meteorological classification.
-        mlyr : class
-            Melting layer class containing the top and bottom boundaries of the
-            ML. Only gates below the melting layer bottom (i.e. the rain region
-            below the melting layer) are included in the correction. If None,
-            the default values of the melting level and the thickness of the
-            melting layer are set to 5 and 0.5, respectively.
+        mlyr : MeltingLayer Class, optional
+            Melting layer class containing the top of the melting layer, (i.e.,
+            the melting level) and its thickness, in km. Only gates below the
+            melting layer bottom (i.e. the rain region below the melting layer)
+            are included in the computation; ml_top and ml_thickness can be
+            either a single value (float, int), or an array (or list) of values
+            corresponding to each azimuth angle of the scan. If None, the
+            function is applied to the whole PPI scan, assuming a ml_thickness
+            of 0.5 km.
         rhv_thld : float
-            Minimum value of :math:`\rho_{HV}` expected on the rain medium.
+            Minimum value of :math:`\rho_{HV}` expected in the rain medium.
             The default is 0.98.
         minbins : int
             Minimum number of bins related to the length of each rain cell
@@ -366,31 +362,66 @@ class AttenuationCorrection:
 
         """
         tic = time.time()
+        params = {'ZH-ZDR relation': method, 'ZH_lower_lim': 20,
+                  'ZH_upper_lim': 45, 'model': 'a1*ZH-b1', 'zdr_max': 1.4,
+                  'a1': 0.048, 'b1': 0.774}
         if method == 'exp':
-            params['ZH-ZDR relation'] = 'exponential'
+            params['ZH-ZDR relation'] = method
             params['model'] = 'a1*ZH^b1'
             params['a1'] = 0.00012
             params['b1'] = 2.5515
+        if rparams is not None:
+            params.update
+        # if mlyr is None:
+        #     mlyr = MeltingLayer(self)
+        #     mlvl = 5
+        #     mlyr_thickness = 0.5
+        #     # mlyr_bottom = mlvl - mlyr_thickness
+        # else:
+        #     mlvl = mlyr.ml_top
+        #     mlyr_thickness = mlyr.ml_thickness
+        #     mlyr.ml_bottom = mlvl - mlyr_thickness
         if mlyr is None:
-            mlvl = 5
-            mlyr_thickness = 0.5
-            # mlyr_bottom = mlvl - mlyr_thickness
+            mlyr = MeltingLayer(self)
+            mlyr.ml_top = 5
+            mlyr.ml_thickness = 0.5
+            mlyr.ml_bottom = mlyr.ml_top - mlyr.ml_thickness
         else:
-            mlvl = mlyr.ml_top
-            mlyr_thickness = mlyr.ml_thickness
-            # mlyr_bottom = mlyr.ml_bottom
-        nrays = len(rad_georef['azim [rad]'])
+            mlyr.ml_bottom = mlyr.ml_top - mlyr.ml_thickness
 
-        idxlimfl = [find_nearest(rad_georef['beam_height [km]'][i, :],
-                    mlvl-mlyr_thickness) for i in range(nrays)]
+        if isinstance(mlyr.ml_top, (int, float)):
+            mlt_idx = [find_nearest(nbh, mlyr.ml_top)
+                       for nbh in rad_georef['beam_height [km]']]
+        elif isinstance(mlyr.ml_top, (np.ndarray, list, tuple)):
+            mlt_idx = [find_nearest(nbh, mlyr.ml_top[cnt])
+                       for cnt, nbh in
+                       enumerate(rad_georef['beam_height [km]'])]
+        if isinstance(mlyr.ml_bottom, (int, float)):
+            mlb_idx = [find_nearest(nbh, mlyr.ml_bottom)
+                       for nbh in rad_georef['beam_height [km]']]
+        elif isinstance(mlyr.ml_bottom, (np.ndarray, list, tuple)):
+            mlb_idx = [find_nearest(nbh, mlyr.ml_bottom[cnt])
+                       for cnt, nbh in
+                       enumerate(rad_georef['beam_height [km]'])]
+        # mlt_idxx = np.array([rad_georef['grid_rectx'][cnt, ix]
+        #                      for cnt, ix in enumerate(mlt_idx)])
+        # mlt_idxy = np.array([rad_georef['grid_recty'][cnt, ix]
+        #                      for cnt, ix in enumerate(mlt_idx)])
+        # mlb_idxx = np.array([rad_georef['grid_rectx'][cnt, ix]
+        #                      for cnt, ix in enumerate(mlb_idx)])
+        # mlb_idxy = np.array([rad_georef['grid_recty'][cnt, ix]
+        #                      for cnt, ix in enumerate(mlb_idx)])
+        
+        
+        nrays = len(rad_georef['azim [rad]'])
+        # TODO fix this so nonisotropic ML are an inpyt.
+        # idxlimfl = [find_nearest(rad_georef['beam_height [km]'][i, :],
+        #             mlvl-mlyr_thickness) for i in range(nrays)]
         m = np.zeros_like(attcorr_vars['ZH [dBZ]'])
         for n, rows in enumerate(m):
-            rows[idxlimfl[n]:] = np.nan
+            rows[mlb_idx[n]:] = np.nan
         m[cclass != 0] = np.nan
         m[:, 0] = np.nan
-
-        rhvlrmin = rhv_thld
-        minbins = minbins
 
         attcorrmask = {keys: np.ma.masked_array(values, m)
                        for keys, values in attcorr_vars.items()}
@@ -405,38 +436,66 @@ class AttenuationCorrection:
         betaof = []
         zdrstat = []
 
+        alphacopy = (np.zeros_like(attcorr_vars['alpha [-]']
+                                   + attcorr_vars['alpha [-]']))
+
         for i in range(nrays):
             if i in idxzdrattcorr:
-                zdr_ibeam = np.ones_like(attcorrmask['ZDR [dB]'][i, :]) * attcorrmask['ZDR [dB]'][i, :]
-                zh_ibeam = np.ones_like(attcorrmask['ZH [dBZ]'][i, :]) * attcorrmask['ZH [dBZ]'][i, :]
+                idmx = np.nancumsum(alphacopy[i]).argmax()
+                if idmx != 0:
+                    alphacopy[i][idmx+1:] = alphacopy[i][idmx]
+                zdr_ibeam = (np.ones_like(attcorrmask['ZDR [dB]'][i, :])
+                             * attcorrmask['ZDR [dB]'][i, :])
+                zh_ibeam = (np.ones_like(attcorrmask['ZH [dBZ]'][i, :])
+                            * attcorrmask['ZH [dBZ]'][i, :])
 
-                zdr_fltr_rhv = np.ma.masked_where(attcorrmask['rhoHV [-]'][i, :] < rhvlrmin, zdr_ibeam)
-                zh_fltr_rhv = np.ma.masked_where(attcorrmask['rhoHV [-]'][i, :] < rhvlrmin, zh_ibeam)
+                zdr_fltr_rhv = np.ma.masked_where(
+                    attcorrmask['rhoHV [-]'][i, :] < rhv_thld, zdr_ibeam)
+                zh_fltr_rhv = np.ma.masked_where(
+                    attcorrmask['rhoHV [-]'][i, :] < rhv_thld, zh_ibeam)
 
-                zdr_mvavfl = np.ma.convolve(zdr_fltr_rhv, np.ones(mov_avrgf_len)/mov_avrgf_len, mode='same')
-                zh_mvavfl = np.ma.convolve(zh_fltr_rhv, np.ones(mov_avrgf_len)/mov_avrgf_len, mode='same')
+                zdr_mvavfl = (np.ma.convolve(zdr_fltr_rhv,
+                                             np.ones(mov_avrgf_len)
+                                             / mov_avrgf_len, mode='same'))
+                zh_mvavfl = (np.ma.convolve(zh_fltr_rhv,
+                                            np.ones(mov_avrgf_len)
+                                            / mov_avrgf_len, mode='same'))
 
-                rcells_idx = np.array(sorted(np.vstack((np.argwhere(np.diff(np.isnan(zdr_mvavfl).mask)),
-                                                        np.argwhere(np.diff(np.isnan(zdr_mvavfl).mask))+1,
-                                                        np.array([[0], [len(zdr_mvavfl)-1]])))))
-                rcells_raw = [rcells_idx[i:i + 2] for i in range(0, len(rcells_idx), 2)][1::2]
+                rcells_idx = np.array(
+                    sorted(
+                        np.vstack((np.argwhere(
+                            np.diff(np.isnan(zdr_mvavfl).mask)),
+                            np.argwhere(np.diff(np.isnan(zdr_mvavfl).mask))+1,
+                            np.array([[0], [len(zdr_mvavfl)-1]])))))
+                rcells_raw = [rcells_idx[i:i + 2]
+                              for i in range(0, len(rcells_idx), 2)][1::2]
                 if rcells_raw:
-                    rcells_dm1 = np.concatenate([np.array(range(int(i[0]), int(i[-1])+1)) for i in rcells_raw])
-                    rcells_dm2 = np.split(rcells_dm1, np.where(np.diff(rcells_dm1) > 2)[0] + 1)
-                    rcells_crc = [np.array([i[0], i[-1]]).reshape((2, 1)) for i in rcells_dm2]
-                    rcells_crc_len = np.concatenate([np.ediff1d(i)+1 if np.ediff1d(i)+1 >= minbins else [np.nan] for i in rcells_crc])
-                    raincells = [j for i, j in enumerate(rcells_crc) if not np.isnan(rcells_crc_len[i])]
+                    rcells_dm1 = np.concatenate(
+                        [np.array(range(int(i[0]), int(i[-1])+1))
+                         for i in rcells_raw])
+                    rcells_dm2 = np.split(
+                        rcells_dm1, np.where(np.diff(rcells_dm1) > 2)[0] + 1)
+                    rcells_crc = [np.array([i[0], i[-1]]).reshape((2, 1))
+                                  for i in rcells_dm2]
+                    rcells_crc_len = np.concatenate(
+                        [np.ediff1d(i)+1 if np.ediff1d(i)+1 >= minbins
+                         else [np.nan] for i in rcells_crc])
+                    raincells = [j for i, j in enumerate(rcells_crc)
+                                 if not np.isnan(rcells_crc_len[i])]
                     if raincells:
-                        raincells_len = np.concatenate([np.ediff1d(i)+1 for i in raincells])
+                        raincells_len = np.concatenate([np.ediff1d(i)+1
+                                                        for i in raincells])
                         rcell = raincells[np.nanargmax(raincells_len)]
                         idxrs = int(rcell[0])
                         idxrf = int(rcell[1])
                         zhcrf = np.nanmean(zh_mvavfl[idxrf - p2avrf+1:idxrf+1])
-                        zdrmrf = np.nanmean(zdr_mvavfl[idxrf - p2avrf+1:idxrf+1])
+                        zdrmrf = np.nanmean(
+                            zdr_mvavfl[idxrf - p2avrf+1:idxrf+1])
                         if method == 'linear':
                             if zhcrf <= params['ZH_lower_lim']:
                                 zdrerf = 0
-                            elif params['ZH_lower_lim'] < zhcrf <= params['ZH_upper_lim']:
+                            elif (params['ZH_lower_lim']
+                                  < zhcrf <= params['ZH_upper_lim']):
                                 zdrerf = params['a1'] * zhcrf - params['b1']
                             elif zhcrf > params['ZH_upper_lim']:
                                 zdrerf = params['zdr_max']
@@ -450,19 +509,45 @@ class AttenuationCorrection:
                                                'theoretical values of ZDR')
                         if zdrerf > zdrmrf:
                             try:
-                                betai = abs(zdrmrf - zdrerf) / (attcorrmask['PhiDP [deg]'][i, :][idxrf] - attcorrmask['PhiDP [deg]'][i, :][idxrs])
-                                zdrirfpia = zdrmrf + (betai / attcorrmask['alpha [-]'][i, :][idxrf]) * np.nanmean(attcorrmask['PIA [dB]'][i, :][idxrf-p2avrf+1:idxrf+1])
-                                if abs(zdrirfpia - zdrerf) > .1:
-                                    sl1 = optimize.root_scalar(lambda betaif: ((zdrmrf) + (betaif) *
-                                                                               ((1 / attcorrmask['alpha [-]'][i, :][idxrf]) *
-                                                                                np.nanmean(attcorrmask['PIA [dB]'][i, :][idxrf-p2avrf+1:idxrf+1]))) - zdrerf,
-                                                               bracket=[0.005, 0.05], method='brentq')
+                                betai = (
+                                    abs(zdrmrf - zdrerf)
+                                    / (attcorrmask['PhiDP [deg]'][i, :][idxrf]
+                                       - attcorrmask['PhiDP [deg]'][i, :][idxrs]))
+                                zdrirfpia = (
+                                    zdrmrf +
+                                    (betai
+                                     / attcorrmask['alpha [-]'][i, :][idxrf])
+                                    * np.nanmean(attcorrmask
+                                                 ['PIA [dB]'][i, :]
+                                                 [idxrf-p2avrf+1:idxrf+1]))
+                                if abs(zdrirfpia - zdrerf) > 0:
+                                    sl1 = optimize.root_scalar(
+                                        lambda betaif: (
+                                            (zdrmrf) + (betaif) *
+                                            ((1 / attcorrmask['alpha [-]'][i, :][idxrf])
+                                             * np.nanmean(
+                                                 attcorrmask['PIA [dB]'][i, :]
+                                                 [idxrf-p2avrf+1:idxrf+1])))
+                                        - zdrerf,
+                                        bracket=[coeff_beta[:2]],
+                                        x0=(np.nanmin(alphacopy[i])
+                                            * beta_alpha_ratio),
+                                        method='brentq')
                                     betao = sl1.root
                                 else:
                                     betao = betai
-                                zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + ((betao/attcorrmask['alpha [-]'][i, :]) * attcorrmask['PIA [dB]'][i, :])
-                                adpi = (betao / attcorrmask['alpha [-]'][i, :]) * attcorrmask['AH [dB/km]'][i, :]
-                                betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :]) + betao
+                                if betao <= 0:
+                                    betao = coeff_beta[0]
+                                if betao >= coeff_beta[1]:
+                                    betao = coeff_beta[1]
+                                zdrcr = ((attvars['ZDR [dB]'][i, :])
+                                         + ((betao/alphacopy[i, :])
+                                            * attcorr_vars['PIA [dB]'][i, :]))
+                                adpi = ((betao
+                                         / attcorr_vars['alpha [-]'][i, :])
+                                        * attcorr_vars['AH [dB/km]'][i, :])
+                                betaopt = (np.zeros_like(
+                                    attcorr_vars['alpha [-]'][i, :]) + betao)
                                 statzdr = f'{i}: beta coeff optimised 1 iter'
                             except ValueError:
                                 idxrs = int(raincells[0][0])
@@ -474,8 +559,10 @@ class AttenuationCorrection:
                                 if method == 'linear':
                                     if zhcrf <= params['ZH_lower_lim']:
                                         zdrerf = 0
-                                    elif params['ZH_lower_lim'] < zhcrf <= params['ZH_upper_lim']:
-                                        zdrerf = params['a1'] * zhcrf - params['b1']
+                                    elif (params['ZH_lower_lim']
+                                          < zhcrf <= params['ZH_upper_lim']):
+                                        zdrerf = (params['a1']
+                                                  * zhcrf - params['b1'])
                                     elif zhcrf > params['ZH_upper_lim']:
                                         zdrerf = params['zdr_max']
                                     else:
@@ -483,68 +570,92 @@ class AttenuationCorrection:
                                 elif method == 'exp':
                                     zdrerf = params['a1']*zhcrf**params['b1']
                                 else:
-                                    raise TowerpyError('Please check the method '
-                                                       'selected for estimating the '
-                                                       'theoretical values of ZDR')
+                                    raise
+                                    TowerpyError('Please check the method '
+                                                 'selected for estimating the '
+                                                 'theoretical values of ZDR')
                                 try:
-                                    betai = abs(zdrmrf - zdrerf) / (attcorrmask['PhiDP [deg]'][i, :][idxrf] - attcorrmask['PhiDP [deg]'][i, :][idxrs])
-                                    zdrirfpia = zdrmrf + (betai / attcorrmask['alpha [-]'][i, :][idxrf]) * np.nanmean(attcorrmask['PIA [dB]'][i, :][idxrf-p2avrf+1:idxrf+1])
-                                    if abs(zdrirfpia - zdrerf) > .1:
-                                        sl1 = optimize.root_scalar(lambda betaif: ((zdrmrf) + (betaif) *
-                                                                                   ((1 / attcorrmask['alpha [-]'][i, :][idxrf]) *
-                                                                                    np.nanmean(attcorrmask['PIA [dB]'][i, :][idxrf - p2avrf+1:idxrf+1]))) - zdrerf,
-                                                                   bracket=[0.005, 0.05], method='brentq')
+                                    betai = (
+                                        abs(zdrmrf - zdrerf)
+                                        / (attcorrmask['PhiDP [deg]'][i, :][idxrf]
+                                           - attcorrmask['PhiDP [deg]'][i, :][idxrs]))
+                                    zdrirfpia = (
+                                        zdrmrf +
+                                        (betai / attcorrmask['alpha [-]'][i, :][idxrf])
+                                        * np.nanmean(
+                                            attcorrmask['PIA [dB]'][i, :]
+                                            [idxrf-p2avrf+1:idxrf+1]))
+                                    if abs(zdrirfpia - zdrerf) > 0:
+                                        sl1 = optimize.root_scalar(
+                                            lambda
+                                            betaif: ((zdrmrf) + (betaif) *
+                                                     ((1 / attcorrmask['alpha [-]'][i, :][idxrf])
+                                                      * np.nanmean(attcorrmask['PIA [dB]'][i, :][idxrf - p2avrf+1:idxrf+1]))) - zdrerf,
+                                            bracket=[coeff_beta[:2]],
+                                            x0=(np.nanmin(alphacopy[i])
+                                                * beta_alpha_ratio),
+                                            method='brentq')
                                         betao = sl1.root
                                     else:
                                         betao = betai
-                                    zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + ((betao/attcorrmask['alpha [-]'][i, :]) * attcorrmask['PIA [dB]'][i, :])
-                                    adpi = (betao / attcorrmask['alpha [-]'][i, :]) * attcorrmask['AH [dB/km]'][i, :]
-                                    betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :]) + betao
+                                    if betao <= 0:
+                                        betao = coeff_beta[0]
+                                    if betao >= coeff_beta[1]:
+                                        betao = coeff_beta[1]
+                                    zdrcr = (
+                                        (attvars['ZDR [dB]'][i, :])
+                                        + ((betao/alphacopy[i, :])
+                                           * attcorr_vars['PIA [dB]'][i, :]))
+                                    adpi = ((betao
+                                             / attcorr_vars['alpha [-]'][i, :])
+                                            * attcorr_vars['AH [dB/km]'][i, :])
+                                    betaopt = (np.zeros_like(
+                                        attcorr_vars['alpha [-]'][i, :])
+                                        + betao)
                                     statzdr = f'{i}: beta coeff optimised 2 iter'
                                 except ValueError:
-                                    # zdrcr = attvars['ZDR [dB]'][i, :]
-                                    zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + (beta_alpha_ratio * attcorrmask['PIA [dB]'][i, :])
-                                    # adpi = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                                    adpi = beta_alpha_ratio * attcorrmask['AH [dB/km]'][i, :]
-                                    # betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :])
-                                    betaopt = attcorrmask['alpha [-]'][i, :] * beta_alpha_ratio
-                                    # statzdr = f'{i} zdrm>zdre t2'
+                                    zdrcr = (
+                                        (attvars['ZDR [dB]'][i, :])
+                                        + (beta_alpha_ratio
+                                           * attcorr_vars['PIA [dB]'][i, :]))
+                                    adpi = (beta_alpha_ratio
+                                            * attcorr_vars['AH [dB/km]'][i, :])
+                                    betaopt = (attcorr_vars['alpha [-]'][i, :]
+                                               * beta_alpha_ratio)
                                     statzdr = f'{i}: beta/alpha: fixed value'
                         else:
-                            # zdrcr = attvars['ZDR [dB]'][i, :]
-                            zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + (beta_alpha_ratio * attcorrmask['PIA [dB]'][i, :])
-                            # adpi = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                            adpi = beta_alpha_ratio * attcorrmask['AH [dB/km]'][i, :]
-                            # betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :])
-                            betaopt = attcorrmask['alpha [-]'][i, :] * beta_alpha_ratio
-                            # statzdr = f'{i} zdrm>zdre'
+                            zdrcr = ((attvars['ZDR [dB]'][i, :])
+                                     + (beta_alpha_ratio
+                                        * attcorr_vars['PIA [dB]'][i, :]))
+                            adpi = (beta_alpha_ratio
+                                    * attcorr_vars['AH [dB/km]'][i, :])
+                            betaopt = (attcorr_vars['alpha [-]'][i, :]
+                                       * beta_alpha_ratio)
                             statzdr = f'{i}: beta/alpha: fixed value'
                     else:
-                        # zdrcr = attvars['ZDR [dB]'][i, :]
-                        zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + (beta_alpha_ratio * attcorrmask['PIA [dB]'][i, :])
-                        # adpi = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                        adpi = beta_alpha_ratio * attcorrmask['AH [dB/km]'][i, :]
-                        # betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :])
-                        betaopt = attcorrmask['alpha [-]'][i, :] * beta_alpha_ratio
-                        # statzdr = f'{i} not enough data'
+                        zdrcr = (
+                            (attvars['ZDR [dB]'][i, :])
+                            + (beta_alpha_ratio
+                               * attcorr_vars['PIA [dB]'][i, :]))
+                        adpi = (beta_alpha_ratio
+                                * attcorr_vars['AH [dB/km]'][i, :])
+                        betaopt = (attcorr_vars['alpha [-]'][i, :]
+                                   * beta_alpha_ratio)
                         statzdr = f'{i}: beta/alpha: fixed value'
                 else:
-                    # zdrcr = attvars['ZDR [dB]'][i, :]
-                    zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + (beta_alpha_ratio * attcorrmask['PIA [dB]'][i, :])
-                    # adpi = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                    adpi = beta_alpha_ratio * attcorrmask['AH [dB/km]'][i, :]
-                    # betaopt = np.zeros_like(attcorrmask['alpha [-]'][i, :])
-                    betaopt = attcorrmask['alpha [-]'][i, :] * beta_alpha_ratio
-                    # statzdr = f'{i} not enough data'
+                    zdrcr = (
+                        (attvars['ZDR [dB]'][i, :])
+                        + (beta_alpha_ratio * attcorr_vars['PIA [dB]'][i, :]))
+                    adpi = beta_alpha_ratio * attcorr_vars['AH [dB/km]'][i, :]
+                    betaopt = (attcorr_vars['alpha [-]'][i, :]
+                               * beta_alpha_ratio)
                     statzdr = f'{i}: beta/alpha: fixed value'
             else:
-                # zdrcr = attvars['ZDR [dB]'][i, :]
-                zdrcr = (attcorrmask['ZDR [dB]'][i, :]) + (beta_alpha_ratio * attcorrmask['PIA [dB]'][i, :])
-                # adpi = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                adpi = beta_alpha_ratio * attcorrmask['AH [dB/km]'][i, :]
-                # betaopt = np.zeros_like(attvars['ZDR [dB]'][i, :])
-                betaopt = attcorrmask['alpha [-]'][i, :] * beta_alpha_ratio
-                # statzdr = f'{i} no zdr cal'
+                zdrcr = (
+                    (attvars['ZDR [dB]'][i, :])
+                    + (beta_alpha_ratio * attcorr_vars['PIA [dB]'][i, :]))
+                adpi = beta_alpha_ratio * attcorr_vars['AH [dB/km]'][i, :]
+                betaopt = attcorr_vars['alpha [-]'][i, :] * beta_alpha_ratio
                 statzdr = f'{i}: beta/alpha: fixed value'
             zdrattcorr.append(zdrcr)
             adpif.append(adpi)
@@ -553,17 +664,16 @@ class AttenuationCorrection:
 
         attcorr1 = {'ZDR [dB]': np.array(zdrattcorr),
                     'ADP [dB/km]': np.array(adpif),
-                    'beta [-]': np.array(betaof)
-                    }
-        # attcorr1['ADP [dB/km]'][:, idxlimfl:, ] = 0
-        for n, rows in enumerate(attcorr1['ADP [dB/km]']):
-            rows[idxlimfl[n]:] = 0
-        for n, rows in enumerate(attcorr1['beta [-]']):
-            rows[idxlimfl[n]:] = 0
+                    'beta [-]': np.array(betaof)}
 
-        # ======================================================================
+        for n, rows in enumerate(attcorr1['ADP [dB/km]']):
+            rows[mlb_idx[n]:] = 0
+        for n, rows in enumerate(attcorr1['beta [-]']):
+            rows[mlb_idx[n]:] = 0
+
+        # =====================================================================
         # Filter non met values
-        # ======================================================================
+        # =====================================================================
         for key, values in attcorr1.items():
             values[cclass != 0] = np.nan
         zdr_calc = {}
