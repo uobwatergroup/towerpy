@@ -5,6 +5,7 @@ import logging
 
 
 class TowerpyError(Exception):
+    """Error towerpy class."""
 
     def __init__(self, message, inner=None):
         super(TowerpyError, self).__init__()
@@ -17,6 +18,7 @@ class TowerpyError(Exception):
 
 
 class TowerpyLog(object):
+    """Log Towerpy class."""
 
     def __init__(self, level=None):
         self.logger = logging.getLogger()

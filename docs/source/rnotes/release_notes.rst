@@ -6,8 +6,31 @@ What’s New In Towerpy
 Summary – Release highlights
 ----------------------------
 
-**Latest release: v1.0.3**
+**Latest release: v1.0.4**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Towerpy v1.0.4
+~~~~~~~~~~~~~~
+::
+  **Towerpy v1.0.4**
+  
+    **Release Date:** May. 5, 2024
+
+
+    **New features**
+      #. Add [mm] as a unit in the datavis module so rainfall accumulations can be used.
+      #. **rad_display**: the *plot_ppi* function can now plot a list of points and the melting layer.
+      #. **Attn_Refl_Relation**: There is new module to compute the Z(A) relation.
+      #. Users can define the ML as a list or array to use non-isotropic melting layer heights in different modules.
+
+    **Minor corrections**
+      #. The units of rainfall intensity are now **mm/h** instead of mm/hr.
+      #. **attc_zhzdr module**: The PIA is used to propagate the ZDR attenuation correction beyond the ML.
+      #. The notebooks were updated to use similar date and times for the 90, 9 and 0.5 deg scans to improve the understanding of the examples.
+
+    **Deprecations**
+      #. 
+
 
 Towerpy v1.0.3
 ~~~~~~~~~~~~~~

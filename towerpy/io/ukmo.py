@@ -255,8 +255,17 @@ class Rad_scan:
                       for i,
                       ray in enumerate(np.rad2deg(self.georef['elev [rad]']))])
         a = [geo.pol2cart(arcl, self.georef['azim [rad]']) for arcl in s.T]
-        self.georef['grid_rectx'] = np.array([i[1] for i in a]).T
-        self.georef['grid_recty'] = np.array([i[0] for i in a]).T
+
+        grid_rectx = np.array([i[1] for i in a]).T
+        grid_recty = np.array([i[0] for i in a]).T
+
+        grid_osgbx = (grid_rectx + self.params['easting [km]'])*1000
+        grid_osgby = (grid_recty + self.params['northing [km]'])*1000
+
+        self.georef['grid_rectx'] = grid_rectx
+        self.georef['grid_recty'] = grid_recty
         self.georef['beam_height [km]'] = bhkm
         self.georef['beambottom_height [km]'] = bhbkm
         self.georef['beamtop_height [km]'] = bhtkm
+        self.georef['grid_osgbx'] = grid_osgbx
+        self.georef['grid_osgby'] = grid_osgby
