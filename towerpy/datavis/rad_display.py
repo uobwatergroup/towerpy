@@ -146,7 +146,11 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
         dnorm.update(unorm)
 # =============================================================================
     # dtdes0 = f"[{rad_params['site_name']}]"
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    # dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     # txtboxs = 'round, rounding_size=0.5, pad=0.5'
     # txtboxc = (0, -.09)
@@ -680,7 +684,10 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
     #     dmmyy_mlt = rad_georef['grid_recty'][:, idx_bht]
     #     dmmyz_mlt = np.ones(dmmyx_mlt.shape)
 
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     if fig_title is None:
         ptitle = dtdes1 + dtdes2
@@ -736,8 +743,10 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
             a.set_ylim(ylims)
         # a.set_title(f'{dtdes}' "\n" f'{key}')
         a.set_title(f'{key}', fontsize=12)
-        a.set_xlabel('Distance from the radar [km]', fontsize=12)
-        a.set_ylabel('Distance from the radar [km]', fontsize=12)
+        # a.set_xlabel('Distance from the radar [km]', fontsize=12)
+        # a.set_ylabel('Distance from the radar [km]', fontsize=12)
+        a.set_xlabel(None, size=12)
+        a.set_ylabel(None, size=12)
         a.grid(True)
         a.axes.set_aspect('equal')
         a.tick_params(axis='both', which='major', labelsize=10)
@@ -759,6 +768,8 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
     # figManager = plt.get_current_fig_manager()
     # figManager.window.showMaximized()
     # plt.tight_layout()
+    plt.setp(ax[-1, :], xlabel='Distance from the radar [km]')
+    plt.setp(ax[:, 0], ylabel='Distance from the radar [km]')
     plt.show()
 
 
@@ -985,7 +996,11 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
             scale='10m',
             facecolor='none')
 # TODO add fig_title
-    pttl = [f"{p['elev_ang [deg]']:{2}.{3}} Deg. "
+    pttl = [f"{p['elev_ang [deg]']} -- "
+            + f"{p['datetime']:%Y-%m-%d %H:%M:%S}"
+            if isinstance(p['elev_ang [deg]'], str)
+            else
+            f"{p['elev_ang [deg]']:{2}.{3}} deg. -- "
             + f"{p['datetime']:%Y-%m-%d %H:%M:%S}"
             for p in rscans_params]
     if coord_sys == 'rect' and cpy_features['status'] is False:
@@ -1361,7 +1376,10 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     tcks = bnd.get(var2plot[var2plot.find('['):])
 
     # dtdes0 = f"[{rad_params['site_name']}]"
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
     # txtboxs = 'round, rounding_size=0.5, pad=0.5'
@@ -1440,7 +1458,10 @@ def plot_snr(rad_georef, rad_params, snr_data, coord_sys='rect',
     proj : 'rect' or 'polar', optional
         Coordinates system (polar or rectangular). The default is 'rect'.
     """
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
     if fig_size is None:
@@ -1536,7 +1557,10 @@ def plot_nmeclassif(rad_georef, rad_params, nme_classif, clutter_map=None,
     ylims : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
     """
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
 
@@ -1703,7 +1727,10 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
         mlb_idxy = np.array([rad_georef['grid_recty'][cnt, ix]
                              for cnt, ix in enumerate(mlb_idx)])
 
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
 
@@ -2008,7 +2035,10 @@ def plot_zdrattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
         mlb_idxy = np.array([rad_georef['grid_recty'][cnt, ix]
                              for cnt, ix in enumerate(mlb_idx)])
 
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
 
@@ -2196,10 +2226,16 @@ def plot_radprofiles(rad_profs, beam_height, mlyr=None, stats=None, ylims=None,
             extend='both')
     if unorm is not None:
         dnorm.update(unorm)
+    # ttxt_elev = f"{rad_profs.elev_angle:{2}.{3}} Deg."
+    # ttxt_dt = f"{rad_profs.scandatetime:%Y-%m-%d %H:%M:%S}"
+    # ttxt = dtdes1+ttxt_dt
+    if isinstance(rad_profs.elev_angle, str):
+        dtdes1 = f"{rad_profs.elev_angle} -- "
+    else:
+        dtdes1 = f"{rad_profs.elev_angle:{2}.{3}} deg. -- "
+    dtdes2 = f"{rad_profs.scandatetime:%Y-%m-%d %H:%M:%S}"
+    ptitle = dtdes1 + dtdes2
 
-    ttxt_elev = f"{rad_profs.elev_angle:{2}.{3}} Deg."
-    ttxt_dt = f"{rad_profs.scandatetime:%Y-%m-%d %H:%M:%S}"
-    ttxt = ttxt_elev+ttxt_dt
     if fig_size is None:
         fig_size = (14, 10)
 
@@ -2224,14 +2260,14 @@ def plot_radprofiles(rad_profs, beam_height, mlyr=None, stats=None, ylims=None,
         fig, ax = plt.subplots(1, len(rad_profs.vps), figsize=fig_size,
                                sharey=True)
         fig.suptitle(f'Vertical profiles of polarimetric variables'
-                     '\n' f'{ttxt}',
+                     '\n' f'{ptitle}',
                      fontsize=fontsizetitle)
     elif rad_profs.profs_type == 'QVPs':
         rprofs = rad_profs.qvps
         fig, ax = plt.subplots(1, len(rad_profs.qvps), figsize=fig_size,
                                sharey=True)
         fig.suptitle('Quasi-Vertical profiles of polarimetric variables \n'
-                     f'{ttxt}',
+                     f'{ptitle}',
                      fontsize=fontsizetitle)
 
     for n, (a, (key, value)) in enumerate(zip(ax.flatten(), rprofs.items())):
@@ -2429,12 +2465,12 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
                             + r"$^{\circ}$"))
         # scan_st.plot(i['range [m]']/-1000, i['beam_height [km]'][0],
         #               color=cmaph[c], ls='--')
+    if spec_range:
+        scan_st.axvline(spec_range, c='k', lw=3, label=f'RD={spec_range}')
     scan_st.set_xlabel('Range [km]', fontsize=fontsizelabels)
     scan_st.tick_params(axis='both', labelsize=fontsizetick)
     scan_st.grid(True)
     scan_st.legend(loc='upper right')
-    if spec_range:
-        scan_st.axvline(spec_range, c='k', lw=3)
 
 
 def plot_offsetcorrection(rad_georef, rad_params, rad_var, var_offset=0,
@@ -2477,7 +2513,10 @@ def plot_offsetcorrection(rad_georef, rad_params, rad_var, var_offset=0,
     fig, ax = plt.subplots(figsize=fig_size,
                            subplot_kw={'projection': 'polar'})
     ax.set_theta_direction(-1)
-    dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
     dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     ptitle = dtdes1 + dtdes2
     ax.set_title(ptitle, fontsize=16)
@@ -2621,32 +2660,27 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, fig_size=None):
 
 def plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b, coeffs_a, coeffs_b,
               temps, var2calc='ZH [dBZ]',):
-    """
+    r"""
     Display the AH-ZH relation.
 
     Parameters
     ----------
-    rad_vars : TYPE
-        DESCRIPTION.
-    temp : TYPE
-        DESCRIPTION.
-    coeff_a : TYPE
-        DESCRIPTION.
-    coeff_b : TYPE
-        DESCRIPTION.
-    coeffs_a : TYPE
-        DESCRIPTION.
-    coeffs_b : TYPE
-        DESCRIPTION.
-    temps : TYPE
-        DESCRIPTION.
-    var2calc : TYPE, optional
-        DESCRIPTION. The default is 'ZH [dBZ]'.
-
-    Returns
-    -------
-    None.
-
+    rad_vars : dict
+        Dict containing radar variables to plot.
+    r_ahzh : obj
+        Results of the Attn_Refl_Relation class.
+    temp: float
+        Temperature, in :math:`^{\circ}C`, used to derive the coefficients
+        according to [1]_. The default is 10.
+    coeff_a, coeff_b: float
+        Computed coefficients of the :math:`A_H(Z_H)` relationship.
+    coeffs_a, coeffs_b: list or array
+        Default coefficients of the :math:`A_H(Z_H)` relationship..
+    temps : list or array
+        Default values for the temperature.
+    var2calc : str, optional
+        Radar variable to be computed. The string has to be one of
+        'AH [dB/km]' or 'ZH [dBZ]'. The default is 'ZH [dBZ]'.
     """
     tcksize = 14
     cmap = 'Spectral_r'
