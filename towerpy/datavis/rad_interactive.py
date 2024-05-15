@@ -419,9 +419,12 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     None.
 
     """
-    ttxt1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
-    ttxt2 = f" {rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
-    ttxt = ttxt1 + ttxt2
+    if isinstance(rad_params['elev_ang [deg]'], str):
+        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+    else:
+        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
+    dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
+    ptitle = dtdes1 + dtdes2
     nangle = 1
     nrange = 1
     lpv = {'ZH [dBZ]': [-10, 60, 15], 'ZDR [dB]': [-2, 6, 17],
@@ -559,17 +562,17 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                 fcb = 1
             if '[m/s]' in polradv:
                 cmaph = tpycm_dv
-            if '[mm/h]' in var2plot:
+            if '[mm/h]' in polradv:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
                 tcks = bnd['[mm/h]']
                 cmaph.set_under('w')
                 fcb = 1
-            if '[mm]' in var2plot:
+            if '[mm]' in polradv:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
                 tcks = bnd['[mm]']
                 cmaph.set_under('w')
                 fcb = 1
-            if '[km]' in var2plot:
+            if '[km]' in polradv:
                 cmaph = mpl.colormaps['gist_earth_r']
                 fcb = 2
     else:
@@ -590,17 +593,17 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             fcb = 1
         if '[m/s]' in polradv:
             cmaph = tpycm_dv
-        if '[mm/h]' in var2plot:
+        if '[mm/h]' in polradv:
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             tcks = bnd['[mm/h]']
             cmaph.set_under('w')
             # fcb = 1
-        if '[mm]' in var2plot:
+        if '[mm]' in polradv:
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             tcks = bnd['[mm]']
             cmaph.set_under('w')
             fcb = 1
-        if '[km]' in var2plot:
+        if '[km]' in polradv:
             cmaph = mpl.colormaps['gist_earth_r']
             fcb = 2
         if polradv in lpv:
@@ -720,7 +723,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
     #                          bbox=dict(boxstyle=txtboxs,
     #                                    fc=fc, ec=ec))
 
-    f3_axvar2plot.set_title(ttxt, fontsize=16)
+    f3_axvar2plot.set_title(ptitle, fontsize=16)
     f3_axvar2plot.grid(True)
 
     f3_axhbeam = figradint.add_subplot(intradgs[-1:, 0:2])
@@ -1043,7 +1046,7 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
     fontsizelabels = 24
     fontsizetick = 20
     linec, lwid = 'k', 3
-    ttxt = f"{profsdt[0]:%Y-%m-%d %H:%M:%S}"
+    ptitle = f"{profsdt[0]:%Y-%m-%d %H:%M:%S}"
     # -------------------------------------------------------------------------
 
     global figprofsint, htiplt, hviax, profsdtn, intpvars, intheight, intscdt
@@ -1140,7 +1143,7 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
     hviax.tick_params(axis='both', direction='in', labelsize=fontsizetick,
                       pad=10)
     hviax.yaxis.set_tick_params(labelbottom=False)
-    hviax.set_title(ttxt, fontsize=fontsizelabels)
+    hviax.set_title(ptitle, fontsize=fontsizelabels)
     hviax.set_xlabel(prflv, fontsize=fontsizelabels, labelpad=15)
 
     ax2_divider = make_axes_locatable(hviax)

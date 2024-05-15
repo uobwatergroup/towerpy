@@ -284,11 +284,11 @@ class PolarimetricProfiles:
         Parameters
         ----------
         rscans_georef : list
-            List of objects containing the georeference of the PPI scans.
+            List of dicts containing the georeference of the PPI scans.
         rscans_params : list
-            List of objects containing Radar technical details.
-        rscans_vars : lost
-            List of objects containing radar variables used to generate the
+            List of dicts containing Radar technical details.
+        rscans_vars : list
+            List of dicts containing radar variables used to generate the
             RD-QVPs.
         r0 : float or list of floats, optional
             Initial range within the PPI scans to build the QVPS, in km.
@@ -499,11 +499,11 @@ class PolarimetricProfiles:
                                                            for d in dmmydt)
                                                        / len(dmmydt))
         self.file_name = 'RD-QVPs'
-        snames_list = [i['site_name'] for i in rscans_params]
-        if snames_list.count(snames_list[0]) == len(snames_list):
-            self.site_name = snames_list[0]
-        else:
-            self.site_name = [i['site_name'] for i in rscans_params]
+        # snames_list = [i['site_name'] for i in rscans_params]
+        # if snames_list.count(snames_list[0]) == len(snames_list):
+        #     self.site_name = snames_list[0]
+        # else:
+        #     self.site_name = [i['site_name'] for i in rscans_params]
         toc = time.time()
         if plot_method:
             rad_display.plot_rdqvps(rscans_georef, rscans_params, self,

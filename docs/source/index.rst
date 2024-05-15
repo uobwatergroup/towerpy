@@ -49,7 +49,7 @@ Check out the :ref:`installation` section for further information about how to i
 
 Citing
 ------
-If you find towerpy useful for a scientific publication, please consider citing the Towerpy `paper <https://www.sciencedirect.com/science/article/pii/S1364815223001329>`  . BibTeX:
+If you find towerpy useful for a scientific publication, please consider citing the Towerpy `paper <https://www.sciencedirect.com/science/article/pii/S1364815223001329>`_:
 
 .. code-block::
    :caption: BibTeX
