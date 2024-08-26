@@ -214,8 +214,8 @@ class PolarimetricProfiles:
         else:
             raise TowerpyError('Choose a method to compute the height of the'
                                'Quasi-Vertical Profiles.')
-        thlds_qvps = {'ZH [dBZ]': [-10, 100], 'ZDR [dB]': None,
-                      'rhoHV [-]': [0.6, 10], 'PhiDP [deg]': None,
+        thlds_qvps = {'ZH [dBZ]': [-10, np.inf], 'ZDR [dB]': None,
+                      'rhoHV [-]': [0.6, np.inf], 'PhiDP [deg]': None,
                       'V [m/s]': None, 'KDP [deg/km]': None}
         if thlds != 'default':
             thlds_qvps.update(thlds)
@@ -344,7 +344,6 @@ class PolarimetricProfiles:
             Climatology, 57(1), 31-50. https://doi.org/10.1175/JAMC-D-17-0033.1
 
         """
-        tic = time.time()
         if r0 is None:
             r0 = [0 for i in rscans_params]
         else:
@@ -504,8 +503,6 @@ class PolarimetricProfiles:
         #     self.site_name = snames_list[0]
         # else:
         #     self.site_name = [i['site_name'] for i in rscans_params]
-        toc = time.time()
         if plot_method:
             rad_display.plot_rdqvps(rscans_georef, rscans_params, self,
                                     spec_range=spec_range, all_desc=all_desc)
-        print(f'RD-QVPS running time: {toc-tic:.3f} sec.')

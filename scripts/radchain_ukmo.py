@@ -7,7 +7,7 @@ import cartopy.crs as ccrs
 
 rsite = 'chenies'
 fdir = f'../datasets/{rsite}/y2020/lpel0/'
-fname = (f'metoffice-c-band-rain-radar_{rsite}_202010030729_raw-dual-polar-'
+fname = (f'metoffice-c-band-rain-radar_{rsite}_202010032115_raw-dual-polar-'
          + 'augzdr-lp-el0.dat')
 
 # =============================================================================
@@ -17,8 +17,8 @@ rdata = tp.io.ukmo.Rad_scan(fdir+fname, rsite)
 rdata.ppi_ukmoraw(exclude_vars=['W [m/s]', 'SQI [-]', 'CI [dB]'])
 rdata.ppi_ukmogeoref()
 
-# Plot the radar PPI
-tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rdata.vars)
+# Plot all the radar variables
+tp.datavis.rad_display.plot_setppi(rdata.georef, rdata.params, rdata.vars)
 
 # %%
 # =============================================================================
@@ -26,7 +26,7 @@ tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rdata.vars)
 # =============================================================================
 rsnr = tp.eclass.snr.SNR_Classif(rdata)
 rsnr.signalnoiseratio(rdata.georef, rdata.params, rdata.vars, min_snr=35,
-                      data2correct=rdata.vars, plot_method=(True))
+                      data2correct=rdata.vars, plot_method=True)
 
 # %%
 # =============================================================================
@@ -44,9 +44,15 @@ rnme.clutter_id(rdata.georef, rdata.params, rdata.vars, binary_class=223,
 # Melting layer allocation
 # =============================================================================
 rmlyr = tp.ml.mlyr.MeltingLayer(rdata)
-rmlyr.ml_top = 3.
-rmlyr.ml_thickness = 1.
+rmlyr.ml_top = 1.8
+rmlyr.ml_thickness = 0.85
+rmlyr.ml_bottom = rmlyr.ml_top - rmlyr.ml_thickness
 
+rmlyr.ml_ppidelimitation(rdata.georef, rdata.params, rsnr.vars)
+
+# Plot rhoHV and the ML
+tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rnme.vars,
+                                var2plot='rhoHV [-]', mlyr=rmlyr)
 # %%
 # =============================================================================
 # ZDR calibration
@@ -61,10 +67,15 @@ rczdr.offset_correction(rnme.vars['ZDR [dB]'],
 # =============================================================================
 rattc = tp.attc.attc_zhzdr.AttenuationCorrection(rdata)
 rattc.zh_correction(rdata.georef, rdata.params, rczdr.vars,
-                    rnme.nme_classif['classif'], attc_method='ABRI',
-                    mlyr=rmlyr, pdp_pxavr_azm=3, pdp_dmin=5, plot_method=True,
+                    rnme.nme_classif['classif'], phidp_prepro=True,
+                    attc_method='ABRI', mlyr=rmlyr, pdp_pxavr_azm=3,
+                    pdp_dmin=5, plot_method=True,
                     pdp_pxavr_rng=round(4000/rdata.params['gateres [m]']))
 
+# %%
+# =============================================================================
+# ZDR Attenuation Correction
+# =============================================================================
 rattc.zdr_correction(rdata.georef, rdata.params, rczdr.vars, rattc.vars,
                      rnme.nme_classif['classif'], mlyr=rmlyr, rhv_thld=0.98,
                      minbins=10, mov_avrgf_len=5, p2avrf=3, plot_method=True)
@@ -103,9 +114,6 @@ tp.datavis.rad_display.plot_ppi(rdata.georef, rdata.params, rqpe.r_z_ah,
                                 data_proj=ccrs.OSGB(approx=False),
                                 cpy_feats={'status': True})
 #%%
-# Plot all the radar variables
-tp.datavis.rad_display.plot_setppi(rdata.georef, rdata.params, rdata.vars)
-
 # Plot an interactive PPI explorer
 tp.datavis.rad_interactive.ppi_base(rdata.georef, rdata.params, rnme.vars,
                                     var2plot='rhoHV [-]')

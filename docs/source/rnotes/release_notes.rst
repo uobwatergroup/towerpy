@@ -6,8 +6,28 @@ What’s New In Towerpy
 Summary – Release highlights
 ----------------------------
 
-**Latest release: v1.0.4**
+**Latest release: v1.0.5**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Towerpy v1.0.5
+~~~~~~~~~~~~~~
+::
+  **Towerpy v1.0.5**
+  
+    **Release Date:** 26 Aug., 2024
+
+
+    **New features**
+      #. **AttenuationCorrection**: This version adds a new function to pre-process PhiDP for the attenuation correction in the zh_correction module.
+      #. **MeltingLayer**: A new function (ml_ppidelimitation) was added to delimit the melting layer within the PPI.
+      #. **RadarQPE**: adp_to_r, ah_to_r, and z_ah_to_r now take temperature as input to interpolate the estimator coefficients.
+
+    **Minor corrections**
+      #. Fix minor errors in the datavis module.
+      #. **Attn_Refl_Relation**: The default temperature is set to 20C
+
+    **Deprecations**
+      #. Printing the running time of the functions is now disabled.
 
 Towerpy v1.0.4
 ~~~~~~~~~~~~~~
