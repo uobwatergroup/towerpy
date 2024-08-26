@@ -1,7 +1,6 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import copy
-import time
 import numpy as np
 from scipy.interpolate import interp1d
 from ..utils import unit_conversion as tpuc
@@ -30,7 +29,7 @@ class Attn_Refl_Relation:
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
 
-    def ah_zh(self, rad_vars, var2calc='ZH [dBZ]', rband='C', temp=10.,
+    def ah_zh(self, rad_vars, var2calc='ZH [dBZ]', rband='C', temp=20.,
               coeff_a=None, coeff_b=None, zh_lower_lim=20., zh_upper_lim=50.,
               copy_ofr=True, data2correct=None, plot_method=False):
         r"""
@@ -50,7 +49,7 @@ class Attn_Refl_Relation:
             The string has to be one of 'C' or 'X'. The default is 'C'.
         temp: float
             Temperature, in :math:`^{\circ}C`, used to derive the coefficients
-            according to [1]_. The default is 10.
+            according to [1]_. The default is 20.
         coeff_a, coeff_b: float
             Override the default coefficients of the :math:`A_H(Z_H)`
             relationship. The default are None.
@@ -96,25 +95,17 @@ class Attn_Refl_Relation:
          Estimation. Journal of Hydrometeorology, 16(2), 487-502.
          https://doi.org/10.1175/JHM-D-14-0066.1
         """
-        tic = time.time()
-        # Default values for the temp.
-        temps = np.array((0, 10, 20, 30))
-        # Default values for X-band radars.
-        coeffs_a_rx = np.array((1.62e-4, 1.15e-4, 7.99e-5, 5.5e-5))
-        coeffs_b_rx = np.array((0.74, 0.78, 0.82, 0.86))
-        # Default values for C-band radars.
-        coeffs_a_rc = np.array((4.27e-5, 2.89e-5, 2.09e-5, 1.59e-5))
-        coeffs_b_rc = np.array((0.73, 0.75, 0.76, 0.77))
-        # Interpolate the temp, and coeffs to set the according coeffs.
-        if rband == 'X':
-            coeffs_a, coeffs_b = coeffs_a_rx, coeffs_b_rx
-            icoeff_a = interp1d(temps, coeffs_a_rx)
-            icoeff_b = interp1d(temps, coeffs_b_rx)
-        if rband == 'C':
-            coeffs_a, coeffs_b = coeffs_a_rc, coeffs_b_rc
-            icoeff_a = interp1d(temps, coeffs_a_rc)
-            icoeff_b = interp1d(temps, coeffs_b_rc)
         if coeff_a is None and coeff_b is None:
+            # Default values for the temp
+            temps = np.array((0, 10, 20, 30))
+            # Default values for C- and X-band radars
+            coeffs_a = {'X': np.array((1.62e-4, 1.15e-4, 7.99e-5, 5.5e-5)),
+                        'C': np.array((4.27e-5, 2.89e-5, 2.09e-5, 1.59e-5))}
+            coeffs_b = {'X': np.array((0.74, 0.78, 0.82, 0.86)),
+                        'C': np.array((0.73, 0.75, 0.76, 0.77))}
+            # Interpolate the temp, and coeffs to set the coeffs
+            icoeff_a = interp1d(temps, coeffs_a.get(rband))
+            icoeff_b = interp1d(temps, coeffs_b.get(rband))
             coeff_a = icoeff_a(temp)
             coeff_b = icoeff_b(temp)
         if var2calc == 'ZH [dBZ]':
@@ -163,12 +154,11 @@ class Attn_Refl_Relation:
             # data2cc = dict(data2correct)
             data2cc.update(r_ahzh)
             self.vars = data2cc
-        toc = time.time()
-        print(r'Z_{H} from A_{H} correction running time: '
-              f'{toc-tic:.3f} sec.')
+
         if plot_method:
-            rdd.plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b, coeffs_a,
-                          coeffs_b, temps)
+            rdd.plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b,
+                          coeffs_a.get(rband), coeffs_b.get(rband), temps,
+                          zh_lower_lim, zh_upper_lim)
 
     def av_zv(self, rad_vars, var2calc='ZV [dBZ]', rband='C', temp=10.,
               coeff_a=None, coeff_b=None, zv_lower_lim=20., zv_upper_lim=50.,
@@ -236,25 +226,17 @@ class Attn_Refl_Relation:
          Estimation. Journal of Hydrometeorology, 16(2), 487-502.
          https://doi.org/10.1175/JHM-D-14-0066.1
         """
-        tic = time.time()
-        # Default values for the temp.
-        temps = np.array((0, 10, 20, 30))
-        # Default values for X-band radars.
-        coeffs_a_rx = np.array((1.35e-4, 9.47e-5, 6.5e-5, 4.46e-5))
-        coeffs_b_rx = np.array((0.78, 0.82, 0.86, 0.89))
-        # Default values for C-band radars.
-        coeffs_a_rc = np.array((3.87e-5, 2.67e-5, 1.97e-5, 1.53e-5))
-        coeffs_b_rc = np.array((0.75, 0.77, 0.78, 0.78))
-        # Interpolate the temp, and coeffs to set the according coeffs.
-        if rband == 'X':
-            coeffs_a, coeffs_b = coeffs_a_rx, coeffs_b_rx
-            icoeff_a = interp1d(temps, coeffs_a_rx)
-            icoeff_b = interp1d(temps, coeffs_b_rx)
-        if rband == 'C':
-            coeffs_a, coeffs_b = coeffs_a_rc, coeffs_b_rc
-            icoeff_a = interp1d(temps, coeffs_a_rc)
-            icoeff_b = interp1d(temps, coeffs_b_rc)
         if coeff_a is None and coeff_b is None:
+            # Default values for the temp
+            temps = np.array((0, 10, 20, 30))
+            # Default values for C- and X-band radars
+            coeffs_a = {'X': np.array((1.35e-4, 9.47e-5, 6.5e-5, 4.46e-5)),
+                        'C': np.array((3.87e-5, 2.67e-5, 1.97e-5, 1.53e-5))}
+            coeffs_b = {'X': np.array((0.78, 0.82, 0.86, 0.89)),
+                        'C': np.array((0.75, 0.77, 0.78, 0.78))}
+            # Interpolate the temp, and coeffs to set the coeffs
+            icoeff_a = interp1d(temps, coeffs_a.get(rband))
+            icoeff_b = interp1d(temps, coeffs_b.get(rband))
             coeff_a = icoeff_a(temp)
             coeff_b = icoeff_b(temp)
         if var2calc == 'ZV [dBZ]':
@@ -303,9 +285,7 @@ class Attn_Refl_Relation:
             # data2cc = dict(data2correct)
             data2cc.update(r_avzv)
             self.vars = data2cc
-        toc = time.time()
-        print(r'Z_{V} from A_{V} correction running time: '
-              f'{toc-tic:.3f} sec.')
+
         if plot_method:
-            rdd.plot_zhah(rad_vars, temp, coeff_a, coeff_b, coeffs_a, coeffs_b,
-                          temps)
+            rdd.plot_zhah(rad_vars, temp, coeff_a, coeff_b,
+                          coeffs_a.get(rband), coeffs_b.get(rband), temps)

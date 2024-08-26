@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def plot_color_gradients(category, cmap_list):
     """
-    Helper function to plot data with associated colormap.
+    Plot data with the associated colormaps.
 
     Parameters
     ----------
@@ -53,7 +53,7 @@ def plot_color_gradients(category, cmap_list):
 
 def plot_examples(colormaps, vmin=-5, vmax=5):
     """
-    Helper function to plot data with associated colormap.
+    Plot random data to depict the colormaps.
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ def plot_examples(colormaps, vmin=-5, vmax=5):
 
 def plot_color_gradients_grayscale(cmap_list):
     """
-    Helper function to plot data with associated colormap.
+    Plot random data to depict the colormaps in grayscale.
 
     Parameters
     ----------
@@ -147,7 +147,7 @@ def plot_color_gradients_grayscale(cmap_list):
 def plot_color_gradients_cvd(cmap_list, cvd_type='protanomaly',
                              severity=100):
     """
-    Helper function to plot data with associated colormap.
+    Plot random data to depict the colormaps for CVD.
 
     Parameters
     ----------

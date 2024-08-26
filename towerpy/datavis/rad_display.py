@@ -147,11 +147,6 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
 # =============================================================================
     # dtdes0 = f"[{rad_params['site_name']}]"
     # dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} Deg."
-    if isinstance(rad_params['elev_ang [deg]'], str):
-        dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
-    else:
-        dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
-    dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
     # txtboxs = 'round, rounding_size=0.5, pad=0.5'
     # txtboxc = (0, -.09)
     # fc, ec = 'w', 'k'
@@ -217,6 +212,8 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
         if '[km]' in var2plot:
             cmaph = mpl.colormaps['gist_earth_r']
             cbtks_fmt = 2
+        if '[dB/km]' in var2plot:
+            cbtks_fmt = 2
     if ucmap is not None:
         cmaph = ucmap
 # =============================================================================
@@ -252,6 +249,11 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
             facecolor='none')
 # =============================================================================
     if fig_title is None:
+        if isinstance(rad_params['elev_ang [deg]'], str):
+            dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
+        else:
+            dtdes1 = f"{rad_params['elev_ang [deg]']:{2}.{3}} deg. -- "
+        dtdes2 = f"{rad_params['datetime']:%Y-%m-%d %H:%M:%S}"
         ptitle = dtdes1 + dtdes2
     else:
         ptitle = fig_title
@@ -540,8 +542,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
                 loc = 'top'
 # =============================================================================
             ticks = bnd.get(var2plot[var2plot.find('['):])
-            if len(ticks) > 20:
-                ticks = ticks[::5]
+            if var2plot in lpv.keys():
+                if len(ticks) > 20:
+                    ticks = ticks[::5]
 # =============================================================================
             cax = ax1_divider.append_axes(loc, '7%', pad='15%',
                                           axes_class=plt.Axes)
@@ -596,6 +599,7 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
         Modify the default plot size.
     """
     lpv = {'ZH [dBZ]': [-10, 60, 15], 'ZV [dBZ]': [-10, 60, 15],
+           'AH [dB/km]': [0, 2, 17], 'ADP [dB/km]': [0, .5, 17],
            'ZDR [dB]': [-2, 6, 17], 'PhiDP [deg]': [0, 180, 10],
            'KDP [deg/km]': [-2, 6, 17], 'rhoHV [-]': [0.3, .9, 1],
            'V [m/s]': [-5, 5, 11], 'gradV [dV/dh]': [-1, 0, 11],
@@ -640,9 +644,17 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
         dnorm['nRainfall [mm]'] = mpc.BoundaryNorm(
             bnd['bRainfall [mm]'], mpl.colormaps['tpylsc_rad_rainrt'].N,
             extend='max')
-    if 'bBeam_height [km]' in bnd.keys():
-        dnorm['nBeam_height [km]'] = mpc.BoundaryNorm(
-            bnd['bBeam_height [km]'], mpl.colormaps['gist_earth_r'].N,
+    if 'bbeam_height [km]' in bnd.keys():
+        dnorm['nbeam_height [km]'] = mpc.BoundaryNorm(
+            bnd['bbeam_height [km]'], mpl.colormaps['gist_earth_r'].N,
+            extend='max')
+    if 'bAH [dB/km]' in bnd.keys():
+        dnorm['nAH [dB/km]'] = mpc.BoundaryNorm(
+            bnd['bAH [dB/km]'], mpl.colormaps['tpylsc_rad_pvars'].N,
+            extend='max')
+    if 'bADP [dB/km]' in bnd.keys():
+        dnorm['nADP [dB/km]'] = mpc.BoundaryNorm(
+            bnd['bADP [dB/km]'], mpl.colormaps['tpylsc_rad_pvars'].N,
             extend='max')
     # if unorm is not None:
     #     dnorm.update(unorm)
@@ -723,6 +735,8 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
             cmap = mpl.colormaps['tpylsc_rad_rainrt']
         elif '[m/s]' in key:
             cmap = mpl.colormaps['tpylsc_div_dbu_rd']
+        elif '[dB/km]' in key:
+            cmap = mpl.colormaps['tpylsc_rad_pvars']
         else:
             cmap = mpl.colormaps['tpylsc_rad_pvars']
         f1 = a.pcolormesh(rad_georef['grid_rectx'], rad_georef['grid_recty'],
@@ -736,7 +750,7 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
             a.plot(mlb_idxx, mlb_idxy, c='grey', ls='-', alpha=3/4,
                    path_effects=[pe.Stroke(linewidth=5, foreground='w'),
                                  pe.Normal()], label=r'$MLyr_{(B)}$')
-            a.legend()
+            a.legend(loc='upper left')
         if xlims is not None:
             a.set_xlim(xlims)
         if ylims is not None:
@@ -756,10 +770,12 @@ def plot_setppi(rad_georef, rad_params, rad_vars, xlims=None, ylims=None,
                          )
         else:
             plt.colorbar(f1, ax=a)
-    if len(rad_vars) == 5:
-        f.delaxes(ax[1, 2])
-    if len(rad_vars) == 7:
-        f.delaxes(ax[1, 3])
+    # if len(rad_vars) == 5:
+    #     f.delaxes(ax[1, 2])
+    # if len(rad_vars) == 7:
+    #     f.delaxes(ax[1, 3])
+    if len(rad_vars) % 2 != 0:
+        f.delaxes(ax.flatten()[-1])
     # txtboxc = (1.025, -.10)
     # txtboxc = (-3., -.10)
     # a.annotate('| Created using Towerpy |', xy=txtboxc, fontsize=8,
@@ -1701,7 +1717,7 @@ def plot_zhattcorr(rad_georef, rad_params, rad_vars_att, rad_vars_attcorr,
     if '[-]' in bnd.keys():
         dnorm['[-]'] = mpc.BoundaryNorm(
             bnd['[-]'], mpl.colormaps['tpylsc_useq_fiery'].N,
-            extend='max')
+            extend='neither')
 # =============================================================================
     if mlyr is not None:
         if isinstance(mlyr.ml_top, (int, float)):
@@ -2389,15 +2405,14 @@ def plot_rdqvps(rscans_georef, rscans_params, tp_rdqvp, mlyr=None, ucmap=None,
     spec_range : int, optional
         Range from the radar within which the data was used.
     """
-    tpcm = 'tpylsc_rad_pvars_r'
     if fig_size is None:
         fig_size = (14, 10)
 
-    cmaph = mpl.colormaps[tpcm](np.linspace(0., .8,
-                                            len(rscans_params)))
+    cmaph = mpl.colormaps['Spectral'](
+        np.linspace(0, 1, len(rscans_params)))
     if ucmap is not None:
-        cmaph = mpl.colormaps[ucmap](np.linspace(0, 1,
-                                                 len(rscans_params)))
+        cmaph = mpl.colormaps[ucmap](
+            np.linspace(0, 1, len(rscans_params)))
 
     fontsizelabels = 20
     fontsizetitle = 25
@@ -2659,7 +2674,7 @@ def plot_mfs(path_mfs, norm=True, vars_bounds=None, fig_size=None):
 
 
 def plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b, coeffs_a, coeffs_b,
-              temps, var2calc='ZH [dBZ]',):
+              temps, zh_lower_lim, zh_upper_lim, var2calc='ZH [dBZ]'):
     r"""
     Display the AH-ZH relation.
 
@@ -2686,7 +2701,7 @@ def plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b, coeffs_a, coeffs_b,
     cmap = 'Spectral_r'
     n1 = mpc.LogNorm(vmin=1, vmax=1000)
     gridsize = 200
-    ahzhii = np.arange(20, 50, 0.05)
+    ahzhii = np.arange(zh_lower_lim, zh_upper_lim, 0.05)
     ahzhlii = tpuc.xdb2x(ahzhii)
     ahzhi = coeff_a * ahzhlii ** coeff_b
     if var2calc == 'AH [dB/km]' and 'ZH [dBZ]' in rad_vars.keys():

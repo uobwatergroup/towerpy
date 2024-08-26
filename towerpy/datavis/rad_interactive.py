@@ -204,12 +204,12 @@ class PPI_Int:
         if event.key not in ('n', 'm'):
             return
         if event.key == 'n':
-            inc = 1
-        else:
             inc = -1
+        else:
+            inc = 1
 
         self.lastind[0] += inc
-        self.lastind[0] = np.clip(self.lastind[0], 1, 359)
+        self.lastind[0] = np.clip(self.lastind[0], 0, 359)
         self.update()
 
     def on_key(self, event):
@@ -256,7 +256,7 @@ class PPI_Int:
         f3_axhbeam.plot(intradarrange/1000, rbeamh_b[nangle], c='k')
         f3_axhbeam.set_xlabel('Range [Km]', fontsize=14)
         f3_axhbeam.set_ylabel('Beam height [Km]', fontsize=14)
-        f3_axhbeam.set_ylabel('Beam height [Km]', fontsize=14)
+        # f3_axhbeam.set_ylabel('Beam height [Km]', fontsize=14)
         f3_axhbeam.grid()
 
         if gcoord_sys == 'polar':
@@ -575,6 +575,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             if '[km]' in polradv:
                 cmaph = mpl.colormaps['gist_earth_r']
                 fcb = 2
+            if '[dBZ]' in polradv:
+                cmaph, normp = tpycm_ref, dnorm['[dBZ]']
+                fcb = 0
     else:
         polradv = var2plot
         mrv = rad_vars[polradv]
@@ -606,6 +609,9 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         if '[km]' in polradv:
             cmaph = mpl.colormaps['gist_earth_r']
             fcb = 2
+        if '[dBZ]' in polradv:
+            cmaph, normp = tpycm_ref, dnorm['[dBZ]']
+            fcb = 0
         if polradv in lpv:
             if lpv.get(polradv)[0] > -1 and lpv.get(polradv)[1] < 1:
                 fcb = 2
@@ -656,7 +662,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                                                        foreground='w'),
                                              pe.Normal()],
                                label=r'$MLyr_{(B)}$')
-            f3_axvar2plot.legend()
+            f3_axvar2plot.legend(loc='upper right')
         # else:
         #     prs = ccrs.PlateCarree()
         #     f3_axvar2plot = figradint.add_subplot(intradgs[0:-1, 0:2],
@@ -715,8 +721,8 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                                            / 25)),
                        angle=90)
         f3_axvar2plot.set_xticklabels([])
-    txtboxs = 'round, rounding_size=0.5, pad=0.5'
-    fc, ec = 'w', 'k'
+    # txtboxs = 'round, rounding_size=0.5, pad=0.5'
+    # fc, ec = 'w', 'k'
     # f3_axvar2plot.annotate('| Created using Towerpy |', xy=(0.175, .03),
     #                          fontsize=8, xycoords='axes fraction',
     #                          va='center', ha='center',
@@ -871,6 +877,7 @@ class HTI_Int:
         hviax.grid(axis='both')
         hviax.set_title(f"{intscdt[idxdt]:%Y-%m-%d %H:%M:%S}", fontsize=24)
         hviax.set_xlabel(ppvar, fontsize=24, labelpad=15)
+        # hviax.set_xlim(35, 55)
         figprofsint.canvas.draw()
 
 
@@ -947,32 +954,27 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
         value, tpycm_plv.N, extend='both')
              for key, value in bnd.items()}
     if 'bZH [dBZ]' in bnd.keys():
-        dnorm['nZH [dBZ]'] = mpc.BoundaryNorm(bnd['bZH [dBZ]'],
-                                                  tpycm_ref.N,
-                                                  extend='both')
+        dnorm['nZH [dBZ]'] = mpc.BoundaryNorm(
+            bnd['bZH [dBZ]'], tpycm_ref.N, extend='both')
     if 'bZV [dBZ]' in bnd.keys():
-        dnorm['nZV [dBZ]'] = mpc.BoundaryNorm(bnd['bZV [dBZ]'],
-                                                  tpycm_ref.N,
-                                                  extend='both')
+        dnorm['nZV [dBZ]'] = mpc.BoundaryNorm(
+            bnd['bZV [dBZ]'], tpycm_ref.N, extend='both')
     if 'brhoHV [-]' in bnd.keys():
-        dnorm['nrhoHV [-]'] = mpc.BoundaryNorm(bnd['brhoHV [-]'],
-                                                   tpycm_plv.N, extend='min')
+        dnorm['nrhoHV [-]'] = mpc.BoundaryNorm(
+            bnd['brhoHV [-]'], tpycm_plv.N, extend='min')
     if 'bRainfall [mm/h]' in bnd.keys():
-        bnrr = mpc.BoundaryNorm(bnd['bRainfall [mm/h]'], tpycm_rnr.N,
-                                    extend='max')
+        bnrr = mpc.BoundaryNorm(
+            bnd['bRainfall [mm/h]'], tpycm_rnr.N, extend='max')
         dnorm['nRainfall [mm/h]'] = bnrr
     if 'bZDR [dB]' in bnd.keys():
-        dnorm['nZDR [dB]'] = mpc.BoundaryNorm(bnd['bZDR [dB]'],
-                                                  tpycm_2slope.N,
-                                                  extend='both')
+        dnorm['nZDR [dB]'] = mpc.BoundaryNorm(
+            bnd['bZDR [dB]'], tpycm_2slope.N, extend='both')
     if 'bKDP [deg/km]' in bnd.keys():
-        dnorm['nKDP [deg/km]'] = mpc.BoundaryNorm(bnd['bKDP [deg/km]'],
-                                                      tpycm_2slope.N,
-                                                      extend='both')
+        dnorm['nKDP [deg/km]'] = mpc.BoundaryNorm(
+            bnd['bKDP [deg/km]'], tpycm_2slope.N, extend='both')
     if 'bV [m/s]' in bnd.keys():
-        dnorm['nV [m/s]'] = mpc.BoundaryNorm(bnd['bV [m/s]'],
-                                                 tpycm_dv.N,
-                                                 extend='both')
+        dnorm['nV [m/s]'] = mpc.BoundaryNorm(
+            bnd['bV [m/s]'], tpycm_dv.N, extend='both')
     if var2plot is None or var2plot == 'ZH [dBZ]':
         var2plot = 'ZH [dBZ]'
         prflv = var2plot
@@ -992,8 +994,9 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
         if '[dV/dh]' in var2plot:
             cmaph = tpycm_dv
             fcb = 1
-        if lpv.get(var2plot)[0] > -1 and lpv.get(var2plot)[1] < 1:
-            fcb = 2
+        if var2plot in lpv:
+            if lpv.get(var2plot)[0] > -1 and lpv.get(var2plot)[1] < 1:
+                fcb = 2
     if ucmap is not None:
         cmaph = ucmap
     tcks = bnd.get('b'+var2plot)
@@ -1131,8 +1134,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
     htiplt.xaxis.set_major_formatter(formatter)
     mpl.rcParams['xtick.labelsize'] = 20
     mpl.rcParams['timezone'] = tz
-    txtboxs = 'round, rounding_size=0.5, pad=0.5'
-    fc, ec = 'w', 'k'
+    # txtboxs = 'round, rounding_size=0.5, pad=0.5'
+    # fc, ec = 'w', 'k'
     # htiplt.annotate('| Created using Towerpy |', xy=(0.02, -.1), fontsize=8,
     #                 xycoords='axes fraction', va='center', ha='center',
     #                 bbox=dict(boxstyle=txtboxs, fc=fc, ec=ec))

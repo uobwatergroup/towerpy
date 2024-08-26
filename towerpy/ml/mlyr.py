@@ -5,12 +5,13 @@ from itertools import product
 import numpy as np
 from ..base import TowerpyError
 from ..utils import radutilities as rut
+from ..datavis import rad_display
 from ..datavis import rad_interactive
 
 
 class MeltingLayer:
     """
-    A class to detect the melting layer using polarimetric weather radar data.
+    A class to determine the melting layer using weather radar data.
 
     Attributes
     ----------
@@ -362,8 +363,8 @@ class MeltingLayer:
                 comb_mult_w = [i-(param_w*(np.gradient(np.gradient(i))))
                                for i in comb_mult]
                 mlrand = [MeltingLayer.findpeaksboundaries(
-                    i, pol_profs.georef['profiles_height [km]'][idxml_btm_it1:idxml_top_it1],
-                    param_w=param_w)
+                        i, pol_profs.georef['profiles_height [km]'][idxml_btm_it1:idxml_top_it1],
+                        param_w=param_w)
                           for i in comb_mult_w]
                 for i, j in enumerate(mlrand):
                     if mlrand[i]['peakmaxvalue'] < param_k:
@@ -401,3 +402,67 @@ class MeltingLayer:
             self.ml_bottom = np.nan
             self.ml_thickness = np.nan
             self.profpeakv = np.nan
+
+    def ml_ppidelimitation(self, rad_georef, rad_params, rad_vars,
+                           classid=None, plot_method=False):
+        """
+        Create a PPI depicting the limits of the melting layer.
+
+        Parameters
+        ----------
+        rad_georef : dict
+            Georeferenced data containing descriptors of the azimuth, gates
+            and beam height, amongst others.
+        rad_params : dict
+            Radar technical details.
+        rad_vars : dict
+            Radar variables used to identify the clutter echoes.
+        classid : dict, optional
+            Modifies the key/values of the melting layer delimitation
+            (regionID). The default are the same as in regionID.
+        plot_method : bool, optional
+            Plot the results of the ML delimitation. The default is False.
+
+        Attributes
+        ----------
+        regionID : dict
+            Key/values of the rain limits:
+                'rain' = 1
+
+                'mlyr' = 2
+
+                'solid_pcp' = 3
+        """
+        ml_top = self.ml_top
+        ml_thickness = self.ml_thickness
+        ml_bottom = self.ml_bottom
+        self.regionID = {'rain': 1.,
+                         'mlyr': 2.,
+                         'solid_pcp': 3.}
+        if classid is not None:
+            self.regionID.update(classid)
+        if np.isnan(ml_bottom):
+            ml_bottom = ml_top - ml_thickness
+        if isinstance(ml_top, (int, float)):
+            mlt_idx = [rut.find_nearest(nbh, ml_top)
+                       for nbh in rad_georef['beam_height [km]']]
+        elif isinstance(ml_top, (np.ndarray, list, tuple)):
+            mlt_idx = [rut.find_nearest(nbh, ml_top[cnt])
+                       for cnt, nbh in
+                       enumerate(rad_georef['beam_height [km]'])]
+        if isinstance(ml_bottom, (int, float)):
+            mlb_idx = [rut.find_nearest(nbh, ml_bottom)
+                       for nbh in rad_georef['beam_height [km]']]
+        elif isinstance(ml_bottom, (np.ndarray, list, tuple)):
+            mlb_idx = [rut.find_nearest(nbh, ml_bottom[cnt])
+                       for cnt, nbh in
+                       enumerate(rad_georef['beam_height [km]'])]
+        ashape = np.zeros_like(rad_vars[[i for i in rad_vars.keys()][0]])
+        for cnt, azi in enumerate(ashape):
+            azi[:mlb_idx[cnt]] = self.regionID['rain']
+            azi[mlt_idx[cnt]:] = self.regionID['solid_pcp']
+        ashape[ashape == 0] = self.regionID['mlyr']
+        self.mlyr_limits = {'pcp_region [cc]': ashape}
+        if plot_method:
+            rad_display.plot_ppi(rad_georef, rad_params, self.mlyr_limits,
+                                 ucmap='tpylc_div_yw_gy_bu')

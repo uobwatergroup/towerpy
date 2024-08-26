@@ -115,7 +115,6 @@ class NME_ID:
             46(7), 1892-1904. https://doi.org/10.1109/TGRS.2008.916979
 
         """
-        tic = time.time()
         self.echoesID = {'meteorological_echoes': 0,
                          'noise': 3,
                          'clutter': 5}
@@ -198,9 +197,7 @@ class NME_ID:
             # ccpoldata = {'classif': clc,
             #              'clutter_map': clmap}
         self.nme_classif = ccpoldata
-        toc = time.time()
-        print(r'Clutter classification running time: '
-              f'{toc-tic:.3f} sec.')
+
         if plot_method:
             if clmap is not None:
                 rad_display.plot_nmeclassif(rad_georef, rad_params, clc, clmap)

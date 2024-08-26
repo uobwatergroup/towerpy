@@ -177,14 +177,14 @@ def maf_radial(rad_vars, maf_len=3, maf_ignorenan=True, maf_extendvalid=False,
         v.append(maf_len)
 
     if maf_ignorenan:
-        m = np.full(rad_vars['ZH [dBZ]'].shape, 0.)
+        m = np.full(rad_vars[list(rad_vars.keys())[0]].shape, 0.)
         for k, v in rad_vars.items():
             m[v < lpv[k][0]] = np.nan
             m[v > lpv[k][1]] = np.nan
         vars_mask = {keys: np.ma.masked_invalid(np.ma.masked_array(values, m))
                      for keys, values in rad_vars.items()}
     else:
-        m = np.full(rad_vars['ZH [dBZ]'].shape, 1.)
+        m = np.full(rad_vars[list(rad_vars.keys())[0]].shape, 1.)
         for k, v in rad_vars.items():
             m[v < lpv[k][0]] = np.nan
             m[v > lpv[k][1]] = np.nan
@@ -280,6 +280,41 @@ def get_windows_data(wdw_size, wdw_coords, array2extract):
     else:
         wdw = print('The window rows/columns must be and odd numer')
     return wdw
+
+
+def rolling_window(a, window, mode='constant', constant_values=np.nan):
+    """
+    Compute a rolling window using np.lib.stride_tricks for fast computation.
+
+    Parameters
+    ----------
+    a : array
+        Array to be smoothed.
+    window : 2-element tuple or list, optional
+        Window size (m, n) used to apply a moving average filter. m and n must
+        be odd numbers for the m-rays and n-gates. The default is (1, 3).
+    mode : str, optional
+        Mode used to pad the array. See numpy.pad for more information.
+        The default is 'constant'.
+    constant_values : int or float, optional
+        Used in 'constant'. The values to set the padded values for each axis.
+        The default is np.nan.
+
+    Notes
+    -----
+        It is expected to pad arrays that represent radar data in polar format.
+        Thus, the rays are wrapped, and the gates are extended for consistency.
+    """
+    if mode == 'edge':
+        apad = np.pad(a, ((0, 0), (window[1]//2, window[1]//2)),
+                      mode='edge')
+    elif mode == 'constant':
+        apad = np.pad(a, ((0, 0), (window[1]//2, window[1]//2)),
+                      mode='constant', constant_values=(constant_values))
+    if window[0] > 1:
+        apad = np.pad(apad, ((window[0]//2, window[0]//2), (0, 0)),
+                      mode='wrap')
+    return np.lib.stride_tricks.sliding_window_view(apad, window)[:, :, 0]
 
 
 def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3], classid=None):
