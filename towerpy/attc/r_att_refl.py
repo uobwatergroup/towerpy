@@ -129,6 +129,11 @@ class Attn_Refl_Relation:
                 r_ahzh['ZH [dBZ]'][ind] = rvars['ZH [dBZ]'][ind]
                 ind = np.isnan(r_ahzh['ZH [dBZ]'])
                 r_ahzh['ZH [dBZ]'][ind] = rvars['ZH [dBZ]'][ind]
+            zh_diff = (tpuc.xdb2x(rad_vars['ZH [dBZ]'])
+                       / tpuc.xdb2x(r_ahzh['ZH [dBZ]']))
+            zh_diff[np.isinf(zh_diff)] = np.nan
+            zh_diffdbZ = tpuc.x2xdb(zh_diff)
+            r_ahzh['diff [dBZ]'] = zh_diffdbZ
         if var2calc == 'AH [dB/km]':
             # Copy the original dict to keep variables unchanged
             rvars = copy.deepcopy(rad_vars)
@@ -156,9 +161,10 @@ class Attn_Refl_Relation:
             self.vars = data2cc
 
         if plot_method:
-            rdd.plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b,
-                          coeffs_a.get(rband), coeffs_b.get(rband), temps,
-                          zh_lower_lim, zh_upper_lim)
+            if var2calc == 'ZH [dBZ]':
+                rdd.plot_zhah(rad_vars, r_ahzh, temp, coeff_a, coeff_b,
+                              coeffs_a.get(rband), coeffs_b.get(rband), temps,
+                              zh_lower_lim, zh_upper_lim)
 
     def av_zv(self, rad_vars, var2calc='ZV [dBZ]', rband='C', temp=10.,
               coeff_a=None, coeff_b=None, zv_lower_lim=20., zv_upper_lim=50.,

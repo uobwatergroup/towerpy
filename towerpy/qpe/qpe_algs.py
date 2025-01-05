@@ -94,8 +94,8 @@ class RadarQPE:
             # Interpolate the temp and coeffs to set coeffs a and b
             icoeff_a = interp1d(temps, coeffs_a.get(rband))
             icoeff_b = interp1d(temps, coeffs_b.get(rband))
-            coeff_a = icoeff_a(temp)
-            coeff_b = icoeff_b(temp)
+            coeff_a = icoeff_a(temp).item()
+            coeff_b = icoeff_b(temp).item()
         else:
             coeff_a = a
             coeff_b = b
@@ -114,8 +114,8 @@ class RadarQPE:
         nanidx = np.where(np.isnan(adp))
         adpr[nanidx] = np.nan
         r = {'Rainfall [mm/h]': coeff_a*adp**coeff_b}
-        r['coeff_a'] = coeff_a.item()
-        r['coeff_b'] = coeff_b.item()
+        r['coeff_a'] = coeff_a
+        r['coeff_b'] = coeff_b
         self.r_adp = r
 
     def ah_to_r(self, ah, rband='C', temp=20., a=None, b=None, mlyr=None,
@@ -184,8 +184,8 @@ class RadarQPE:
             # Interpolate the temp and coeffs to set coeffs a and b
             icoeff_a = interp1d(temps, coeffs_a.get(rband))
             icoeff_b = interp1d(temps, coeffs_b.get(rband))
-            coeff_a = icoeff_a(temp)
-            coeff_b = icoeff_b(temp)
+            coeff_a = icoeff_a(temp).item()
+            coeff_b = icoeff_b(temp).item()
         else:
             coeff_a = a
             coeff_b = b
@@ -204,8 +204,8 @@ class RadarQPE:
         nanidx = np.where(np.isnan(ah))
         ahr[nanidx] = np.nan
         r = {'Rainfall [mm/h]': coeff_a*ahr**coeff_b}
-        r['coeff_a'] = coeff_a.item()
-        r['coeff_b'] = coeff_b.item()
+        r['coeff_a'] = coeff_a
+        r['coeff_b'] = coeff_b
         self.r_ah = r
 
     def kdp_to_r(self, kdp, a=24.68, b=0.81, beam_height=None, mlyr=None):
@@ -541,8 +541,8 @@ class RadarQPE:
             # Interpolate the temp and coeffs to set coeffs a and b
             icoeff_a = interp1d(temps, coeffs_a.get(rband))
             icoeff_b = interp1d(temps, coeffs_b.get(rband))
-            coeff_a = icoeff_a(temp)
-            coeff_b = icoeff_b(temp)
+            coeff_a = icoeff_a(temp).item()
+            coeff_b = icoeff_b(temp).item()
         else:
             coeff_a = rah_a
             coeff_b = rah_b

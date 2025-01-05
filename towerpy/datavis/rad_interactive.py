@@ -431,7 +431,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
            'PhiDP [deg]': [0, 180, 10], 'KDP [deg/km]': [-2, 6, 17],
            'rhoHV [-]': [0.3, .9, 1], 'V [m/s]': [-5, 5, 11],
            'gradV [dV/dh]': [-1, 0, 11],  # 'LDR [dB]': [-35, 0, 11],
-           'Rainfall [mm/h]': [0, 64, 11], 'Rainfall [mm]': [0, 200, 14],
+           'Rainfall [mm/h]': [0.1, 64, 11], 'Rainfall [mm]': [0, 200, 14],
            'beam_height [km]': [0, 7, 36]}
     if vars_bounds is not None:
         lpv.update(vars_bounds)
@@ -500,10 +500,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    if vars_bounds is None:
-        bnd['[mm/h]'] = np.array((0, 1, 2, 4, 8, 12, 16, 20, 24, 30, 36, 48,
-                                 56, 64))
-        bnd['[mm]'] = np.array((0, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+    if vars_bounds is None or 'Rainfall [mm/h]' not in vars_bounds.keys():
+        bnd['[mm/h]'] = np.array((0.1, 1, 2, 4, 8, 12, 16, 20, 24, 30,
+                                  36, 48, 56, 64))
+    if vars_bounds is None or 'Rainfall [mm]' not in vars_bounds.keys():
+        bnd['[mm]'] = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
                                 75, 100, 150, 200))
 
     dnorm = {key: mpc.BoundaryNorm(
@@ -565,7 +566,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             if '[mm/h]' in polradv:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
                 tcks = bnd['[mm/h]']
-                cmaph.set_under('w')
+                cmaph.set_under('whitesmoke')
                 fcb = 1
             if '[mm]' in polradv:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
@@ -599,7 +600,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         if '[mm/h]' in polradv:
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             tcks = bnd['[mm/h]']
-            cmaph.set_under('w')
+            cmaph.set_under('whitesmoke')
             # fcb = 1
         if '[mm]' in polradv:
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
@@ -809,7 +810,8 @@ class HTI_Int:
                           label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
+        hviax.legend(by_label.values(), by_label.keys(), fontsize=16,
+                     loc='upper left')
         hviax.grid(axis='both')
         hviax.set_title(f"{intscdt[idxdt]:%Y-%m-%d %H:%M:%S}", fontsize=24)
         hviax.set_xlabel(label, fontsize=24, labelpad=15)
@@ -873,7 +875,8 @@ class HTI_Int:
                           label='$MLyr_{(B)}$')
         handles, labels = hviax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        hviax.legend(by_label.values(), by_label.keys(), fontsize=16, loc=2)
+        hviax.legend(by_label.values(), by_label.keys(), fontsize=16,
+                     loc='upper left')
         hviax.grid(axis='both')
         hviax.set_title(f"{intscdt[idxdt]:%Y-%m-%d %H:%M:%S}", fontsize=24)
         hviax.set_xlabel(ppvar, fontsize=24, labelpad=15)
@@ -935,7 +938,7 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
            'PhiDP [deg]': [0, 180, 10], 'KDP [deg/km]': [-2, 6, 17],
            'rhoHV [-]': [0.3, .9, 1], 'V [m/s]': [-5, 5, 11],
            'gradV [dV/dh]': [-1, 0, 11],  # 'LDR [dB]': [-35, 0, 11],
-           'Rainfall [mm/h]': [0, 64, 11], 'Rainfall [mm]': [0, 200, 14],
+           'Rainfall [mm/h]': [0.1, 64, 11], 'Rainfall [mm]': [0.1, 200, 14],
            'beam_height [km]': [0, 7, 36]}
     if vars_bounds is not None:
         lpv.update(vars_bounds)
@@ -944,10 +947,11 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
            else np.hstack((np.linspace(value[0], value[1], 4)[:-1],
                            np.linspace(value[1], value[2], 11)))
            for key, value in lpv.items()}
-    if vars_bounds is None:
-        bnd['[mm/h]'] = np.array((0, 1, 2, 4, 8, 12, 16, 20, 24, 30, 36, 48,
+    if vars_bounds is None or 'Rainfall [mm/h]' not in vars_bounds.keys():
+        bnd['[mm/h]'] = np.array((0.1, 1, 2, 4, 8, 12, 16, 20, 24, 30, 36, 48,
                                  56, 64))
-        bnd['[mm]'] = np.array((0, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+    if vars_bounds is None or 'Rainfall [mm]' not in vars_bounds.keys():
+        bnd['[mm]'] = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
                                 75, 100, 150, 200))
 
     dnorm = {'n'+key[1:]: mpc.BoundaryNorm(
@@ -1220,8 +1224,8 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     at = AnchoredText('Initial identification of the \n' +
                       'Melting Layer signatures \n'
                       'combining the normalised \n' +
-                      r'profiles of $Z_H$ and $\rho_{HV}$',
-                      loc=10, prop=dict(size=12, color='white'), frameon=False)
+                      r'profiles of $Z_H$ and $\rho_{HV}$', loc='center',
+                      prop=dict(size=12, color='white'), frameon=False)
     cax.add_artist(at)
 
     # =============================================================================
@@ -1271,10 +1275,10 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     cax.set_facecolor('slategrey')
     at = AnchoredText('Detection of the ML boundaries \n' +
                       'for a given combination of\n' +
-                      'polarimetric profiles.\n',
+                      'polarimetric profiles.\n', loc='center',
                       # 'The 1st and 2nd derivative are \n' +
                       # ' also shown 10.5194/amt-14-2873-2021',
-                      loc=10, prop=dict(size=12, color='white'), frameon=False)
+                      prop=dict(size=12, color='white'), frameon=False)
     cax.add_artist(at)
 
     # =============================================================================
@@ -1318,10 +1322,10 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
     cax.set_facecolor('slategrey')
     at = AnchoredText('Use the slider to assess the \n' +
                       'performance of each profile \n' +
-                      'combination for detecting the ML.',
+                      'combination for detecting the ML.', loc='center',
                       # 'The 1st and 2nd derivative are \n' +
                       # ' also shown 10.5194/amt-14-2873-2021',
-                      loc=10, prop=dict(size=12, color='white'), frameon=False)
+                      prop=dict(size=12, color='white'), frameon=False)
     cax.add_artist(at)
 
     # ax_amp = plt.axes([0.25, 0.15, 0.65, 0.03])

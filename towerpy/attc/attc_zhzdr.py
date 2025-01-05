@@ -191,7 +191,6 @@ class AttenuationCorrection:
             minthr_pdp0 = phidp_prepro_argso['minthr_pdp0']
             rhohv_min = phidp_prepro_argso['rhohv_min']
             t_spdp = phidp_prepro_argso['t_spdp']
-            nrays = rad_params['nrays']
             ngates = rad_params['ngates']
             attvars = copy.copy(attvars)
 
@@ -213,8 +212,9 @@ class AttenuationCorrection:
                   and (np.isnan(phidp_pad[nr][nbin-1])
                        and np.isnan(phidp_pad[nr][nbin+1]))
                   else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0 and nbin != phidp_pad.shape[1]-1]
-                 for nr in range(phidp_pad.shape[0])])
+                  if nbin != 0
+                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
             # Filter using rhoHV
             phidp_dspk[attvars['rhoHV [-]'] < rhohv_min] = np.nan
             # Computes sPhiDP for each ray
@@ -230,16 +230,18 @@ class AttenuationCorrection:
                   and (phidp_pad[nr][nbin-1] >= t_spdp
                        or phidp_pad[nr][nbin+1] >= t_spdp)
                   else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0 and nbin != phidp_pad.shape[1]-1]
-                 for nr in range(phidp_pad.shape[0])])
+                  if nbin != 0
+                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
             # Filter isolated values
             phidp_sfnv2 = np.array(
                 [[np.nan if ~np.isnan(vbin)
                     and (np.isnan(phidp_pad[nr][nbin-1])
                          or np.isnan(phidp_pad[nr][nbin+1]))
                   else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0 and nbin != phidp_pad.shape[1]-1]
-                 for nr in range(phidp_pad.shape[0])])
+                  if nbin != 0
+                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
             phidp_sfnv = phidp_sfnv*phidp_sfnv2
             phidp_f = phidp_dspk_rhv * phidp_sfnv
             # Filter isolated values
@@ -251,19 +253,22 @@ class AttenuationCorrection:
                   and (np.isnan(phidp_pad[nr][nbin-1])
                        or np.isnan(phidp_pad[nr][nbin+1]))
                   else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0 and nbin != phidp_pad.shape[1]-1]
-                 for nr in range(phidp_pad.shape[0])])
+                  if nbin != 0
+                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
             phidp_f = phidp_f * phidp_f2
-            # Computes and initial PhiDP(0)
+            # Computes initial PhiDP(0)
             phidp0 = np.array([[np.nanmedian(
                 nr[np.isfinite(nr)][:mov_avrgf_len[1]+1])
                 if ~np.isnan(nr).all() else 0
-                for nr in phidp_f]]).transpose()
+                for nr in phidp_f]], dtype=np.float64).transpose()
+            phidp0[phidp0 == 0] = np.nanmedian(phidp0[phidp0 != 0])
             phidp0t = np.tile(phidp0, (1, mov_avrgf_len[1] + 1))
             phidp_f[:, : mov_avrgf_len[1] + 1] = phidp0t
             # Add phidp0
             phidp_f = np.array([nr - phidp0[cr]
-                                for cr, nr in enumerate(phidp_f)])
+                                for cr, nr in enumerate(phidp_f)],
+                               dtype=np.float64)
             # Computes a MAV
             phidp_m = maf_radial(
                 {'PhiDPi [deg]': phidp_f}, maf_len=mov_avrgf_len[1],
@@ -277,15 +282,17 @@ class AttenuationCorrection:
                   and (np.isnan(phidp_pad[nr][nbin-1])
                        or np.isnan(phidp_pad[nr][nbin+1]))
                   else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0 and nbin != phidp_pad.shape[1]-1]
-                 for nr in range(phidp_pad.shape[0])])
+                  if nbin != 0
+                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
             phidp_m = phidp_m * phidp_f2
             # Interpolation and final filtering
             itprng = np.array(range(ngates))
             phidp_i = {'PhiDPi [deg]': np.array(
                 [interp_nan(itprng, nr, nan_type='nan') if ~np.isnan(nr).all()
-                 else nr for nr in phidp_m])}
-            phidp_i['PhiDPi [deg]'][:, : mov_avrgf_len[1] + 1] = phidp_f[:, : mov_avrgf_len[1] + 1]
+                 else nr for nr in phidp_m], dtype=np.float64)}
+            phidp_i['PhiDPi [deg]'][:, : mov_avrgf_len[
+                1] + 1] = phidp_f[:, : mov_avrgf_len[1] + 1]
             phidp_i = {'PhiDPi [deg]': np.array(
                 [fillnan1d(i) for i in phidp_i['PhiDPi [deg]']])}
             # Apply a moving average filter to the whole PPI
@@ -394,11 +401,12 @@ class AttenuationCorrection:
         self.vars = attcorr
 
         if plot_method:
-            rad_display.plot_zhattcorr(rad_georef, rad_params, attvars,
-                                       attcorr, mlyr=mlyr,
-                                       vars_bounds={'alpha [-]':
-                                                    [0,
-                                                     coeff_alpha[1], 11]})
+            rad_display.plot_zhattcorr(
+                rad_georef, rad_params, attvars, attcorr, mlyr=mlyr,
+                vars_bounds={'alpha [-]':
+                             [0,
+                              round((coeff_alpha[1]+(coeff_alpha[1]*.1))*100,
+                                    -1)/100, 11]})
 
     def zdr_correction(self, rad_georef, rad_params, attvars, attcorr_vars,
                        cclass, mlyr=None, attc_method='BRI',
