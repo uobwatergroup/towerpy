@@ -1,8 +1,9 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
+import copy
+import cartopy.io.shapereader as shpreader
 import numpy as np
 from scipy import interpolate
-import cartopy.io.shapereader as shpreader
 
 
 def find_nearest(iarray, val2search):
@@ -359,3 +360,96 @@ def compute_texture(tpy_coordlist, rad_vars, wdw_size=[3, 3], classid=None):
 
     rvars = {k: vtxt[k] | vval[k] for k in echoesID.keys()}
     return rvars
+
+
+def idx_consecutive(array1d, step_size=1, group_size=1):
+    """
+    Find the index of consecutive non-nan values within a 1D array.
+
+    Parameters
+    ----------
+    array1d : array_like
+        Input 1-D array.
+    stepsize : int or float, optional
+        Difference between consecutive elements. The default is 1.
+    group_size : int, optional
+        Minimum size of the grouped consecutive-valid values.
+        The default is 3.
+    """
+    # IDX of non-nan values
+    idx_valid = np.nonzero(~np.isnan(array1d))[0]
+    # Group consecutive non-nan values
+    cons_group = np.split(
+        idx_valid, np.where(np.diff(idx_valid) != step_size)[0]+1)
+    cons_idx = np.hstack([i for i in cons_group if len(i) >= group_size])
+    return cons_idx
+
+
+def lsinterference_filter(rvars2filter, rhv_min=0.6, data2correct=None):
+    """
+    Filter linear signatures and speckles using rhoHV [-].
+
+    Parameters
+    ----------
+    rvars2filter : dict
+        Radar variables affected by linear signatures and speckles.
+    rhv_min : float, optional
+       Minimal threshold in rhoHV [-] used to discard non-meteorological
+       scatterers. The default is 0.6.
+    data2correct : dict, optional
+        Dictionary to be updated with the filtered radar variables.
+        The default is None.
+    """
+    window = (3, 3)
+    mode = 'constant'
+    arr_rhohv = rvars2filter['rhoHV [-]'].copy()
+    constant_values = np.nan
+    # Create a padded array
+    if mode == 'edge':
+        apad = np.pad(arr_rhohv, ((0, 0), (window[1]//2, window[1]//2)),
+                      mode='edge')
+    elif mode == 'constant':
+        apad = np.pad(arr_rhohv, ((0, 0), (window[1]//2, window[1]//2)),
+                      mode='constant', constant_values=(constant_values))
+    if window[0] > 1:
+        apad = np.pad(apad, ((window[0]//2, window[0]//2), (0, 0)),
+                      mode='wrap')
+    # Check that all sorrounding values of pixel are nan to remove speckles
+    spckl1 = np.array([[np.nan if ~np.isnan(vbin)
+                        and np.isnan(apad[nray-1][nbin-1])
+                        and np.isnan(apad[nray-1][nbin])
+                        and np.isnan(apad[nray-1][nbin+1])
+                        and np.isnan(apad[nray][nbin-1])
+                        and np.isnan(apad[nray][nbin+1])
+                        and np.isnan(apad[nray+1][nbin-1])
+                        and np.isnan(apad[nray+1][nbin])
+                        and np.isnan(apad[nray+1][nbin+1])
+                        else 1
+                        for nbin, vbin in enumerate(apad[nray])
+                        if nbin != 0 and nbin != apad.shape[1]-1]
+                       for nray in range(apad.shape[0])
+                       if nray != 0 and nray != apad.shape[0]-1])
+    spckl1[:, 0] = np.nan
+    # Filter using rhohv threshold.
+    spckl1[rvars2filter['rhoHV [-]'] <= rhv_min] = np.nan
+    # Detect linear signatures.
+    spckl2 = np.array([[np.nan if ~np.isnan(vbin)
+                        and np.isnan(apad[nray-1][nbin])
+                        and np.isnan(apad[nray+1][nbin]) else 1
+                        for nbin, vbin in enumerate(apad[nray])
+                        if nbin != 0 and nbin != apad.shape[1]-1]
+                       for nray in range(apad.shape[0])
+                       if nray != 0 and nray != apad.shape[0]-1])
+    spckl1[:, 0] = 1
+    if data2correct is not None:
+        rdataflt = copy.deepcopy(data2correct)
+        for key in rdataflt:
+            rdataflt[key] = rdataflt[key]*(spckl1 * spckl2)
+        return rdataflt
+    else:
+        return spckl1 * spckl2
+
+
+def linspace_step(start, stop, step):
+    """Like np.linspace but uses step instead of num."""
+    return np.linspace(start, stop, int((stop - start) / step + 1))

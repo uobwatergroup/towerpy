@@ -6,8 +6,28 @@ What’s New In Towerpy
 Summary – Release highlights
 ----------------------------
 
-**Latest release: v1.0.5**
+**Latest release: v1.0.6**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Towerpy v1.0.6
+~~~~~~~~~~~~~~
+::
+  **Towerpy v1.0.6**
+  
+    **Release Date:** 5 Jan., 2025
+
+
+    **New features**
+      #. **PhiDP_Calibration**: This version adds new functions to estimate PhiDP(0).
+      #. **plot_ppidiff**: Adds a function to plot the difference between a radar variable from different dicts.
+      #. **radutilities**: Adds a function to filter linear signatures and speckles.
+
+    **Minor corrections**
+      #. Fix an error in the pre-process PhiDP (zh_correction) module when changing the window size.
+      #. **rad_display** and **rad_interactive**: Adds location to legends.
+
+    **Deprecations**
+      #. None
 
 Towerpy v1.0.5
 ~~~~~~~~~~~~~~
