@@ -5,7 +5,7 @@ from os import path
 
 setup(
       name='towerpy-rd',
-      version='1.0.6',
+      version='1.0.7',
       description='Toolbox for processing polarimetric weather radar data',
       url='https://github.com/uobwatergroup/towerpy',
       author='Daniel Sanchez-Rivas and Miguel A Rico-Ramirez',

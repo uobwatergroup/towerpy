@@ -44,10 +44,170 @@ class AttenuationCorrection:
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
 
+    def attc_phidp_prepro(self, rad_georef, rad_params, attvars,
+                          mov_avrgf_len=(1, 3), t_spdp=10, minthr_pdp0=-5,
+                          rhohv_min=0.90, phidp0_correction=True):
+        r"""
+        Prepare :math:`\Phi_{DP}` for attenuation correction.
+
+        Parameters
+        ----------
+        rad_georef : dict
+            Georeferenced data containing descriptors of the azimuth, gates
+            and beam height, amongst others.
+        rad_params : dict
+            Radar technical details.
+        attvars : dict
+            Polarimetric variables used for the attenuation correction.
+        mov_avrgf_len : 2-element tuple or list, optional
+            Window size used to smooth :math:`\Phi_{DP}` by applying a
+            moving average window. The default is (1, 3). It is
+            recommended to average :math:`\Phi_{DP}` along the range,
+            i.e. keep the window size in a (1, n) size.
+        t_spdp: int or float, optional
+            Discard bins with standard deviations of :math:`\Phi_{DP}`
+            greater than the selected value. The default is 10 deg.
+        minthr_pdp0: int or float, optional
+            Tolerance for the true value of :math:`\Phi_{DP}(r0)`.
+            Values below this threshold are removed.
+            The default is -5 deg.
+        rhohv_min: float, optional
+            Threshold in :math:`\rho_{HV}` used to discard bins
+            related to nonmeteorological
+            signals. The default is 0.90
+        phidp0_correction : Bool, optional
+            If True, adjust :math:`\Phi_{DP}(r0)` for each individual
+            ray.
+
+        Notes
+        -----
+        1. This function smooths the total :math:`\Phi_{DP}` using
+        the given window size, remove spurious values within the signal
+        phase, etc.
+
+        2. :math:`\Phi_{DP}` must have been previously unfolded and
+        offset (:math:`\Phi_{DP}(r0)`) corrected.
+
+        """
+        ngates = rad_params['ngates']
+        attvars = copy.copy(attvars)
+
+        if (mov_avrgf_len[1] % 2) == 0:
+            print('Choose an odd number to apply the '
+                  + 'moving average filter')
+        phidp_O = {k: np.ones_like(attvars[k]) * attvars[k]
+                   for k in list(attvars) if k.startswith('Phi')}
+        # Removes low-noisy values of PhiDP below the given PhiDP(0)
+        phidp_O['PhiDP [deg]'][phidp_O['PhiDP [deg]']
+                               < minthr_pdp0] = minthr_pdp0
+        # Filter isolated values
+        phidp_pad = np.pad(phidp_O['PhiDP [deg]'],
+                           ((0, 0), (mov_avrgf_len[1]//2,
+                                     mov_avrgf_len[1]//2)),
+                           mode='constant', constant_values=(np.nan))
+        phidp_dspk = np.array(
+            [[np.nan if ~np.isnan(vbin)
+              and (np.isnan(phidp_pad[nr][nbin-1])
+                   and np.isnan(phidp_pad[nr][nbin+1]))
+              else 1 for nbin, vbin in enumerate(phidp_pad[nr])
+              if nbin != 0
+              and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+             for nr in range(phidp_pad.shape[0])], dtype=np.float64)
+        # Filter using rhoHV
+        phidp_dspk[attvars['rhoHV [-]'] < rhohv_min] = np.nan
+        # Computes sPhiDP for each ray
+        phidp_dspk_rhv = phidp_O['PhiDP [deg]'] * phidp_dspk
+        phidp_s = np.nanstd(rolling_window(
+            phidp_dspk_rhv, mov_avrgf_len), axis=-1, ddof=1)
+        phidp_pad = np.pad(phidp_s, ((0, 0), (mov_avrgf_len[1]//2,
+                                              mov_avrgf_len[1]//2)),
+                           mode='constant', constant_values=(np.nan))
+        # Filter values with std values greater than std threshold
+        phidp_sfnv = np.array(
+            [[np.nan if vbin >= t_spdp
+              and (phidp_pad[nr][nbin-1] >= t_spdp
+                   or phidp_pad[nr][nbin+1] >= t_spdp)
+              else 1 for nbin, vbin in enumerate(phidp_pad[nr])
+              if nbin != 0
+              and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+             for nr in range(phidp_pad.shape[0])], dtype=np.float64)
+        # Filter isolated values
+        phidp_sfnv2 = np.array(
+            [[np.nan if ~np.isnan(vbin)
+                and (np.isnan(phidp_pad[nr][nbin-1])
+                     or np.isnan(phidp_pad[nr][nbin+1]))
+              else 1 for nbin, vbin in enumerate(phidp_pad[nr])
+              if nbin != 0
+              and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+             for nr in range(phidp_pad.shape[0])], dtype=np.float64)
+        phidp_sfnv = phidp_sfnv*phidp_sfnv2
+        phidp_f = phidp_dspk_rhv * phidp_sfnv
+        # Filter isolated values
+        phidp_pad = np.pad(phidp_f, ((0, 0), (mov_avrgf_len[1]//2,
+                                              mov_avrgf_len[1]//2)),
+                           mode='constant', constant_values=(np.nan))
+        phidp_f2 = np.array(
+            [[np.nan if ~np.isnan(vbin)
+              and (np.isnan(phidp_pad[nr][nbin-1])
+                   or np.isnan(phidp_pad[nr][nbin+1]))
+              else 1 for nbin, vbin in enumerate(phidp_pad[nr])
+              if nbin != 0
+              and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+             for nr in range(phidp_pad.shape[0])], dtype=np.float64)
+        phidp_f = phidp_f * phidp_f2
+        # Computes initial PhiDP(0)
+        if phidp0_correction:
+            phidp0 = np.array([[
+                nr[np.isfinite(nr)][0] if ~np.isnan(nr).all() else 0
+                for nr in phidp_f]], dtype=np.float64).transpose()
+        else:
+            phidp0 = np.array([[1e-5 if ~np.isnan(nr).all() else 0
+                                for nr in phidp_f]],
+                              dtype=np.float64).transpose()
+        phidp0[phidp0 == 0] = np.nanmedian(phidp0[phidp0 != 0])
+        phidp0t = np.tile(phidp0, (1, mov_avrgf_len[1] + 1))
+        phidp_f[:, : mov_avrgf_len[1] + 1] = phidp0t
+        # Add phidp0
+        phidp_f = np.array([nr - phidp0[cr]
+                            for cr, nr in enumerate(phidp_f)],
+                           dtype=np.float64)
+        # Computes a MAV
+        phidp_m = maf_radial(
+            {'PhiDPi [deg]': phidp_f}, maf_len=mov_avrgf_len[1],
+            maf_ignorenan=True, maf_extendvalid=False)['PhiDPi [deg]']
+        # Filter isolated values
+        phidp_pad = np.pad(phidp_m, ((0, 0), (mov_avrgf_len[1]//2,
+                                              mov_avrgf_len[1]//2)),
+                           mode='constant', constant_values=(np.nan))
+        phidp_f2 = np.array(
+            [[np.nan if ~np.isnan(vbin)
+              and (np.isnan(phidp_pad[nr][nbin-1])
+                   or np.isnan(phidp_pad[nr][nbin+1]))
+              else 1 for nbin, vbin in enumerate(phidp_pad[nr])
+              if nbin != 0
+              and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
+             for nr in range(phidp_pad.shape[0])], dtype=np.float64)
+        phidp_m = phidp_m * phidp_f2
+        # Interpolation and final filtering
+        itprng = np.array(range(ngates))
+        phidp_i = {'PhiDPi [deg]': np.array(
+            [interp_nan(itprng, nr, nan_type='nan') if ~np.isnan(nr).all()
+             else nr for nr in phidp_m], dtype=np.float64)}
+        phidp_i['PhiDPi [deg]'][:, : mov_avrgf_len[
+            1] + 1] = phidp_f[:, : mov_avrgf_len[1] + 1]
+        phidp_i = {'PhiDPi [deg]': np.array(
+            [fillnan1d(i) for i in phidp_i['PhiDPi [deg]']])}
+        # Apply a moving average filter to the whole PPI
+        phidp_maf = maf_radial(
+            phidp_i, maf_len=mov_avrgf_len[1], maf_ignorenan=False,
+            maf_extendvalid=True)
+        # Filter values using ZH
+        phidp_maf['PhiDPi [deg]'][np.isnan(
+            attvars['ZH [dBZ]'])] = np.nan
+        attvars['PhiDP [deg]'] = phidp_maf['PhiDPi [deg]']
+        self.vars = attvars
+
     def zh_correction(self, rad_georef, rad_params, attvars, cclass, mlyr=None,
-                      phidp_prepro=False,
-                      phidp_prepro_args={'mov_avrgf_len': (1, 3), 't_spdp': 10,
-                                         'minthr_pdp0': -5, 'rhohv_min': 0.90},
                       attc_method='ABRI', pdp_pxavr_rng=7, pdp_pxavr_azm=1,
                       pdp_dmin=20, coeff_alpha=[0.020, 0.1, 0.073],
                       coeff_a=[1e-5, 9e-5, 3e-5], coeff_b=[0.65, 0.85, 0.78],
@@ -75,34 +235,6 @@ class AttenuationCorrection:
             corresponding to each azimuth angle of the scan. If None, the
             function is applied to the whole PPI scan, assuming a ml_thickness
             of 0.5 km.
-        phidp_prepro : bool, optional
-            Process :math:`\Phi_{DP}` to mitigate the influence of spurious
-            values within the signal phase. :math:`\Phi_{DP}` must have been
-            previously unfolded and offset (:math:`\Phi_{DP}(r0)`) corrected.
-            The default is False.
-        phidp_prepro_args : dict, optional
-            Parameters used for the preprocessing of :math:`\Phi_{DP}`.
-            The default are:
-
-                mov_avrgf_len : 2-element tuple or list, optional
-                    Window size used to smooth :math:`\Phi_{DP}` by applying a
-                    moving average window. The default is (1, 3). It is
-                    recommended to average :math:`\Phi_{DP}` along the range,
-                    i.e. keep the window size in a (1, n) size.
-
-                t_spdp: int or float, optional
-                    Threshold used to discard bins with standard deviations of
-                    :math:`\Phi_{DP}` greater than the selected value.
-                    The default is 10 deg.
-
-                minthr_pdp0: int or float, optional
-                    Tolerance for the true value of :math:`\Phi_{DP}(r0)`.
-                    Values below this threshold are removed.
-                    The default is -5 deg.
-
-                rhohv_min: float, optional
-                    Threshold used to discard bins related to nonmeteorological
-                    signals. The default is 0.90
         attc_method : str
             Attenuation correction algorithm to be used. The default is 'ABRI':
 
@@ -183,128 +315,6 @@ class AttenuationCorrection:
             Geoscience and Remote Sensing, vol. 50, no. 12, pp. 5061-5071,
             Dec. 2012. https://doi.org/10.1109/TGRS.2012.2195228
         """
-        if phidp_prepro:
-            phidp_prepro_argso = {'mov_avrgf_len': (1, 3), 't_spdp': 10,
-                                  'minthr_pdp0': -5, 'rhohv_min': 0.9}
-            phidp_prepro_argso = phidp_prepro_argso | phidp_prepro_args
-            mov_avrgf_len = phidp_prepro_argso['mov_avrgf_len']
-            minthr_pdp0 = phidp_prepro_argso['minthr_pdp0']
-            rhohv_min = phidp_prepro_argso['rhohv_min']
-            t_spdp = phidp_prepro_argso['t_spdp']
-            ngates = rad_params['ngates']
-            attvars = copy.copy(attvars)
-
-            if (mov_avrgf_len[1] % 2) == 0:
-                print('Choose an odd number to apply the '
-                      + 'moving average filter')
-            phidp_O = {k: np.ones_like(attvars[k]) * attvars[k]
-                       for k in list(attvars) if k.startswith('Phi')}
-            # Removes low-noisy values of PhiDP below the given PhiDP(0)
-            phidp_O['PhiDP [deg]'][phidp_O['PhiDP [deg]']
-                                   < minthr_pdp0] = minthr_pdp0
-            # Filter isolated values
-            phidp_pad = np.pad(phidp_O['PhiDP [deg]'],
-                               ((0, 0), (mov_avrgf_len[1]//2,
-                                         mov_avrgf_len[1]//2)),
-                               mode='constant', constant_values=(np.nan))
-            phidp_dspk = np.array(
-                [[np.nan if ~np.isnan(vbin)
-                  and (np.isnan(phidp_pad[nr][nbin-1])
-                       and np.isnan(phidp_pad[nr][nbin+1]))
-                  else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0
-                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
-                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
-            # Filter using rhoHV
-            phidp_dspk[attvars['rhoHV [-]'] < rhohv_min] = np.nan
-            # Computes sPhiDP for each ray
-            phidp_dspk_rhv = phidp_O['PhiDP [deg]'] * phidp_dspk
-            phidp_s = np.nanstd(rolling_window(
-                phidp_dspk_rhv, mov_avrgf_len), axis=-1, ddof=1)
-            phidp_pad = np.pad(phidp_s, ((0, 0), (mov_avrgf_len[1]//2,
-                                                  mov_avrgf_len[1]//2)),
-                               mode='constant', constant_values=(np.nan))
-            # Filter values with std values greater than std threshold
-            phidp_sfnv = np.array(
-                [[np.nan if vbin >= t_spdp
-                  and (phidp_pad[nr][nbin-1] >= t_spdp
-                       or phidp_pad[nr][nbin+1] >= t_spdp)
-                  else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0
-                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
-                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
-            # Filter isolated values
-            phidp_sfnv2 = np.array(
-                [[np.nan if ~np.isnan(vbin)
-                    and (np.isnan(phidp_pad[nr][nbin-1])
-                         or np.isnan(phidp_pad[nr][nbin+1]))
-                  else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0
-                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
-                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
-            phidp_sfnv = phidp_sfnv*phidp_sfnv2
-            phidp_f = phidp_dspk_rhv * phidp_sfnv
-            # Filter isolated values
-            phidp_pad = np.pad(phidp_f, ((0, 0), (mov_avrgf_len[1]//2,
-                                                  mov_avrgf_len[1]//2)),
-                               mode='constant', constant_values=(np.nan))
-            phidp_f2 = np.array(
-                [[np.nan if ~np.isnan(vbin)
-                  and (np.isnan(phidp_pad[nr][nbin-1])
-                       or np.isnan(phidp_pad[nr][nbin+1]))
-                  else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0
-                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
-                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
-            phidp_f = phidp_f * phidp_f2
-            # Computes initial PhiDP(0)
-            phidp0 = np.array([[np.nanmedian(
-                nr[np.isfinite(nr)][:mov_avrgf_len[1]+1])
-                if ~np.isnan(nr).all() else 0
-                for nr in phidp_f]], dtype=np.float64).transpose()
-            phidp0[phidp0 == 0] = np.nanmedian(phidp0[phidp0 != 0])
-            phidp0t = np.tile(phidp0, (1, mov_avrgf_len[1] + 1))
-            phidp_f[:, : mov_avrgf_len[1] + 1] = phidp0t
-            # Add phidp0
-            phidp_f = np.array([nr - phidp0[cr]
-                                for cr, nr in enumerate(phidp_f)],
-                               dtype=np.float64)
-            # Computes a MAV
-            phidp_m = maf_radial(
-                {'PhiDPi [deg]': phidp_f}, maf_len=mov_avrgf_len[1],
-                maf_ignorenan=True, maf_extendvalid=False)['PhiDPi [deg]']
-            # Filter isolated values
-            phidp_pad = np.pad(phidp_m, ((0, 0), (mov_avrgf_len[1]//2,
-                                                  mov_avrgf_len[1]//2)),
-                               mode='constant', constant_values=(np.nan))
-            phidp_f2 = np.array(
-                [[np.nan if ~np.isnan(vbin)
-                  and (np.isnan(phidp_pad[nr][nbin-1])
-                       or np.isnan(phidp_pad[nr][nbin+1]))
-                  else 1 for nbin, vbin in enumerate(phidp_pad[nr])
-                  if nbin != 0
-                  and nbin < phidp_pad.shape[1] - mov_avrgf_len[1] + 2]
-                 for nr in range(phidp_pad.shape[0])], dtype=np.float64)
-            phidp_m = phidp_m * phidp_f2
-            # Interpolation and final filtering
-            itprng = np.array(range(ngates))
-            phidp_i = {'PhiDPi [deg]': np.array(
-                [interp_nan(itprng, nr, nan_type='nan') if ~np.isnan(nr).all()
-                 else nr for nr in phidp_m], dtype=np.float64)}
-            phidp_i['PhiDPi [deg]'][:, : mov_avrgf_len[
-                1] + 1] = phidp_f[:, : mov_avrgf_len[1] + 1]
-            phidp_i = {'PhiDPi [deg]': np.array(
-                [fillnan1d(i) for i in phidp_i['PhiDPi [deg]']])}
-            # Apply a moving average filter to the whole PPI
-            phidp_maf = maf_radial(
-                phidp_i, maf_len=mov_avrgf_len[1], maf_ignorenan=False,
-                maf_extendvalid=True)
-            # Filter values using ZH
-            phidp_maf['PhiDPi [deg]'][np.isnan(
-                attvars['ZH [dBZ]'])] = np.nan
-
-            attvars['PhiDP [deg]'] = phidp_maf['PhiDPi [deg]']
-
         array1d = npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS')
         array2d = npct.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
         if platform.system() == 'Linux':
@@ -391,7 +401,6 @@ class AttenuationCorrection:
             idmx = np.nancumsum(alphacopy[i]).argmax()
             if idmx != 0:
                 attcorr['PIA [dB]'][i][idmx+1:] = attcorr['PIA [dB]'][i][idmx]
-
         # =====================================================================
         # Filter non met values
         # =====================================================================
@@ -545,7 +554,7 @@ class AttenuationCorrection:
             params['coeff_a'] = 0.00012
             params['coeff_b'] = 2.5515
         if rparams is not None:
-            params.update
+            params.update(rparams)
         if mlyr is None:
             mlyr = MeltingLayer(self)
             mlyr.ml_top = 5
@@ -816,9 +825,9 @@ class AttenuationCorrection:
                     'beta [-]': np.array(betaof)}
 
         for n, rows in enumerate(attcorr1['ADP [dB/km]']):
-            rows[mlb_idx[n]:] = 0
+            rows[mlb_idx[n]+1:] = 0
         for n, rows in enumerate(attcorr1['beta [-]']):
-            rows[mlb_idx[n]:] = 0
+            rows[mlb_idx[n]+1:] = 0
 
         # =====================================================================
         # Filter non met values

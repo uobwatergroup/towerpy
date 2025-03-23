@@ -6,8 +6,32 @@ What’s New In Towerpy
 Summary – Release highlights
 ----------------------------
 
-**Latest release: v1.0.6**
+**Latest release: v1.0.7**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Towerpy v1.0.7
+~~~~~~~~~~~~~~
+::
+  **Towerpy v1.0.7**
+  
+    **Release Date:** 23 Mar 2025
+
+
+    **New features**
+      #. **attc.attc_zhzdr**: The tool to pre-process PhiDP for attenuation corrections is no longer an argument of the *zh_correction* function but a separate function (attc_phidp_prepro) instead. This change allows users to better visualise the steps of the attenuation correction.
+      #. **datavis.rad_display and datavis.rad_interactive**: Add a new argument (cbticks) to set the colorbar ticks in different plots.
+      #. **eclass.nme**: The _lsinterference_filter_ function was moved to this module and improved to generate similar outputs as other functions in this module.
+      #. **qpe.qpe_algs**: There is a new rainfall estimator _ah_kdp_to_r_ that uses the KDP and AH variables to estimate rainfall rates.
+
+    **Minor corrections**
+      #. **attc.attc_zhzdr**: Fix an error in the *zdr_correction* argument,  _rparams,_ that was not being used properly.
+      #. **calib.calib_phidp**: Improve the readability of the documentation.
+      #. **datavis.tpy_colors**: The rad_model colormap was moved to the radar related colormaps.
+      #. **ml.mlyr**: Fix some minor bugs in this module to improve the detection of the melting layer height.
+
+    **Deprecations**
+      #. attc.attc_zhzdr argument: **phidp_prepro** is now a separate function.
+      #. **radutilities**: The **lsinterference_filter** function is now part of the eclass.nme module.
 
 Towerpy v1.0.6
 ~~~~~~~~~~~~~~

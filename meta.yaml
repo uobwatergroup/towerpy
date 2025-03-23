@@ -1,5 +1,5 @@
 {% set name = "towerpy" %}
-{% set version = "1.0.6" %}
+{% set version = "1.0.7" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/uobwatergroup/towerpy/archive/v{{ version }}.tar.gz
-  sha256: 99ab9d83981021fe5eb0324d9ef57cf1ab7bc4659b86f31b719fbe3810c39752
+  sha256: 9a6c4d9d3fae4c8a3a266ac3697c65406c8692d729ce4b47325cbe06c1d88f3f
 
 build:
   noarch: python

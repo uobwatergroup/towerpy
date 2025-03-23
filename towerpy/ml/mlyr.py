@@ -311,7 +311,7 @@ class MeltingLayer:
         if (all(value is np.nan for value in pkscombzh_rhv.values())
            or pkscombzh_rhv['peakmaxvalue'] < param_k):
             ttxt_dt = f"{self.scandatetime:%Y-%m-%d %H:%M:%S}"
-            print(f'ML signatures could not be found at {ttxt_dt}')
+            # print(f'ML signatures could not be found at {ttxt_dt}')
             mlyr = np.nan
             # mlrand = np.nan
             # combin = np.nan
@@ -320,13 +320,14 @@ class MeltingLayer:
             peakcombzh_rhv = (pol_profs.georef['profiles_height [km]']
                               [min_hidx:max_hidx][pkscombzh_rhv['idxmax']])
             idxml_btm_it1 = rut.find_nearest(
-                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv-.75)+1
+                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv-.75)
             idxml_top_it1 = rut.find_nearest(
-                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv+.75)+1
-            if peakcombzh_rhv > 4.25:
+                pol_profs.georef['profiles_height [km]'], peakcombzh_rhv+.75)
+            # if peakcombzh_rhv > 4.25:
+            if peakcombzh_rhv > max_h - 0.75:
                 idxml_top_it1 = 0
-            if idxml_btm_it1 < min_hidx:
-                idxml_btm_it1 = min_hidx
+            # if idxml_btm_it1 < min_hidx:
+            #     idxml_btm_it1 = min_hidx
             # else:
                 # min_hidx = idxml_btm_it1
             if idxml_top_it1 > min_hidx:
@@ -462,7 +463,8 @@ class MeltingLayer:
             azi[:mlb_idx[cnt]] = self.regionID['rain']
             azi[mlt_idx[cnt]:] = self.regionID['solid_pcp']
         ashape[ashape == 0] = self.regionID['mlyr']
-        self.mlyr_limits = {'pcp_region [cc]': ashape}
+        self.mlyr_limits = {'pcp_region [HC]': ashape}
         if plot_method:
             rad_display.plot_ppi(rad_georef, rad_params, self.mlyr_limits,
+                                 cbticks=self.regionID,
                                  ucmap='tpylc_div_yw_gy_bu')

@@ -8,6 +8,7 @@ from matplotlib.collections import LineCollection
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from matplotlib.offsetbox import AnchoredText
 import matplotlib.patheffects as pe
+import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import cartopy.io.img_tiles as cimgt
@@ -21,7 +22,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
              xlims=None, ylims=None, data_proj=None, ucmap=None, unorm=None,
              ring=None, range_rings=None, rd_maxrange=False, pixel_midp=False,
              mlyr=None, points2plot=None, ptsvar2plot=None, vars_bounds=None,
-             cpy_feats=None, proj_suffix='osgb', fig_title=None,
+             cpy_feats=None, proj_suffix='osgb', cbticks=None, fig_title=None,
              fig_size=None):
     """
     Display a radar PPI scan.
@@ -89,6 +90,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
         The X/Y grids must exist in the rad_georef dictionary, e.g.
         'grid_osgbx--grid_osgby', 'grid_utmx--grid_utmy',
         'grid_wgs84x--grid_wgs84y', etc. The default is 'osgb'.
+    cbticks : dict, optional
+        Modifies the default ticks' location (dict values) and labels
+        (dict keys) in the colour bar.
     fig_title : str, optional
         String to show in the plot title.
     fig_size : 2-element tuple or list, optional
@@ -175,12 +179,12 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
                 tcks = bnd['[mm/h]']
                 cmaph.set_under('whitesmoke')
                 tickLabels = map(str, tcks)
-                # cbtks_fmt = 1
+                cbtks_fmt = 1
             if '[mm]' in var2plot:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
                 tcks = bnd['[mm]']
                 cmaph.set_under('whitesmoke')
-                # cbtks_fmt = 1
+                cbtks_fmt = 1
             if '[km]' in var2plot:
                 cmaph = mpl.colormaps['gist_earth_r']
                 cbtks_fmt = 2
@@ -200,6 +204,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
         if '[m/s]' in var2plot:
             cmaph = mpl.colormaps['tpylsc_div_dbu_rd']
         if '[mm/h]' in var2plot:
+            cbtks_fmt = 1
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             tcks = bnd['[mm/h]']
             cmaph.set_under('whitesmoke')
@@ -208,7 +213,7 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             cmaph.set_under('whitesmoke')
             tcks = bnd['[mm]']
-            # cbtks_fmt = 1
+            cbtks_fmt = 1
         if '[km]' in var2plot:
             cmaph = mpl.colormaps['gist_earth_r']
             cbtks_fmt = 2
@@ -283,7 +288,11 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
             cb1 = plt.colorbar(mappable, ax=ax1, aspect=8, shrink=0.65,
                                pad=.1, norm=normp)
             cb1.ax.tick_params(direction='in', axis='both', labelsize=10)
+            # cb1.ax.set_xticklabels(['Low', 'Medium', 'High'])
         cb1.ax.set_title(f'{var2plot}', fontsize=10)
+        if cbticks is not None:
+            cb1.set_ticks(ticks=list(cbticks.values()),
+                          labels=list(cbticks.keys()))
         # ax1.annotate('| Created using Towerpy |', xy=txtboxc,
         #              fontsize=8, xycoords='axes fraction',
         #              va='center', ha='center',
@@ -400,6 +409,9 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
         ax1.set_ylabel('Distance from the radar [km]', fontsize=12,
                        labelpad=10)
         ax1.tick_params(direction='in', axis='both', labelsize=10)
+        if cbticks is not None:
+            cb1.set_ticks(ticks=list(cbticks.values()),
+                          labels=list(cbticks.keys()), ha='right')
         ax1.axes.set_aspect('equal')
         # ax1.annotate('| Created using Towerpy |', xy=txtboxc,
         #              fontsize=8, xycoords='axes fraction',
@@ -548,11 +560,16 @@ def plot_ppi(rad_georef, rad_params, rad_vars, var2plot=None, coord_sys='rect',
 # =============================================================================
             cax = ax1_divider.append_axes(loc, '7%', pad='15%',
                                           axes_class=plt.Axes)
-            ax1.get_figure().colorbar(mappable, cax=cax,
-                                      orientation=orientation,
-                                      ticks=ticks,
-                                      format=f'%.{cbtks_fmt}f',
-                                      )
+            if cbticks is not None:
+                ax1.get_figure().colorbar(
+                    mappable, cax=cax, orientation=orientation,
+                    ticks=list(cbticks.values()),
+                    format=mticker.FixedFormatter(list(cbticks.keys())))
+            else:
+                ax1.get_figure().colorbar(mappable, cax=cax,
+                                          orientation=orientation,
+                                          ticks=ticks,
+                                          format=f'%.{cbtks_fmt}f')
             cax.tick_params(direction='in', labelsize=12)
             cax.xaxis.set_ticks_position('top')
             cax.set_title(plotunits, fontsize=14)
@@ -1237,7 +1254,8 @@ def plot_mgrid(rscans_georef, rscans_params, rscans_vars, var2plot=None,
 
 def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
                        vars_bounds=None, xlims=None, ylims=None, zlims=[0, 8],
-                       limh=8, ucmap=None, unorm=None, fig_size=None):
+                       limh=8, ucmap=None, unorm=None, cbticks=None,
+                       fig_size=None):
     """
     Display a 3-D representation of the radar cone coverage.
 
@@ -1276,6 +1294,11 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     unorm : matplotlib.colors normalisation object, optional
         User-defined normalisation method to map colormaps onto radar data.
         The default is None.
+    cbticks : dict, optional
+        Modifies the default ticks' location (dict values) and labels
+        (dict keys) in the colour bar.
+    fig_size : 2-element tuple or list, optional
+        Modify the default plot size.
     """
     from matplotlib.colors import LightSource
 
@@ -1391,7 +1414,7 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
             cmaph = mpl.colormaps['gist_earth_r']
             cbtks_fmt = 2
     if ucmap is not None:
-        cmaph = ucmap
+        cmaph = mpl.colormaps[ucmap]
     tcks = bnd.get(var2plot[var2plot.find('['):])
 
     # dtdes0 = f"[{rad_params['site_name']}]"
@@ -1431,11 +1454,14 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
 
     # Plot the surface.
     ax.plot_surface(X, Y, Z, cmap=cmaph, norm=normp, facecolors=rgb,
-                    linewidth=0, antialiased=True, shade=False,
-                    rstride=1, cstride=1)
-
-    mappable2 = ax.contourf(X, Y, R, zdir='z', offset=0, levels=tcks,
-                            cmap=cmaph, norm=normp)
+                    linewidth=0, antialiased=True, shade=False,  # cstride=1,
+                    rstride=1)
+    if cbticks is not None:
+        mappable2 = ax.contourf(X, Y, R, zdir='z', offset=0, levels=tcks,
+                                cmap=cmaph, norm=normp)
+    else:
+        mappable2 = ax.contourf(X, Y, R, zdir='z', offset=0, levels=tcks,
+                                cmap=cmaph, norm=normp, extend=normp.extend)
     # Customize the axis.
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
@@ -1447,8 +1473,13 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     # ax.zaxis.set_major_formatter('{x:.02f}')
 
     # Add a color bar which maps values to colors.
-    cb1 = fig.colorbar(mappable2, shrink=0.4, aspect=5, norm=normp, cmap=cmaph,
-                       ticks=tcks, format=f'%.{cbtks_fmt}f')
+    if cbticks is not None:
+        cb1 = fig.colorbar(mappable2, shrink=0.4, aspect=5, norm=normp,
+                           cmap=cmaph, ticks=list(cbticks.values()),
+                           format=mticker.FixedFormatter(list(cbticks.keys())))
+    else:
+        cb1 = fig.colorbar(mappable2, shrink=0.4, aspect=5, norm=normp,
+                           cmap=cmaph, ticks=tcks, format=f'%.{cbtks_fmt}f')
     cb1.ax.tick_params(direction='in', axis='both', labelsize=14)
     cb1.ax.set_title(var2plot[var2plot .find('['):], fontsize=14)
 
@@ -1460,7 +1491,7 @@ def plot_cone_coverage(rad_georef, rad_params, rad_vars, var2plot=None,
     plt.show()
 
 
-def plot_snr(rad_georef, rad_params, snr_data, coord_sys='rect',
+def plot_snr(rad_georef, rad_params, snr_data, min_snr, coord_sys='rect',
              fig_size=None):
     """
     Display the results of the SNR classification.
@@ -1503,7 +1534,8 @@ def plot_snr(rad_georef, rad_params, snr_data, coord_sys='rect',
         cb2.ax.tick_params(direction='in', axis='both', labelsize=14)
         cb2.ax.set_title('SNR [dB]', fontsize=14, y=-2.5)
 
-        ax3.set_title('Signal (SNR>minSNR)', fontsize=14, y=-0.15)
+        ax3.set_title(f'Signal (SNR > minSNR [{min_snr:.2f}])', fontsize=14,
+                      y=-0.15)
         ax3.pcolormesh(rad_georef['theta'], rad_georef['rho'],
                        np.flipud(snr_data['snrclass']), shading='auto',
                        cmap=mpl.colormaps['tpylc_div_yw_gy_bu'])
@@ -1539,7 +1571,7 @@ def plot_snr(rad_georef, rad_params, snr_data, coord_sys='rect',
 
         mpl.colormaps['tpylc_div_yw_gy_bu'].set_bad(color='#505050')
         # ax3.set_title('Signal (SNR>minSNR)')
-        ax3.set_title(f'{ptitle} \n' + 'SNR>minSNR \n' +
+        ax3.set_title(f'{ptitle} \n' + f'SNR > minSNR [{min_snr:.2f}] \n' +
                       '[Signal = Blue; Noise = Gray]', fontsize=14)
         ax3.pcolormesh(rad_georef['grid_rectx'], rad_georef['grid_recty'],
                        snr_data['snrclass'], shading='auto',
