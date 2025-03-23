@@ -30,8 +30,8 @@ class NME_ID:
         site_name : str
             Name of the radar site.
         echoesID : dict
-            Key/values of the clutter classification:
-                'meteorological_echoes' = 0
+            Key/values of the ME/NME classification:
+                'pcpn' = 0
 
                 'noise' = 3
 
@@ -47,6 +47,113 @@ class NME_ID:
         self.file_name = radobj.file_name
         self.scandatetime = radobj.scandatetime
         self.site_name = radobj.site_name
+
+    def lsinterference_filter(self, rad_georef, rad_params, rad_vars,
+                              rhv_min=0.3, classid=None, data2correct=None,
+                              plot_method=False):
+        """
+        Filter linear signatures and speckles.
+
+        Parameters
+        ----------
+        rad_georef : dict
+            Georeferenced data containing descriptors of the azimuth,
+            gates and beam height, amongst others.
+        rad_params : dict
+            Radar technical details.
+        rad_vars : dict
+            Radar variables used to identify the LS and speckles.
+        rhv_min : float, optional
+            Minimal threshold in rhoHV [-] used to discard
+            non-meteorological scatterers. The default is 0.3
+        classid : dict, optional
+            Modifies the key/values of the LS/Despeckling results
+            (echoesID). The default are the same as in echoesID
+            (see class definition).
+        data2correct :  dict, optional
+            Variables into which LS ans speckles are removed.
+            The default is None.
+        plot_method : TYPE, optional
+            Plot the LS/speckles classification method.
+            The default is False.
+
+        Notes
+        -----
+        1. Radar variables should already be (at least) filtered for
+        noise to ensure accurate and reliable results.
+
+        """
+        self.echoesID = {'pcpn': 0,
+                         'noise': 3,
+                         'clutter': 5}
+        if classid is not None:
+            self.echoesID.update(classid)
+
+        window = (3, 3)
+        mode = 'constant'
+        arr_rhohv = rad_vars['rhoHV [-]'].copy()
+        constant_values = np.nan
+        # Create a padded array
+        if mode == 'edge':
+            apad = np.pad(arr_rhohv, ((0, 0), (window[1]//2, window[1]//2)),
+                          mode='edge')
+        elif mode == 'constant':
+            apad = np.pad(arr_rhohv, ((0, 0), (window[1]//2, window[1]//2)),
+                          mode='constant', constant_values=(constant_values))
+        if window[0] > 1:
+            apad = np.pad(apad, ((window[0]//2, window[0]//2), (0, 0)),
+                          mode='wrap')
+        # Check that all sorrounding values of pixel are nan to remove speckles
+        spckl1 = np.array([[np.nan if ~np.isnan(vbin)
+                            and np.isnan(apad[nray-1][nbin-1])
+                            and np.isnan(apad[nray-1][nbin])
+                            and np.isnan(apad[nray-1][nbin+1])
+                            and np.isnan(apad[nray][nbin-1])
+                            and np.isnan(apad[nray][nbin+1])
+                            and np.isnan(apad[nray+1][nbin-1])
+                            and np.isnan(apad[nray+1][nbin])
+                            and np.isnan(apad[nray+1][nbin+1])
+                            else 1
+                            for nbin, vbin in enumerate(apad[nray])
+                            if nbin != 0 and nbin != apad.shape[1]-1]
+                           for nray in range(apad.shape[0])
+                           if nray != 0 and nray != apad.shape[0]-1])
+        spckl1[:, 0] = np.nan
+        # Filter using rhohv threshold.
+        spckl1[rad_vars['rhoHV [-]'] <= rhv_min] = np.nan
+        # Detect linear signatures.
+        spckl2 = np.array([[np.nan if ~np.isnan(vbin)
+                            and np.isnan(apad[nray-1][nbin])
+                            and np.isnan(apad[nray+1][nbin]) else 1
+                            for nbin, vbin in enumerate(apad[nray])
+                            if nbin != 0 and nbin != apad.shape[1]-1]
+                           for nray in range(apad.shape[0])
+                           if nray != 0 and nray != apad.shape[0]-1])
+        spckl1[:, 0] = 1
+        # Classifies the pixels according to echoesID
+        fclass = np.where(np.isnan(rad_vars['ZH [dBZ]']), 3, 0)
+        fclass2 = np.where(np.isnan(spckl1 * spckl2), 5, 0)
+
+        fclass = np.where(fclass2 == 5, 5, fclass)
+
+        if classid is not None:
+            fclass[fclass == 0] = self.echoesID['pcpn']
+            fclass[fclass == 3] = self.echoesID['noise']
+            fclass[fclass == 5] = self.echoesID['clutter']
+
+        lsc_data = {'classif': fclass}
+
+        if data2correct is not None:
+            data2cc = copy.deepcopy(data2correct)
+            for key, values in data2cc.items():
+                values[fclass != self.echoesID['pcpn']] = np.nan
+            self.vars = data2cc
+        self.ls_dsp_class = lsc_data
+
+        if plot_method:
+            rad_display.plot_ppi(rad_georef, rad_params, lsc_data,
+                                 cbticks=self.echoesID,
+                                 ucmap='tpylc_div_yw_gy_bu')
 
     def clutter_id(self, rad_georef, rad_params, rad_vars, path_mfs=None,
                    min_snr=0, binary_class=0, clmap=None, classid=None,
@@ -89,7 +196,8 @@ class NME_ID:
             Clutter frequency map in the interval [0-1]. The default is None.
         classid : dict, optional
             Modifies the key/values of the clutter classification results
-            (echoesID). The default are the same as in echoesID.
+            (echoesID). The default are the same as in echoesID
+            (see class definition).
         data2correct : dict, optional
             Variables into which clutter echoes are removed.
             The default is None.
@@ -114,8 +222,18 @@ class NME_ID:
             weather radar. IEEE Transactions on Geoscience and Remote Sensing,
             46(7), 1892-1904. https://doi.org/10.1109/TGRS.2008.916979
 
+        Examples
+        --------
+        >>> rnme = tp.eclass.nme.NME_ID(rdata)
+        >>> rnme.clutter_id(rdata.georef, rdata.params, rsnr.vars,
+                            binary_class=159, min_snr=rsnr.min_snr)
+
+        binary_class = 159 -> (128+16+8+4+2+1) i.e.
+        :math:`\rho_{HV} + V + \sigma(\rho_{HV}) + \sigma(\Phi_{DP})
+        + \sigma(Z_{DR}) + \sigma(Z_{H})`
+
         """
-        self.echoesID = {'meteorological_echoes': 0,
+        self.echoesID = {'pcpn': 0,
                          'noise': 3,
                          'clutter': 5}
         if classid is not None:
@@ -165,7 +283,6 @@ class NME_ID:
         if 'rhoHV [-]' not in rdatv.keys():
             rdatv['rhoHV [-]'] = ldr
         np.nan_to_num(rdatv['ZH [dBZ]'], copy=False, nan=-50.)
-        # if rdatp['elev_ang [deg]'] < 89:
         libcc.clutterclassifier(pathmfs, rdatp['nrays'],
                                 rdatp['ngates'],
                                 rdatv['ZH [dBZ]'],
@@ -178,24 +295,15 @@ class NME_ID:
                                 rdatg['elev [rad]'],
                                 param_clc, clc)
         if classid is not None:
-            clc[clc == 0] = self.echoesID['meteorological_echoes']
+            clc[clc == 0] = self.echoesID['pcpn']
             clc[clc == 3] = self.echoesID['noise']
             clc[clc == 5] = self.echoesID['clutter']
-        # clc[self.snr_class['snrclass'] != 1] = 3  # ###
-        # if data2correct is None:
         ccpoldata = {'classif': clc, 'clutter_map': clmap}
         if data2correct is not None:
             data2cc = copy.deepcopy(data2correct)
-            # if rdatp['elev_ang [deg]'] > 89:
-            #     for key, values in data2cc.items():
-            #         values[self.snr_class['snrclass'] != 1] = np.nan
-            #     ccpoldata = {'cclass': clc, 'vars': data2cc}
-            # else:
             for key, values in data2cc.items():
-                values[clc != self.echoesID['meteorological_echoes']] = np.nan
+                values[clc != self.echoesID['pcpn']] = np.nan
             self.vars = data2cc
-            # ccpoldata = {'classif': clc,
-            #              'clutter_map': clmap}
         self.nme_classif = ccpoldata
 
         if plot_method:

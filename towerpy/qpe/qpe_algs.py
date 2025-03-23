@@ -44,7 +44,7 @@ class RadarQPE:
             Temperature, in :math:`^{\circ}C`, used to derive the coefficients
             a, b according to [1]_. The default is 20.
         a, b : floats
-            Override the default coefficients of the :math:`R(A_{H})`
+            Override the computed coefficients of the :math:`R(A_{DP})`
             relationship. The default are None.
         mlyr : MeltingLayer Class, optional
             Melting layer class containing the top of the melting layer, (i.e.,
@@ -134,7 +134,7 @@ class RadarQPE:
             Temperature, in :math:`^{\circ}C`, used to derive the coefficients
             a, b according to [1]_. The default is 20.
         a, b : floats
-            Override the default coefficients of the :math:`R(A_{H})`
+            Override the computed coefficients of the :math:`R(A_{H})`
             relationship. The default are None.
         mlyr : MeltingLayer Class, optional
             Melting layer class containing the top of the melting layer, (i.e.,
@@ -484,7 +484,14 @@ class RadarQPE:
         rz_a, rz_b : float
             Parameters of the :math:`R(Z_h)` relationship.
         rah_a, rah_b : floats
-            Parameters of the :math:`R(A_{H})` relationship.
+            Override the computed coefficients of the :math:`R(A_{H})`
+            relationship. The default are None.
+        rband: str
+            Frequency band according to the wavelength of the radar.
+            The string has to be one of 'S', 'C' or 'X'. The default is 'C'.
+        temp: float
+            Temperature, in :math:`^{\circ}C`, used to derive the coefficients
+            rah_a, rah_b according to [1]_. The default is 20.
         z_thld : float, optional
             :math:`Z_H` threshold used for the transition to :math:`R(A_{H})`.
             The default is 40 dBZ.
@@ -662,3 +669,122 @@ class RadarQPE:
         r['coeff_arkdp'] = rkdp_a
         r['coeff_brkdp'] = rkdp_b
         self.r_z_kdp = r
+
+    def ah_kdp_to_r(self, zh, ah, kdp, rah_a=None, rah_b=None, rkdp_a=24.68,
+                    rkdp_b=0.81, rband='C', temp=20., z_thld=40,
+                    beam_height=None, mlyr=None):
+        r"""
+        Compute rain rates using an hybrid estimator that combines :math:`R(A_H)` [Eq.1]_ and :math:`R(K_{DP})` [Eq.2]_ for a given threshold in :math:`Z_H`.
+
+        Parameters
+        ----------
+        zh : float or array
+             Floats that corresponds to reflectivity, in dBZ.
+        ah : float or array
+            Floats that corresponds to specific attenuation, in dB/km.
+        kdp : float or array
+            Floats that corresponds to specific differential phase,
+            in deg/km.
+        rah_a, rah_b : floats
+            Override the computed coefficients of the :math:`R(A_{H})`
+            relationship. The default are None.
+        rkdp_a, rkdp_b : floats
+            Parameters of the :math:`R(K_{DP})` relationship.
+        rband: str
+            Frequency band according to the wavelength of the radar.
+            The string has to be one of 'S', 'C' or 'X'. The default is 'C'.
+        temp: float
+            Temperature, in :math:`^{\circ}C`, used to derive the coefficients
+            rah_a, rah_b according to [1]_. The default is 20.
+        z_thld : float, optional
+            :math:`Z_H` threshold used for the transition from :math:`R(A_{H})`
+            to :math:`R(K_{DP})`.
+            The default is 40 dBZ.
+        beam_height : array, optional
+            Height of the centre of the radar beam, in km.
+        mlyr : MeltingLayer Class, optional
+            Melting layer class containing the top of the melting layer, (i.e.,
+            the melting level) and its thickness. Only gates below the melting
+            layer bottom (i.e. the rain region below the melting layer) are
+            included in the computation; ml_top and ml_thickness can be either
+            a single value (float, int), or an array (or list) of values
+            corresponding to each azimuth angle of the scan. If None, the
+            rainfall estimator is applied to the whole PPI scan.
+
+        Returns
+        -------
+        R : dict
+            Computed rain rates, in mm/h.
+
+        Math
+        ----
+        .. [Eq.1]
+        .. math:: Z_H < 40 dBZ \rightarrow R = aA_{H}^b
+        .. [Eq.2]
+        .. math:: Z_H \geq 40 dBZ \rightarrow R = aK_{DP}^b
+        where R in mm/h, :math:`Z_H` in dBZ, :math:`A_H` in dB/km,
+        :math:`K_{DP}` in deg/km
+
+        Notes
+        -----
+        Standard values according to [1]_ and [2]_.
+
+        References
+        ----------
+        .. [1] Ryzhkov, A., Diederich, M., Zhang, P., & Simmer, C. (2014).
+            "Potential Utilization of Specific Attenuation for Rainfall
+            Estimation, Mitigation of Partial Beam Blockage, and Radar
+            Networking" Journal of Atmospheric and Oceanic Technology, 31(3),
+            599-619. https://doi.org/10.1175/JTECH-D-13-00038.1
+        .. [2] Bringi, V.N., Rico-Ramirez, M.A., Thurai, M. (2011). "Rainfall
+            estimation with an operational polarimetric C-band radar in the
+            United Kingdom: Comparison with a gauge network and error
+            analysis" Journal of Hydrometeorology 12, 935–954.
+            https://doi.org/10.1175/JHM-D-10-05013.1
+        """
+        if rah_a is None and rah_b is None:
+            # Default values for the temp
+            temps = np.array((0, 10, 20, 30))
+            # Default values for S-C and X-band radars
+            coeffs_a = {'X': np.array((49.1, 45.5, 43.5, 43.0)),
+                        'C': np.array((221, 250, 294, 352)),
+                        'S': np.array((2.23e3, 3.10e3, 4.12e3, 5.33e3))}
+            coeffs_b = {'X': np.array((0.87, 0.83, 0.79, 0.76)),
+                        'C': np.array((0.92, 0.91, 0.89, 0.89)),
+                        'S': np.array((1.03, 1.03, 1.03, 1.03))}
+            # Interpolate the temp and coeffs to set coeffs a and b
+            icoeff_a = interp1d(temps, coeffs_a.get(rband))
+            icoeff_b = interp1d(temps, coeffs_b.get(rband))
+            coeff_a = icoeff_a(temp).item()
+            coeff_b = icoeff_b(temp).item()
+        else:
+            coeff_a = rah_a
+            coeff_b = rah_b
+        zh = np.array(zh)
+        ahr = np.zeros_like(ah)+ah
+        kdpr = np.zeros_like(kdp)+kdp
+        if mlyr is not None and beam_height is not None:
+            mlyr_bottom = mlyr.ml_top - mlyr.ml_thickness
+            if isinstance(mlyr_bottom, (int, float)):
+                mlb_idx = [rut.find_nearest(nbh, mlyr_bottom)
+                           for nbh in beam_height]
+            elif isinstance(mlyr_bottom, (np.ndarray, list, tuple)):
+                mlb_idx = [rut.find_nearest(nbh, mlyr_bottom[cnt])
+                           for cnt, nbh in enumerate(beam_height)]
+            for cnt, azi in enumerate(zh):
+                azi[mlb_idx[cnt]:] = 0
+        nanidx = np.where(np.isnan(ah))
+        ahr[nanidx] = np.nan
+        nanidx = np.where(np.isnan(kdp))
+        kdpr[nanidx] = np.nan
+        rah = coeff_a*ahr**coeff_b
+        rkdp = rkdp_a*abs(kdpr)**rkdp_b*np.sign(kdpr)
+        rah[(zh >= z_thld)] = rkdp[(zh >= z_thld)]
+        # rkdp[(zh < z_thld)] = rah[(zh < z_thld)]
+        r = {'Rainfall [mm/h]': rah}
+        # r = {'Rainfall [mm/h]': rkdp}
+        r['coeff_arah'] = coeff_a
+        r['coeff_brah'] = coeff_b
+        r['coeff_arkdp'] = rkdp_a
+        r['coeff_brkdp'] = rkdp_b
+        self.r_ah_kdp = r

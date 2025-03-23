@@ -109,8 +109,8 @@ class PhiDP_Calibration:
         if np.isnan(mlvl) and np.isnan(mlyr_bottom):
             boundaries_idx = [np.nan]
         if max_h:
-            maxheight = find_nearest(pol_profs.georef['profiles_height [km]'],
-                                     max_h)
+            maxheight = find_nearest(
+                pol_profs.georef['profiles_height [km]'], max_h)
 
         if any(np.isnan(boundaries_idx)):
             self.phidp_offset = 0
@@ -164,14 +164,14 @@ class PhiDP_Calibration:
         pol_profs : dict
             Profiles of polarimetric variables.
         mlyr : class
-            Melting layer class containing the top and bottom boundaries of
-            the ML.
+            Melting layer class containing the top and bottom
+            boundaries of the ML.
         min_h : float, optional
-            Minimum height of usable data within the polarimetric profiles.
-            The default is 0.
+            Minimum height of usable data within the polarimetric
+            profiles. The default is 0.
         max_h : float, optional
-            Maximum height of usable data within the polarimetric profiles.
-            The default is 3.
+            Maximum height of usable data within the polarimetric
+            profiles. The default is 3.
         zhmin : float, optional
             Threshold on :math:`Z_{H}` (in dBZ) related to light rain.
             The default is 0.
@@ -179,14 +179,15 @@ class PhiDP_Calibration:
             Threshold on :math:`Z_{H}` (in dBZ) related to light rain.
             The default is 20.
         rhvmin : float, optional
-            Threshold on :math:`\rho_{HV}` (unitless) related to light rain.
-            The default is 0.985.
+            Threshold on :math:`\rho_{HV}` (unitless) related to
+            light rain. The default is 0.985.
         minbins : float, optional
-            Consecutive bins of :math:`\Phi_{DP}` related to light rain.
-            The default is 3.
+            Consecutive bins of :math:`\Phi_{DP}` related to light
+            rain. The default is 3.
         stats : dict, optional
-            If True, the function returns stats related to the computation of
-            the :math:`\Phi_{DP}` offset. The default is False.
+            If True, the function returns stats related to the
+            computation of the :math:`\Phi_{DP}` offset.
+            The default is False.
 
         Notes
         -----
@@ -194,9 +195,9 @@ class PhiDP_Calibration:
 
         References
         ----------
-        .. [1] Sanchez-Rivas, D. and Rico-Ramirez, M. A. (2022): "Calibration
-            of radar differential reflectivity using quasi-vertical profiles",
-            Atmos. Meas. Tech., 15, 503–520,
+        .. [1] Sanchez-Rivas, D. and Rico-Ramirez, M. A. (2022):
+            "Calibration of radar differential reflectivity using
+            quasi-vertical profiles", Atmos. Meas. Tech., 15, 503–520,
             https://doi.org/10.5194/amt-15-503-2022
         """
         if mlyr is None:
@@ -266,8 +267,8 @@ class PhiDP_Calibration:
                                            'offset_sem': calpdpqvps_sem}
 
     def offsetdetection_ppi(self, rad_vars, mov_avrgf_len=(1, 3), thr_spdp=10,
-                            rhohv_min=0.9, zh_min=5., max_off=360,
-                            mode='median'):
+                            rhohv_min=0.9, zh_min=5., max_off=360, preset=None,
+                            preset_tol=5, mode='median'):
         r"""
         Compute the :math:`\Phi_{DP}` offset using PPIs`.
 
@@ -283,21 +284,30 @@ class PhiDP_Calibration:
             i.e. keep the window size in a (1, n) size.
         thr_spdp : int or float, optional
             Threshold used to discard bins with standard deviations of
-            :math:`\Phi_{DP}` greater than the selected value. The default is
-            10 deg.
+            :math:`\Phi_{DP}` greater than the selected value.
+            The default is 10 deg.
         rhohv_min : float, optional
-            Threshold in :math:`\rho_{HV}` used to discard bins related to
-            nonmeteorological signals. The default is 0.90
+            Threshold in :math:`\rho_{HV}` used to discard bins
+            related to nonmeteorological signals. The default is 0.90
         zh_min : float, optional
             Threshold in :math:`Z_H` used to discard bins related to
             nonmeteorological signals. The default is 5.
         max_off : float or int, optional
-            Maximum value allowed for :math:`\Phi_{DP}(0)`. The default is 360.
+            Maximum value allowed for :math:`\Phi_{DP}(0)`.
+            The default is 360.
+        preset : float or int, optional
+            Preset :math:`\Phi_{DP}(0)`. The default is None.
+        preset_tol : float or int, optional
+            Maximum difference allowed between the preset and
+            computed :math:`\Phi_{DP}(0)` values. Offset values that
+            exceed this tolerance value are replaced with the preset
+            value. The default tolerance is 5 deg.
         mode : str, optional
-            Resulting :math:`\Phi_{DP}` offset. The string has to be one of
-            'median' or 'multiple'. If median, :math:`\Phi_{DP}` offset is
-            computed as a single value (the median of all rays).
-            Otherwise, the :math:`\Phi_{DP}` offset is calculated ray-wise.
+            Resulting :math:`\Phi_{DP}` offset. The string has to be
+            one of 'median' or 'multiple'. If median, :math:`\Phi_{DP}`
+            offset is computed as a single value
+            (the median of all rays). Otherwise,
+            the :math:`\Phi_{DP}` offset is calculated ray-wise.
             The default is 'median'.
         """
         rad_vars = copy.copy(rad_vars)
@@ -366,18 +376,21 @@ class PhiDP_Calibration:
              for nr in range(phidp_pad.shape[0])], dtype=np.float64)
         phidp_f = phidp_f * phidp_f2
         # Computes and initial PhiDP(0)
-        phidp0 = np.array([[np.nanmedian(
-            nr[np.isfinite(nr)][:mov_avrgf_len[1]])
-            if ~np.isnan(nr).all() else 0
+        phidp0 = np.array([[
+            nr[np.isfinite(nr)][0] if ~np.isnan(nr).all() else 0
             for nr in phidp_f]], dtype=np.float64).transpose()
         phidp0[phidp0 == 0] = np.nanmedian(phidp0[phidp0 != 0])
         if mode == 'median':
             phidp_offset = np.nanmedian(phidp0)
             if abs(phidp_offset) > max_off or np.isnan(phidp_offset):
                 phidp_offset = 0
+            if preset and abs(phidp_offset - preset) > preset_tol:
+                phidp_offset = preset
         elif mode == 'multiple':
             phidp0[abs(phidp0) > max_off] = 0
             phidp0 = np.nan_to_num(phidp0)
+            if preset:
+                phidp0[abs(phidp0 - preset) > preset_tol] = preset
             phidp_offset = phidp0
         self.phidp_offset = phidp_offset
         # return phidp_offset
@@ -390,17 +403,23 @@ class PhiDP_Calibration:
         Parameters
         ----------
         phidp2calib : array of float
-            Offset-affected differential phase :math:`(\Phi_{DP})` in deg.
+            Offset-affected differential phase :math:`(\Phi_{DP})`
+            in deg.
         phidp_offset : float
             Differential phase offset in deg. The default is 0.
         data2correct : dict, optional
-            Dictionary to update the offset-corrected :math:`(\Phi_{DP})`.
-            The default is None.
+            Dictionary to update the offset-corrected
+            :math:`(\Phi_{DP})`. The default is None.
         """
-        if np.isnan(phidp_offset):
-            phidp_offset = 0
-        phidp_oc = copy.deepcopy(phidp2calib) - phidp_offset
-
+        if isinstance(phidp_offset, (int, float)):
+            if np.isnan(phidp_offset):
+                phidp_offset = 0
+            phidp_oc = copy.deepcopy(phidp2calib) - phidp_offset
+        elif isinstance(phidp_offset, (np.ndarray, list, tuple)):
+            # TODO: raise error if lens are different
+            phidp_oc = copy.deepcopy(phidp2calib)
+            phidp_oc[:] = [ray - phidp_offset[cnt]
+                           for cnt, ray in enumerate(phidp_oc)]
         if data2correct is None:
             self.vars = {'PhiDP [deg]': phidp_oc}
         else:

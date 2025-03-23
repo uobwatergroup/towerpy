@@ -78,7 +78,7 @@ class SNR_Classif:
         self.min_snr = min_snr
         self.snr_class = snr
         if plot_method:
-            rad_display.plot_snr(rad_georef, rad_params, snr)
+            rad_display.plot_snr(rad_georef, rad_params, snr, min_snr)
 
     @staticmethod
     def static_signalnoiseratio(rad_georef, rad_params, rad_vars,

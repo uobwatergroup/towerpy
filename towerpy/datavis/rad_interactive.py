@@ -14,6 +14,7 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from matplotlib.offsetbox import AnchoredText
 from matplotlib.widgets import RadioButtons, Slider
 import matplotlib.patheffects as pe
+import matplotlib.ticker as mticker
 from scipy import spatial
 from ..utils import radutilities as rut
 from ..base import TowerpyError
@@ -370,7 +371,8 @@ class PPI_Int:
 
 def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
              vars_bounds=None, ppi_xlims=None, ppi_ylims=None, ucmap=None,
-             radial_xlims=None, radial_ylims=None, mlyr=None, fig_size=None):
+             radial_xlims=None, radial_ylims=None, mlyr=None, cbticks=None,
+             fig_size=None):
     """
     Create the base display for the interactive PPI explorer.
 
@@ -413,11 +415,11 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         Plot the melting layer height. ml_top (float, int, list or np.array)
         and ml_bottom (float, int, list or np.array) must be explicitly
         defined. The default is None.
-
-    Returns
-    -------
-    None.
-
+    cbticks : dict, optional
+        Modifies the default ticks' location (dict values) and labels
+        (dict keys) in the colour bar.
+    fig_size : 2-element tuple or list, optional
+        Modify the default plot size.
     """
     if isinstance(rad_params['elev_ang [deg]'], str):
         dtdes1 = f"{rad_params['elev_ang [deg]']} -- "
@@ -571,7 +573,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
             if '[mm]' in polradv:
                 cmaph = mpl.colormaps['tpylsc_rad_rainrt']
                 tcks = bnd['[mm]']
-                cmaph.set_under('w')
+                cmaph.set_under('whitesmoke')
                 fcb = 1
             if '[km]' in polradv:
                 cmaph = mpl.colormaps['gist_earth_r']
@@ -605,7 +607,7 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         if '[mm]' in polradv:
             cmaph = mpl.colormaps['tpylsc_rad_rainrt']
             tcks = bnd['[mm]']
-            cmaph.set_under('w')
+            cmaph.set_under('whitesmoke')
             fcb = 1
         if '[km]' in polradv:
             cmaph = mpl.colormaps['gist_earth_r']
@@ -641,14 +643,20 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
                         for i in zip(rad_georef['grid_rectx'].flat,
                                      rad_georef['grid_recty'].flat)]
         f3_axvar2plot = figradint.add_subplot(intradgs[0:-1, 0:2])
-        f3_axvar2plot.pcolormesh(rad_georef['grid_rectx'],
-                                 rad_georef['grid_recty'],
-                                 mrv, shading='auto',
-                                 cmap=cmaph, norm=normp)
-        clb = plt.colorbar(mpl.cm.ScalarMappable(norm=normp, cmap=cmaph),
-                           ax=f3_axvar2plot, format=f'%.{fcb}f',
-                           ticks=tcks)
-        clb.ax.tick_params(direction='in', labelsize=12)
+        f3rec = f3_axvar2plot.pcolormesh(rad_georef['grid_rectx'],
+                                         rad_georef['grid_recty'],
+                                         mrv, shading='auto',
+                                         cmap=cmaph, norm=normp)
+        if cbticks is not None:
+            clb = plt.colorbar(
+                f3rec, ax=f3_axvar2plot, ticks=list(cbticks.values()),
+                format=mticker.FixedFormatter(list(cbticks.keys())))
+            clb.ax.tick_params(direction='in', labelsize=12, rotation=90)
+        else:
+            clb = plt.colorbar(
+                mpl.cm.ScalarMappable(norm=normp, cmap=cmaph),
+                ax=f3_axvar2plot, format=f'%.{fcb}f', ticks=tcks)
+            clb.ax.tick_params(direction='in', labelsize=12)
         f3_axvar2plot.axes.set_aspect('equal')
         clb.ax.set_title(plotunits, fontsize=14)
         f3_axvar2plot.format_coord = format_coord
@@ -706,17 +714,22 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
               ' =============================================================')
         f3_axvar2plot = figradint.add_subplot(intradgs[0:-1, 0:2],
                                               projection='polar')
-        f3_axvar2plot.pcolormesh(rad_georef['theta'],
-                                 rad_georef['rho'],
-                                 np.flipud(mrv), shading='auto',
-                                 cmap=cmaph, norm=normp)
-        plt.colorbar(mpl.cm.ScalarMappable(norm=normp, cmap=cmaph),
-                     ax=f3_axvar2plot)
+        f3pol = f3_axvar2plot.pcolormesh(rad_georef['theta'],
+                                         rad_georef['rho'],
+                                         np.flipud(mrv), shading='auto',
+                                         cmap=cmaph, norm=normp)
+        if cbticks is not None:
+            clb = plt.colorbar(
+                f3pol, ax=f3_axvar2plot, ticks=list(cbticks.values()),
+                format=mticker.FixedFormatter(list(cbticks.keys())))
+        else:
+            clb = plt.colorbar(mpl.cm.ScalarMappable(norm=normp, cmap=cmaph),
+                               ax=f3_axvar2plot)
         f3_axvar2plot.grid(color='gray', linestyle=':')
         f3_axvar2plot.set_theta_zero_location('N')
         f3_axvar2plot.set_thetagrids(np.arange(nangle, nangle+2))
         f3_axvar2plot.xaxis.grid(ls='-')
-        if rad_params['elev_ang [deg]'] < 89:
+        if not isinstance(rad_params['elev_ang [deg]'], str) and rad_params['elev_ang [deg]'] < 89:
             plt.rgrids(np.arange(0, (rad_georef['range [m]'][-1]/1000)*1.1,
                                  5 * round((rad_georef['range [m]'][-1]/1000)
                                            / 25)),
@@ -746,27 +759,6 @@ def ppi_base(rad_georef, rad_params, rad_vars, var2plot=None, proj='rect',
         if i != list(intradaxs)[-1]:
             intradaxs[i].get_xaxis().set_visible(False)
             intradaxs[i].tick_params(axis='y', labelsize=12)
-
-    # if len(intradaxs) == 2:
-    #     intradaxs['f3_ax2'].get_shared_x_axes().join(intradaxs['f3_ax2'],
-    #                                                  intradaxs['f3_ax3'])
-
-    # if len(intradaxs) == 3:
-    #     intradaxs['f3_ax2'].get_shared_x_axes().join(intradaxs['f3_ax2'],
-    #                                                  intradaxs['f3_ax3'],
-    #                                                  intradaxs['f3_ax4'])
-
-    # if len(intradaxs) == 4:
-    #     intradaxs['f3_ax2'].get_shared_x_axes().join(intradaxs['f3_ax2'],
-    #                                                  intradaxs['f3_ax3'],
-    #                                                  intradaxs['f3_ax4'],
-    #                                                  intradaxs['f3_ax5'])
-    # if len(intradaxs) == 5:
-    #     intradaxs['f3_ax2'].get_shared_x_axes().join(intradaxs['f3_ax2'],
-    #                                                  intradaxs['f3_ax3'],
-    #                                                  intradaxs['f3_ax4'],
-    #                                                  intradaxs['f3_ax5'],
-    #                                                  intradaxs['f3_ax6'])
 
     intradaxs[list(intradaxs)[-1]].set_xlabel('Range [Km]', fontsize=14)
     intradaxs[list(intradaxs)[-1]].tick_params(axis='both', labelsize=12)
@@ -884,9 +876,10 @@ class HTI_Int:
         figprofsint.canvas.draw()
 
 
-def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
-             vars_bounds=None, ptype='pseudo', contourl=None, htixlim=None,
-             htiylim=None, tz='Europe/London', fig_size=None):
+def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ptype='pseudo',
+             contourl=None, ucmap=None, unorm=None, vars_bounds=None,
+             htixlim=None, htiylim=None, cbticks=None, fig_size=None,
+             tz='Europe/London'):
     """
     Create the base display for the HTI.
 
@@ -902,6 +895,17 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
     var2plot : str, optional
         Key of the radar variable to plot. The default is None. This option
         will plot ZH or the 'first' element in the rad_vars dict.
+    ptype : str, 'pseudo' or 'fcontour'
+        Create a pseudocolor or filled contours plot.
+        The default is 'pseudo'.
+    contourl : str, optional
+        Draw contour lines of the specified radar variable.
+        The default is None.
+    ucmap : colormap, optional
+        User-defined colormap.
+    unorm : matplotlib.colors normalisation object, optional
+        User-defined normalisation method to map colormaps onto radar data.
+        The default is None.
     vars_bounds : dict containing key and 3-element tuple or list, optional
         Boundaries [min, max, nvals] between which radar variables are
         to be mapped. The default are:
@@ -912,18 +916,15 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
              'V [m/s]': [-5, 5, 11], 'gradV [dV/dh]': [-1, 0, 11],
              'LDR [dB]': [-35, 0, 11],
              'Rainfall [mm/h]': [0.1, 64, 11]}
-    ucmap : colormap, optional
-        User-defined colormap.
-    ptype : str, 'pseudo' or 'fcontour'
-        Create a pseudocolor or filled contours plot.
-        The default is 'pseudo'.
-    contourl : str, optional
-        Draw contour lines of the specified radar variable.
-        The default is None.
     htixlim : 2-element tuple or list of datetime objects, optional
         Set the x-axis view limits [min, max]. The default is None.
     htiylim : 2-element tuple or list, optional
         Set the y-axis view limits [min, max]. The default is None.
+    cbticks : dict, optional
+        Modifies the default ticks' location (dict values) and labels
+        (dict keys) in the colour bar.
+    fig_size : 2-element tuple or list, optional
+        Modify the default plot size.
     tz : str
         Key/name of the radar data timezone. The given tz string is then
         retrieved from the ZoneInfo module. Default is 'Europe/London'
@@ -1003,6 +1004,8 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
                 fcb = 2
     if ucmap is not None:
         cmaph = ucmap
+    if unorm is not None:
+        dnorm.update(unorm)
     tcks = bnd.get('b'+var2plot)
 
     profsheight = np.array([nprof.georef['profiles_height [km]']
@@ -1109,17 +1112,24 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ucmap=None,
 
     ax1_divider = make_axes_locatable(htiplt)
     cax1 = ax1_divider.append_axes("top", size="10%", pad="7%")
-    if '[-]' in var2plot:
-        cb1 = figprofsint.colorbar(mpl.cm.ScalarMappable(norm=normp,
-                                                         cmap=cmaph),
-                                   ax=htiplt, format=f'%.{fcb}f', cax=cax1,
-                                   orientation="horizontal", ticks=tcks)
+    if cbticks is not None:
+        cb1 = figprofsint.colorbar(
+            mpl.cm.ScalarMappable(norm=normp, cmap=cmaph), ax=htiplt, cax=cax1,
+            orientation="horizontal", ticks=list(cbticks.values()),
+            format=mticker.FixedFormatter(list(cbticks.keys())),
+            extend='neither')
+        cb1.ax.tick_params(length=0, direction='in', labelsize=20)
     else:
-        cb1 = figprofsint.colorbar(mpl.cm.ScalarMappable(norm=normp,
-                                                         cmap=cmaph),
-                                   ax=htiplt, format=f'%.{fcb}f', cax=cax1,
-                                   orientation="horizontal")
-    cb1.ax.tick_params(direction='in', labelsize=20)
+        if '[-]' in var2plot:
+            cb1 = figprofsint.colorbar(
+                mpl.cm.ScalarMappable(norm=normp, cmap=cmaph), ax=htiplt,
+                ticks=tcks, format=f'%.{fcb}f', cax=cax1,
+                orientation="horizontal")
+        else:
+            cb1 = figprofsint.colorbar(
+                mpl.cm.ScalarMappable(norm=normp, cmap=cmaph), ax=htiplt,
+                cax=cax1, format=f'%.{fcb}f', orientation="horizontal")
+        cb1.ax.tick_params(direction='in', labelsize=20)
     cb1.ax.set_ylabel(f'{plotvname} \n'
                       + f'{plotunits}', fontsize=15, labelpad=50)
     cax1.xaxis.set_ticks_position("top")

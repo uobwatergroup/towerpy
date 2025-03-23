@@ -11,7 +11,7 @@ project = 'Towerpy'
 author = 'DSR-MARR-TowerpyCom'
 
 release = '2022'
-version = '1.0.6'
+version = '1.0.7'
 
 # -- General configuration
 
