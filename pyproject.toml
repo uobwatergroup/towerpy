@@ -7,7 +7,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "towerpy-rd"
+name = "towerpy_rd"
 description = """Towerpy: an open-source toolbox for processing polarimetric radar data"""
 requires-python = ">=3.9"
 license = {file = "LICENSE.txt"}

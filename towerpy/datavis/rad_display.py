@@ -10,12 +10,18 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from matplotlib.offsetbox import AnchoredText
 import matplotlib.patheffects as pe
 import matplotlib.ticker as mticker
+from matplotlib.ticker import MaxNLocator
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import cartopy.io.img_tiles as cimgt
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from ..utils import radutilities as rut
 from ..base import TowerpyError
 from ..utils import unit_conversion as tpuc
+from ..utils.radutilities import resolve_rect_coords, find_nearest
+from ..utils.radutilities import _safe_metadata, getcoordunits
+from ..utils.radutilities import _as_dataset, _deep_update
+from ..utils.unit_conversion import _safe_units, convert, _normalise_units
 # from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
 
@@ -2819,6 +2825,1479 @@ def plot_ppidiff(rad_georef, rad_params, rad_var1, rad_var2, var2plot1=None,
 # %% xarray implementation
 # =============================================================================
 
+# =============================================================================
+# %%% Plotting parameters
+# =============================================================================
+from dataclasses import dataclass
+
+@dataclass
+class PlotParams:
+    range_spec: list
+    norm_boundaries: list
+    cmap: object
+    extend: str
+    norm: object
+    ticklabels: list | None
+    force_all_ticks: bool = False
+
+@dataclass
+class CmapSpec:
+    name: str
+    extend: str = "both"
+    set_under: str | None = None
+    set_over: str | None = None
+
+
+def _lookup_params_override(dct, varname, units):
+    """Return override from dict using varname first, then units.
+    Override keys are normalised so users can pass raw unit strings."""
+    if not dct:
+        return None
+
+    # Normalise all keys in the override dict
+    normed = {}
+    for k, v in dct.items():
+        # If the key is a variable name, keep it as-is
+        if k in (varname,):
+            normed[k] = v
+        else:
+            # Otherwise treat it as a unit string and normalise it
+            normed[_normalise_units(k)] = v
+
+    # Priority 1: variable name
+    if varname in normed:
+        return normed[varname]
+
+    # Priority 2: canonical units
+    if units in normed:
+        return normed[units]
+
+    return None
+
+
+def _nice_continuous_ticks(boundaries, max_ticks=10):
+    """
+    Return a reduced, nicely spaced set of ticks for continuous colorbars
+    using MaxNLocator, clipped to the actual boundaries.
+    """
+    bmin, bmax = float(boundaries[0]), float(boundaries[-1])
+    locator = MaxNLocator(nbins=max_ticks)
+    ticks = locator.tick_values(bmin, bmax)
+    # Clip to [bmin, bmax] to avoid "empty" extensions
+    ticks = ticks[(ticks >= bmin) & (ticks <= bmax)]
+    # Ensure at least two ticks
+    if ticks.size < 2:
+        ticks = np.linspace(bmin, bmax, min(max_ticks, len(boundaries)))
+    return ticks
+
+
+def _add_colorbar(fig, ax, mappable, pltprms, fsizes, vunits, rotangle=0,
+                  coord_sys="polar", cartopy_enabled=False, pos='top', pad="2%",
+                  size="7%", label=None, labelpad=40):
+    """Add a colorbar for plots."""
+    bounds = pltprms.norm_boundaries
+    # Skip colorbars with no data
+    if np.allclose(bounds, bounds[0]):
+        print("Colorbar skipped: collapsed boundaries")
+        return None
+    
+    # =============================================================================
+    # POLAR or CARTOPY COLORBAR
+    # =============================================================================
+    if coord_sys == "polar" or cartopy_enabled:
+        rotangle = 90
+        shrink = 0.65 if coord_sys == "polar" else 1.0
+        cb = fig.colorbar(mappable, ax=ax, extend=pltprms.extend,
+                          shrink=shrink, aspect=8)
+        cb.ax.tick_params(direction="in", axis="both",
+                          labelsize=fsizes["fsz_cb"])
+        # Categorical case
+        if pltprms.ticklabels is not None:
+            cb.set_ticks(bounds)
+            cb.set_ticklabels(pltprms.ticklabels)
+            plt.setp(cb.ax.get_yticklabels(),
+                     rotation=rotangle, ha="left", va="center")
+        # RHOHV
+        elif pltprms.force_all_ticks:
+            cb.set_ticks(bounds)
+        # Continuous case
+        else:
+            # If too many boundaries, reduce ticks manually
+            # if len(bounds) > 20 or len(bounds) > mappable.cmap.N:
+            threshold = max(20, mappable.cmap.N)
+            if len(bounds) > threshold:
+                nice_ticks = _nice_continuous_ticks(bounds)
+                cb.set_ticks(nice_ticks)
+            else:
+                # Let Matplotlib choose ticks automatically
+                pass
+        # Optional label
+        if label:
+            cb.ax.set_ylabel(label, fontsize=fsizes["fsz_cb"], labelpad=labelpad)
+            cb.ax.yaxis.set_label_position("right")
+        return cb
+    # =============================================================================
+    # RECTANGULAR COLORBAR (TOP AXIS)
+    # =============================================================================
+    ax_divider = make_axes_locatable(ax)
+    cax = ax_divider.append_axes(pos, size=size, pad=pad, axes_class=plt.Axes)
+    sm = mpl.cm.ScalarMappable(cmap=pltprms.cmap, norm=pltprms.norm)
+    # cb = fig.colorbar(mappable, cax=cax, orientation="horizontal",
+    #                   extend=pltprms.extend)
+    cb = fig.colorbar(sm, cax=cax, orientation="horizontal",
+                      extend=pltprms.extend )
+    cax.tick_params(direction="out", labelsize=fsizes["fsz_cb"],
+                    rotation=rotangle)
+    cax.xaxis.set_ticks_position("top")
+    # Categorical case
+    if pltprms.ticklabels is not None:
+        cb.set_ticks(bounds)
+        cb.set_ticklabels(pltprms.ticklabels)
+    # RHOHV special case
+    elif pltprms.force_all_ticks:
+        cb.set_ticks(bounds)
+    # Continuous case
+    else:
+        # If too many boundaries, reduce ticks manually
+        threshold = max(20, mappable.cmap.N)
+        if len(bounds) > threshold:
+            nice_ticks = _nice_continuous_ticks(bounds)
+            cb.set_ticks(nice_ticks)
+        else:
+            # Let Matplotlib choose ticks automatically
+            pass
+    if label:
+        cb.ax.set_ylabel(label, fontsize=fsizes["fsz_cb"], labelpad=labelpad)
+        cb.ax.yaxis.set_label_position("left")
+    cb.ax.tick_params(direction="out")
+    return cax
+
+
+def _discrete_cmap_with_labels(values, cmap_name="tpylc_div_yw_gy_bu",
+                              labels=None):
+    """Generate discrete colormaps and normalisation for categorical data."""
+    unique_vals = np.unique(values)
+
+    # Bin edges halfway between successive values
+    edges = np.concatenate([[unique_vals[0] - 0.5],
+                            (unique_vals[:-1] + unique_vals[1:]) / 2,
+                            [unique_vals[-1] + 0.5]])
+
+    # Build a ListedColormap with exactly N colours
+    base_cmap = plt.get_cmap(cmap_name)
+    if hasattr(base_cmap, "colors"):
+        colors = base_cmap.colors[:len(unique_vals)]
+    else:
+        colors = base_cmap(np.linspace(0, 1, len(unique_vals)))
+    cmap = mpc.ListedColormap(colors)
+
+    # BoundaryNorm ensures discrete mapping
+    norm = mpc.BoundaryNorm(edges, cmap.N)
+
+    # Labels
+    ticklabels = [labels.get(v, str(v)) for v in unique_vals] if labels else [str(v) for v in unique_vals]
+
+    return cmap, norm, unique_vals.tolist(), ticklabels
+
+
+
+def _resolve_cmap(units, varname, ucmap, cb_ext=None):
+    """
+    Return a colormap and extension mode resolved from units, overrides,
+    and defaults."""
+    CMAP_DEFAULTS = {
+        "dBZ":      CmapSpec("tpylsc_rad_ref", extend="both"),
+        "unitless": CmapSpec("tpylsc_rad_pvars", extend="both"),
+        "dB":       CmapSpec("tpylsc_rad_2slope", extend="both"),
+        "deg/km":   CmapSpec("tpylsc_rad_2slope", extend="both"),
+        "dB/km":    CmapSpec("tpylsc_rad_pvars", extend="max"),
+        "m/s":      CmapSpec("tpylsc_div_dbu_rd", extend="both"),
+        "mm/h":     CmapSpec("tpylsc_rad_rainrt", extend="max",
+                             set_under="whitesmoke"),
+        "mm":       CmapSpec("tpylsc_rad_rainrt", extend="max",
+                             set_under="whitesmoke"),
+        "km":       CmapSpec("gist_earth", extend="max"),
+        "dV/dh":    CmapSpec("tpylsc_rad_2slope_r", extend="both"),
+        "dBm":      CmapSpec("tpylsc_rad_pvars", extend="both"),
+        "unorm":    CmapSpec("tpylsc_useq_bupkyw", extend="neither"),
+        "0-1":      CmapSpec("tpylsc_useq_bupkyw", extend="neither"),
+        }
+
+    # Override by varname
+    # if ucmap and varname in ucmap:
+    #     spec = CmapSpec(ucmap[varname])
+    cmap_name = _lookup_params_override(ucmap, varname, units)
+    if cmap_name is not None:
+        spec = CmapSpec(cmap_name)
+    elif varname.lower().startswith('pia'):
+        spec = CmapSpec("tpylsc_useq_fiery", extend="max")
+    # elif varname.lower() == "alpha":
+    elif varname.lower().startswith('alpha'):
+        spec = CmapSpec("tpylsc_useq_fiery", extend="max")
+    # elif varname.lower() == "beta":
+    elif varname.lower().startswith('beta'):
+        spec = CmapSpec("tpylsc_useq_fiery", extend="max")
+    # here im not sure because is DWD special case with no units
+    elif varname.lower().startswith('uvrad'):
+        spec = CmapSpec("tpylsc_div_dbu_rd", extend="both")
+    # Override by units
+    elif ucmap and units in ucmap:
+        spec = CmapSpec(ucmap[units])
+    else:
+        spec = CMAP_DEFAULTS.get(units, CmapSpec("tpylsc_rad_pvars"))
+
+    # Apply cb_ext override (if provided)
+    # if cb_ext and units in cb_ext:
+    #     spec.extend = cb_ext[units]
+    ext_override = _lookup_params_override(cb_ext, varname, units)
+    if ext_override is not None:
+        spec.extend = ext_override
+    # Instantiate colormap safely
+    cmap = mpl.colormaps[spec.name].copy()
+
+    if spec.set_under:
+        cmap.set_under(spec.set_under)
+    if spec.set_over:
+        cmap.set_over(spec.set_over)
+
+    return cmap, spec.extend
+
+
+def _resolve_var2plot(ds, var2plot):
+    """Select a variable to plot, preferring reflectivity if available."""
+    if var2plot is not None:
+        return var2plot
+    # Auto-select reflectivity if present
+    for name, da in ds.data_vars.items():
+        if da.attrs.get("units") == "dBZ":
+            return name
+    # Fallback: first variable
+    return list(ds.data_vars)[0]
+
+
+def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
+                custom_rules=None, ucmap=None):
+    """
+    Generate plotting parameters for a given radar variable.
+
+    Parameters
+    ----------
+    varname : str
+        Variable name to plot (must be present in xrds.data_vars).
+    xrds : xarray.Dataset
+        Dataset containing radar variables and coordinates.
+    vars_bounds : dict, optional
+        Explicit bounds overrides keyed by variable name.
+        Format: {"DBZH": [-20, 70, 19]}.
+    unorm : dict, optional
+        User normalisation overrides keyed by variable name or unit.
+        Values should be matplotlib.colors.Normalize or BoundaryNorm objects.
+    cb_ext : dict, optional
+        Colourbar extension overrides keyed by unit.
+    custom_rules : dict, optional
+        Metadata-driven rules keyed by 'units', 'standard_name', or 'short_name'.
+        Values can be lists (bounds), arrays (boundaries), or callables
+        (functions returning boundaries).
+    ucmap : dict, optional
+        Colormap overrides keyed by unit or variable name.
+        Example: {"dBZ": "viridis", "PHIDP": "twilight"}.
+
+    Returns
+    -------
+    range_spec : list
+        [vmin, vmax, N] used to generate boundaries (unless overridden).
+    norm_boundaries : ndarray
+        Array of boundaries for colour normalisation.
+    cmap : dict
+        Colormap dictionary keyed by unit.
+    extend : dict
+        Colourbar extension dictionary keyed by unit.
+    normp : matplotlib.colors.Normalize
+        Normalisation object for plotting.
+    varname : str
+        Variable name (echoed back).
+
+    Override Hierarchy
+    ------------------
+    1. vars_bounds[varname] → explicit bounds override
+    2. unorm[varname] or unorm[units] → explicit normalisation override
+    3. ucmap[varname] or ucmap[units] → explicit colormap override
+    4. custom_rules (units → standard_name → short_name)
+    5. Built-in defaults (lpv_units, lpv_standard, lpv_short)
+    6. Fallback: auto-scale from data min/max
+
+    Notes
+    -----
+    - This function normalises obvious unit inconsistencies (e.g. "meters per seconds" → "m/s", "mm h-1" → "mm/h") and applies a hierarchy of rules to determine bounds, colormaps, and normalisation for plotting radar variables.
+    - Unit strings are normalised internally (e.g. "meters per seconds" → "m/s").
+    """
+    da = xrds[varname]
+    units_raw = da.attrs.get("units", "")
+    stdname = da.attrs.get("standard_name", "")
+    short = da.attrs.get("short_name", varname)
+
+    # Normalise some unit inconsistencies 
+    units = _normalise_units(units_raw)
+
+    # Defaults grouped inside function 
+    lpv_units = {"dBZ": [-10, 60, 15],
+                 "dB": [-2, 6, 17],
+                 "deg": [0, 180, 19],
+                 "deg/km": [-2, 6, 17],
+                 "unitless": [0.3, 0.9, 1.0],
+                 "dB/km": [0, 0.5, 11],
+                 "m/s": [-5, 5, 11],
+                 "dV/dh": [-1.8, 0.6, 13],
+                 "mm/h": [0, 64, 14],
+                 "mm": [0, 200, 14],
+                 "km": [0, 7, 36],
+                 "0-1": [0, 1, 11],
+                 "dBm": [-120, 0, 25],
+                 "unorm": [0, 1, 11]
+                 }
+    # Remove unitless unless rhohv
+    if "rhohv" not in short.lower():
+        lpv_units.pop("unitless", None)
+    # Remove dB default unless ZDR
+    if "zdr" not in short.lower():
+        lpv_units.pop("dB", None)
+
+    lpv_standard = {
+        "radar_linear_depolarization_ratio": [-30, 10, 17],
+        # "radar_specific_differential_phase_hv": [-2, 6, 17],
+        # "radar_differential_phase_hv": [0, 180, 19],
+        "radar_doppler_spectrum_width_h": [0, 5, 11],
+        "radar_doppler_spectrum_width_v": [0, 5, 11],
+        "signal_noise_ratio": [-30, 130, 17],
+        "linear_signal_noise_ratio": [0, 1e6, 20],
+        "signal_noise_ratio_h": [0, 30, 17],
+        "signal_noise_ratio_v": [0, 30, 17],
+        # "signal_quality_index_h": [0, 1, 11],
+        # "signal_quality_index_v": [0, 1, 11],
+        # "clutter_indicator": [0, 1, 11],
+        "clutter_map": [0, 1, 11],
+        "radar_linear_equivalent_reflectivity_factor_h": [0, 1e6, 20],
+        "radar_linear_equivalent_reflectivity_factor_v": [0, 1e6, 20]
+        }
+
+    lpv_short = {"PIA": [0, 20, 21], "alpha": [0, 0.2, 21],
+                 "beta": [0, 0.1, 21]
+                 }
+    
+    # Continuous variables
+    if "flags" not in units.lower():
+        bounds = _lookup_params_override(vars_bounds, varname, units)
+        if bounds is not None:
+            pass  # use this override
+        elif custom_rules and "units" in custom_rules and units in custom_rules["units"]:
+            bounds = custom_rules["units"][units]
+        elif stdname in lpv_standard:
+            bounds = lpv_standard[stdname]
+        elif short in lpv_short:
+            bounds = lpv_short[short]
+        elif units in lpv_units:
+            bounds = lpv_units[units]
+        else:
+            bounds = [float(da.min()), float(da.max()), 13]
+        # Boundaries
+        # Custom non-uniform rainfall boundaries
+        # if units == "mm/h" and not (vars_bounds and varname in vars_bounds):
+        if units == "mm/h" and not (
+                vars_bounds and (varname in vars_bounds
+                                 or _normalise_units("mm/h") in vars_bounds)):
+            n = 13
+            arr = np.geomspace(1, 64, num=n)  # exact 1 → 64 range
+            arr = np.concatenate(([0.1, 0.5], arr))  # drizzle resolution
+            arr = np.array((0.1, 1, 2, 4, 8, 12, 16, 20, 24, 30, 36, 48, 56,
+                            64))
+            custom_bnd = arr
+            bounds = [arr.min(), arr.max(), len(arr)]
+        elif units == "mm" and not (vars_bounds and varname in vars_bounds):
+            arr = np.array([0.1, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64,
+                            96, 128, 256])
+            arr = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 75,
+                            100, 125, 150, 200))
+            bounds = [arr.min(), arr.max(), len(arr)]
+            custom_bnd = arr
+        else:
+            custom_bnd = None
+
+        # Colormap resolution (with overrides) 
+        cmap, ext = _resolve_cmap(units, varname, ucmap, cb_ext)
+        if custom_bnd is not None:
+            bnd = custom_bnd
+        elif "rhohv" in short.lower():
+            bnd = np.hstack((np.linspace(bounds[0], bounds[1], 4)[:-1],
+                             np.linspace(bounds[1], bounds[2], 11)))
+            ext = "min"
+        else:
+            bnd = np.linspace(bounds[0], bounds[1], bounds[2])
+        # Normalisation hierarchy 
+        # if unorm and varname in unorm:
+        #     normp = unorm[varname]
+        # elif unorm and units in unorm:
+        #     normp = unorm[units]
+        norm_override = _lookup_params_override(unorm, varname, units)
+        if norm_override is not None:
+            normp = norm_override
+        else:
+            normp = mpc.BoundaryNorm(bnd, cmap.N, extend=ext)
+        ticklabels = None
+    else:
+        # Handle categorical flags 
+        flags = da.attrs.get("flags", {})
+        values = list(flags.values())
+        labels = {v: k for k, v in flags.items()}  # invert mapping
+        # Decide colormap source
+        if ucmap and (varname in ucmap or units in ucmap):
+            cmap_name = ucmap.get(varname, ucmap.get(units))
+        else:
+            if "mlpclass" in short.lower():
+                cmap_name = "Paired"
+            else:
+                cmap_name = "tpylc_div_yw_gy_bu"  # default fallback
+        cmap, normp, ticks, ticklabels = _discrete_cmap_with_labels(
+            values, labels=labels, cmap_name=cmap_name)
+        bounds = [min(values), max(values), len(values)]
+        bnd = ticks
+        ext = "neither"  # flags don’t need extensions
+    force_all_ticks = False
+    if "rhohv" in short.lower() or "rate" in short.lower():
+        force_all_ticks = True
+
+    return PlotParams(range_spec=bounds, norm_boundaries=bnd, cmap=cmap,
+                      extend=ext, norm=normp, ticklabels=ticklabels,
+                      force_all_ticks=force_all_ticks)
+
+
+def default_cartopy_config():
+    """
+    Return the default configuration dictionary for Cartopy-based plotting.
+
+    This dictionary defines all tunable Cartopy options used by
+    ``plot_ppi_xr``. Users may override any subset of keys by passing a
+    ``cartopy_cfg`` dictionary to ``plot_ppi_xr``; missing keys fall back to
+    the defaults defined here.
+
+    Returns
+    -------
+    cfg : dict
+        Dictionary with the following structure:
+
+        enable_cartopy : bool, default False
+            Whether to activate Cartopy plotting. If True, ``coord_sys`` is
+            forced to ``"rect"`` and ``polarplot`` is ignored.
+
+        projection : cartopy.crs.CRS, default PlateCarree()
+            Map projection used for the Matplotlib axes.
+
+        data_crs : cartopy.crs.CRS or None, default None
+            CRS of the input data coordinates. Required when
+            ``enable_cartopy=True``. For lon/lat grids, use
+            ``ccrs.PlateCarree()``; for projected grids, use the appropriate
+            CRS (e.g. ``ccrs.UTM(32)``).
+
+        extent : tuple of float or None, default None
+            Optional map extent ``(xmin, xmax, ymin, ymax)`` in the projection
+            CRS. If None, the extent is derived from the data.
+
+        tiles : dict
+            Configuration for background map tiles:
+
+                enabled : bool, default False
+                    Whether to draw background tiles.
+
+                class : cartopy.io.img_tiles.* or None, default None
+                    Tile provider class (e.g. ``OSM()``, ``StamenTerrain()``).
+
+                kwargs : dict, default {}
+                    Additional keyword arguments passed to the tile provider.
+
+                resolution : int, default 8
+                    Tile resolution level.
+
+                alpha : float, default 1.0
+                    Tile transparency.
+
+        features : list
+            List of Cartopy features to add (e.g. coastlines, borders, rivers).
+            Defaults to ``default_cartopy_features``.
+
+        gridlines : dict
+            Configuration for gridlines:
+
+                enabled : bool, default True
+                    Whether to draw gridlines.
+
+                draw_labels : bool, default True
+                    Whether to label gridlines.
+
+                label_size : int, default 10
+                    Font size for gridline labels.
+
+        alpha_rad : float, default 1.0
+            Transparency applied to the radar field.
+    """
+
+    return {"enable_cartopy": False,
+            "projection": ccrs.PlateCarree(),
+            "data_crs": None,
+            "extent": None,
+            "tiles": {"enabled": False, "class": None, "kwargs": {},
+                      "resolution": 8, "alpha": 1.0},
+            "features": default_cartopy_features,
+            "gridlines": {"enabled": True, "draw_labels": True,
+                          "label_size": 10},
+            "tick_spacing": {"dx": 1.0, "dy": 1.0},
+            "alpha_rad": 1.0}
+
+# =============================================================================
+# %%% PPI plots
+# =============================================================================
+
+def _resolve_mlyr(ds, mlyr_bnames):
+    """
+    Resolve melting-layer top/bottom DataArrays from either:
+    - dataset defaults (MLYRTOP, MLYRBTM), or
+    - user-provided variable names via mlyr_bnames={'top': ..., 'bottom': ...}.
+    """
+    if mlyr_bnames is None:
+        top_name = "MLYRTOP"
+        bot_name = "MLYRBTM"
+    else:
+        top_name = mlyr_bnames.get("top")
+        bot_name = mlyr_bnames.get("bottom")
+
+    if top_name not in ds or bot_name not in ds:
+        return None, None
+
+    return ds[top_name], ds[bot_name]
+
+
+def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
+                polarplot=True, cartopy_enabled=False, data_crs=None,
+                projcoord_names=None):
+    """
+    Overlay melting-layer boundaries (top and bottom) on a PPI axis.
+    """
+    # Resolve ML boundaries
+    mlyr_top, mlyr_bottom = _resolve_mlyr(ds, mlyr_bnames)
+    if mlyr_top is None:
+        return
+
+    # Beam height field
+    if "beamc_height" not in ds:
+        return
+    bh = ds["beamc_height"]
+
+    # Vectorised nearest-range lookup
+    mlyr_top_idx = abs(bh - mlyr_top).argmin(dim="range")
+    mlyr_bottom_idx = abs(bh - mlyr_bottom).argmin(dim="range")
+    # =============================================================================
+    # CARTOPY MODE
+    # =============================================================================
+    if cartopy_enabled:
+        if projcoord_names is None:
+            return
+
+        xname = projcoord_names.get("x")
+        yname = projcoord_names.get("y")
+
+        if xname not in ds.coords or yname not in ds.coords:
+            return
+
+        proj_x = ds[xname]      # (azimuth, range)
+        proj_y = ds[yname]
+
+        # Ensure shapes match beam height
+        if proj_x.shape != bh.shape:
+            return
+
+        # Extract ML boundary coordinates
+        mlt_x = proj_x.isel(range=mlyr_top_idx).values
+        mlt_y = proj_y.isel(range=mlyr_top_idx).values
+        mlb_x = proj_x.isel(range=mlyr_bottom_idx).values
+        mlb_y = proj_y.isel(range=mlyr_bottom_idx).values
+
+        # Plot using data CRS
+        line_top = ax.plot(
+            mlt_x, mlt_y, c="k", ls="-", alpha=0.85,
+            transform=data_crs,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(T)}$")[0]
+        line_bot = ax.plot(
+            mlb_x, mlb_y, c="grey", ls="-", alpha=0.85,
+            transform=data_crs,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(B)}$")[0]
+        legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        ax.add_artist(legend)
+        return
+    # =============================================================================
+    # POLAR MODE
+    # =============================================================================
+    if coord_sys == "polar" and {"range", "azimuth"} <= set(ds.coords):
+
+        r_km = convert(ds["range"], "km")
+        az = ds["azimuth"]
+        if polarplot:
+            az = np.deg2rad(az)
+
+        ml_top = r_km.isel(range=mlyr_top_idx).values
+        ml_bot = r_km.isel(range=mlyr_bottom_idx).values
+
+        line_top = ax.plot(
+            az.values, ml_top, c="k", ls="-", alpha=0.85,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(T)}$")[0]
+        line_bot = ax.plot(
+            az.values, ml_bot, c="grey", ls="-", alpha=0.85,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(B)}$")[0]
+        legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        ax.add_artist(legend)
+        return
+    # =============================================================================
+    #     RECTANGULAR MODE
+    # =============================================================================
+    coord_namex, coord_namey = resolve_rect_coords(ds, coord_names)
+    if coord_sys == "rect" and coord_namex in ds.coords and coord_namey in ds.coords:
+
+        rect_x = ds[coord_namex]
+        rect_y = ds[coord_namey]
+
+        if rect_x.shape != bh.shape:
+            return
+
+        mlt_x = rect_x.isel(range=mlyr_top_idx).values
+        mlt_y = rect_y.isel(range=mlyr_top_idx).values
+        mlb_x = rect_x.isel(range=mlyr_bottom_idx).values
+        mlb_y = rect_y.isel(range=mlyr_bottom_idx).values
+
+        line_top = ax.plot(
+            mlt_x, mlt_y, c="k", ls="-", alpha=0.85,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(T)}$")[0]
+
+        line_bot = ax.plot(
+            mlb_x, mlb_y, c="grey", ls="-", alpha=0.85,
+            path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
+            label=r"$MLyr_{(B)}$")[0]
+
+        legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        ax.add_artist(legend)
+        return
+
+
+def _plot_max_range(ax, ds, *, coord_names=None, proj_x=None, proj_y=None,
+                    data_crs=None, color="gray", linewidth=1.0, **kwargs):
+    """
+    Plot the maximum range boundary in either rectangular or projected coordinates.
+    """
+    # Cartopy / projected branch
+    if proj_x is not None and proj_y is not None and data_crs is not None:
+        # Last column is the max range boundary
+        ax.plot(proj_x[:, -1], proj_y[:, -1], color=color,
+                linewidth=linewidth, transform=data_crs, **kwargs)
+        return
+
+    # Rectangular branch
+    xname, yname = resolve_rect_coords(ds, coord_names)
+    if xname is None or yname is None:
+        return
+    x = ds[xname].values
+    y = ds[yname].values
+    # Max range is the last row or last column depending on orientation
+    # I assume y increases with range
+    ax.plot(x, np.full_like(x, y[-1]), color=color, linewidth=linewidth,
+            **kwargs)
+
+
+def _plot_pixel_midpoints(ax, ds, *, coord_names=None, proj_x=None, proj_y=None,
+                          data_crs=None, color="grey", alpha=0.2, marker="+",
+                          **kwargs):
+    """
+    Plot pixel midpoints in either rectangular or projected coordinates.
+    """
+    # Cartopy / projected branch
+    if proj_x is not None and proj_y is not None and data_crs is not None:
+        ax.scatter(proj_x.ravel(), proj_y.ravel(), color=color,
+                   alpha=alpha, marker=marker, transform=data_crs, **kwargs)
+        return
+
+    # Rectangular branch
+    xname, yname = resolve_rect_coords(ds, coord_names)
+    if xname is None or yname is None:
+        return
+
+    xx = ds[xname].values.reshape(-1)
+    yy = ds[yname].values.reshape(-1)
+
+    ax.scatter(xx, yy, color=color, alpha=alpha, marker=marker, **kwargs)
+
+
+def _plot_range_rings(ax, ds, range_rings, *, coord_sys, polarplot=True,
+                      coord_names=None, color="grey", alpha=0.75, **kwargs):
+    """
+    Plot range rings in either rectangular or polar coordinates.
+    """
+    # Resolve range coordinate
+    if "range" not in ds.coords:
+        return
+    # hardcode range
+    r_km = convert(ds["range"], "km")
+
+    # Normalise range_rings input
+    if isinstance(range_rings, range):
+        range_rings = list(range_rings)
+
+    if isinstance(range_rings, (int, float)):
+        # spacing in km → generate rings up to max range
+        nrings_km = np.arange(range_rings, float(r_km.max()), range_rings)
+    else:
+        # explicit radii in km
+        nrings_km = np.asarray(range_rings, dtype=float)
+
+    # Find nearest range indices
+    idx_rs = [find_nearest(r_km.values, rr) for rr in nrings_km]
+    # =========================================================================
+    # RECTANGULAR MODE
+    # =========================================================================
+    if coord_sys == "rect":
+        xname, yname = resolve_rect_coords(ds, coord_names)
+        if xname is None:
+            return
+
+        rect_x = ds[xname]
+        rect_y = ds[yname]
+
+        rings_x = np.stack([rect_x.isel(range=i).values for i in idx_rs])
+        rings_y = np.stack([rect_y.isel(range=i).values for i in idx_rs])
+
+        ax.scatter(rings_x, rings_y, color=color, alpha=alpha, marker=".",
+                   **kwargs)
+        # Crosshairs
+        ax.axhline(0, color=color, ls="--", alpha=alpha)
+        ax.axvline(0, color=color, ls="--", alpha=alpha)
+        ax.grid(True)
+        return
+    # =========================================================================
+    # POLAR MODE
+    # =========================================================================
+    if coord_sys == "polar":
+        if "azimuth" not in ds.coords:
+            return
+
+        az = ds["azimuth"]
+        if polarplot:
+            az = np.deg2rad(az)
+
+        # For each ring, plot a constant radius vs azimuth
+        for i in idx_rs:
+            rr_km = float(r_km.isel(range=i))
+            ax.plot(az.values, np.full_like(az.values, rr_km),
+                    color=color, alpha=alpha, ls="--", **kwargs)
+        ax.grid(True)
+        return
+
+
+def _plot_contours(ax, ds, varname, *, coord_sys, polarplot=True,
+                   coord_names=None, contour_kw, xrdsvar_sorted=None,
+                   az_grid=None, r_grid_km=None, fs_label=10):
+    """
+    Plot contour overlays in either rectangular or polar coordinates.
+    """
+    # Resolve the data variable
+    if varname not in ds:
+        return
+    da = ds[varname]
+
+    # Merge default and user contour kwargs
+    ckw = {"alpha": 0.5, "zorder": 2, "colors": None, "legend": False}
+    if contour_kw:
+        ckw.update(contour_kw)
+    # =========================================================================
+    # RECTANGULAR MODE
+    # =========================================================================
+    if coord_sys == "rect":
+        xname, yname = resolve_rect_coords(ds, coord_names)
+        if xname is None:
+            return
+        rect_x = ds[xname]
+        rect_y = ds[yname]
+        contour = ax.contour(rect_x.values, rect_y.values, da.values,
+                             **contour_kw,)
+        ax.clabel(contour, inline=True, fontsize=fs_label)
+        if ckw["legend"]:
+            handles, labels = contour.legend_elements()
+            labels = [lb.replace("x = ", "") for lb in labels]
+            ax.legend(handles, labels, title=varname, loc="upper right").set_zorder(5)
+        return
+    # =========================================================================
+    # POLAR MODE
+    # =========================================================================
+    if coord_sys == "polar":
+        if "azimuth" not in ds.coords or "range" not in ds.coords:
+            return
+        # da must be 2D: (azimuth, range)
+        contour = ax.contour(az_grid.values, r_grid_km.values,
+                             da.values, **contour_kw)
+        ax.clabel(contour, inline=True, fontsize=fs_label)
+        if ckw["legend"]:
+            handles, labels = contour.legend_elements()
+            labels = [lb.replace("x = ", "") for lb in labels]
+            ax.legend(handles, labels, title=varname, loc="upper right").set_zorder(5)
+        return
+
+
+def _plot_points(ax, points, coord_names,
+                 ptsvar=None, norm=None, cmap=None, size=20):
+
+    # Validate coordinate names
+    required = {coord_names["x"], coord_names["y"]}
+    missing = required - set(points.keys())
+    if missing:
+        raise ValueError(
+            f"points2plot is missing required coordinates: {missing}")
+    # Extract coordinates
+    x = points[coord_names["x"]]
+    y = points[coord_names["y"]]
+    # Scatter logic
+    if ptsvar is None or ptsvar not in points:
+        ax.scatter(x, y, color="k", marker="o", s=size)
+    else:
+        ax.scatter(x, y, c=points[ptsvar], cmap=cmap, norm=norm, marker="o",
+                   edgecolors="k", s=size)
+
+# =============================================================================
+# Cartopy features
+# =============================================================================
+default_cartopy_features = [
+    {"feature": cfeature.NaturalEarthFeature(
+        "cultural", "admin_1_states_provinces_lines", "10m",
+        facecolor="none"), "kwargs": {"edgecolor": "black", "ls": ":"}},
+    {"feature": cfeature.NaturalEarthFeature(
+        "cultural", "admin_0_countries", "10m", facecolor="none"),
+        "kwargs": {"edgecolor": "black"}}]
+
+def _print_cartopy_licenses(cfg):
+    print("© Natural Earth; license: public domain")
+
+    tiles = cfg.get("tiles", {})
+    tile_class = tiles.get("class")
+
+    if tile_class is None:
+        return
+
+    # Stamen
+    if tile_class.__name__ == "Stamen":
+        print("© Map tiles by Stamen Design (CC BY 3.0). "
+              "Data by OpenStreetMap (ODbL).")
+
+    # Mapbox
+    if tile_class.__name__ == "MapboxTiles":
+        print("© Mapbox; see https://www.mapbox.com/legal/tos/")
+
+    # GoogleTiles
+    if tile_class.__name__ == "GoogleTiles":
+        print("© Google Maps tiles; usage subject to Google Terms of Service")
+
+
+def _add_cartopy_tiles(ax, cfg):
+    """Add tile imagery to a Cartopy GeoAxes."""
+    tcfg = cfg.get("tiles", {})
+    if not tcfg.get("enabled", False):
+        return
+
+    tile_class = tcfg.get("class")
+    if tile_class is None:
+        raise ValueError("tiles.enabled=True but no tile class provided")
+
+    tile_kwargs = tcfg.get("kwargs", {})
+    resolution = tcfg.get("resolution", 8)
+    alpha = tcfg.get("alpha", 1.0)
+
+    tile_source = tile_class(**tile_kwargs)
+    ax.add_image(tile_source, resolution, alpha=alpha)
+
+
+def _add_cartopy_features(ax, cfg):
+    """Add arbitrary Cartopy features to the GeoAxes."""
+    for item in cfg.get("features", []):
+        feat = item["feature"]
+        kwargs = item.get("kwargs", {})
+        ax.add_feature(feat, **kwargs)
+
+
+def _add_cartopy_gridlines(ax, cfg):
+    """Add gridlines with optional labels."""
+    from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+
+    gl_cfg = cfg.get("gridlines", {})
+    if not gl_cfg.get("enabled", True):
+        return
+
+    gl = ax.gridlines(draw_labels=gl_cfg.get("draw_labels", True),
+                      dms=False, x_inline=False, y_inline=False)
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.bottom_labels = True
+    gl.left_labels = True
+    gl.xformatter = LONGITUDE_FORMATTER
+    gl.yformatter = LATITUDE_FORMATTER
+
+    gl.xlabel_style = {"size": gl_cfg.get("label_size", 10)}
+    gl.ylabel_style = {"size": gl_cfg.get("label_size", 10)}
+
+
+def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
+             polarcoord_names={"azi": "azimuth", "rng": "range"},
+             rectcoord_names={"x": "grid_rectx", "y": "grid_recty"},
+             projcoord_names={"x": "grid_osgbx", "y": "grid_osgby"},
+             cartopy_cfg=None, vars_bounds=None, cb_ext=None, unorm=None,
+             ucmap=None, cbticks=None, font_sizes='regular',
+             fig_size=None, fig_title=None, fig=None, ax1=None, plot_grid=False,
+             plot_axislabels=True, plot_mlyr=False, mlyr_bnames=None,
+             plot_contourl=None, contour_kw=None, range_rings=None,
+             rd_maxrange=False, points2plot=None, ptsvar2plot=None,
+             pixel_midp=False, add_colorbar=False, custom_rules=None,
+             xlims=None, ylims=None):
+    """
+    Plot a radar Plan Position Indicator (PPI) scan from an xarray Dataset.
+
+    This function provides a flexible and extensible interface for visualising
+    radar sweep data in polar, rectangular, or projected (Cartopy) coordinate
+    systems. It supports colour‑mapped fields, contours, range rings, point
+    overlays, melting‑layer boundaries, and various customisation options.
+
+    Parameters
+    ----------
+    xrds : xarray.Dataset
+        Radar sweep dataset containing the variable to plot and the required
+        coordinate fields. Must include azimuth/range for polar mode, or
+        rectangular/projected coordinates for rect/cartopy modes.
+    var2plot : str or None, optional
+        Name of the variable to display. If None, the function attempts to
+        infer a suitable default from the dataset.
+    coord_sys : {'polar', 'rect'}, default 'polar'
+        Coordinate system used for plotting. If Cartopy is enabled, this is
+        overridden to 'rect'.
+    polarplot : bool, default False
+        If True, use a polar projection (radians) for azimuth. If False, plot
+        azimuth on the x‑axis in degrees.
+    polarcoord_names : dict, default {'azi': 'azimuth', 'rng': 'range'}
+        Names of azimuth and range coordinates in polar mode.
+    rectcoord_names : dict, default {'x': 'grid_rectx', 'y': 'grid_recty'}
+        Names of rectangular coordinates for non‑Cartopy rect mode.
+    projcoord_names : dict, default {'x': 'grid_osgbx', 'y': 'grid_osgby'}
+        Names of projected coordinates for Cartopy mode.
+    cartopy_cfg : dict or None
+        Optional configuration dictionary controlling Cartopy-based plotting.
+        Any keys provided here override the defaults returned by
+        :func:`default_cartopy_config`. See ``help(default_cartopy_config)``
+        for the full configuration structure and available options.
+    vars_bounds, cb_ext, unorm, ucmap: optional
+        Parameters forwarded to the colour‑mapping logic via `plot_params`.
+    cbticks : list or None
+        Custom tick locations for the colourbar.
+    font_sizes : {'regular', 'large'}, default 'regular'
+        Controls font sizes for labels, ticks, and titles.
+    fig_size : tuple or None
+        Figure size in inches. If None, a sensible default is chosen based on
+        the coordinate system.
+    fig_title : str or None
+        Custom figure title. If None, a metadata‑derived title is used.
+    fig, ax1 : matplotlib Figure and Axes or None
+        Existing figure/axes to draw on. If None, new ones are created.
+    plot_grid : bool, default True
+        Whether to draw gridlines on the axes.
+    plot_axislabels : bool, default True
+        Whether to label the axes.
+    plot_mlyr : bool, default False
+        If True, overlay melting‑layer boundaries (top and bottom). Requires
+        melting‑layer metadata in the dataset or user‑specified variable names.
+    mlyr_bnames : dict or None
+        Optional mapping specifying which dataset variables contain the melting
+        layer boundaries, e.g.:
+            {'top': 'MLT', 'bottom': 'MLB'}
+        If None, defaults to 'MLYRTOP' and 'MLYRBTM'.
+    plot_contourl : str or None
+        Name of a variable to overlay as contours.
+    contour_kw : dict or None
+        Additional keyword arguments passed to `ax.contour`.
+    range_rings : list or None
+        Multiple range rings to draw (in km).
+    rd_maxrange : bool, default False
+        If True, draw a circle marking the radar's maximum range.
+    points2plot : array-like or None
+        Optional set of points to overlay on the PPI.
+    ptsvar2plot : str or None
+        Variable used to colour the points in `points2plot`.
+    pixel_midp : bool, default False
+        If True, overlay pixel midpoints.
+    add_colorbar : bool, default False
+        Whether to add a colourbar to the plot.
+    custom_rules : dict or None
+        Optional custom colour‑mapping rules for
+        :func:`towerpy.datavis.rad_display.plot_params`.
+    xlims, ylims : tuple or None
+        Axis limits for rectangular or projected plots.
+
+    Returns
+    -------
+    mappable : matplotlib.cm.ScalarMappable
+        The object associated with the colour‑mapped field.
+    ax1 : matplotlib Axes
+        The axes on which the PPI is drawn.
+
+    Notes
+    -----
+    - When Cartopy is enabled, `coord_sys` is forced to 'rect' and `polarplot`
+      is ignored.
+    - Melting‑layer plotting uses vectorised nearest‑range lookup based on the
+      dataset's beam‑height fields.
+    """
+    # Normalise input
+    xrds = xrds.squeeze(drop=True)
+    xrds, da_name = _as_dataset(xrds)
+    # Resolve variable
+    var2plot = _resolve_var2plot(xrds, var2plot)
+    # Extract metadata safely
+    meta = _safe_metadata(xrds)
+    elev_str = meta["elev_str"]
+    dt_str = meta["dt_str"]
+    rname = meta["rname"]
+    swp_mode = meta["swp_mode"]
+    mappable = None
+    # =============================================================================
+    # Creates plotting parameters 
+    # =============================================================================
+    fsizes = {'fsz_cb': 10, 'fsz_cbt': 12, 'fsz_pt': 14, 'fsz_axlb': 12,
+              'fsz_axtk': 10}
+    if font_sizes == 'large':
+        fsizes = {k1: v1 + 4 for k1, v1 in fsizes.items()}
+    # szpnts = 25
+    szpnts = None
+    pltprms = plot_params(var2plot, xrds, vars_bounds=vars_bounds,
+                          unorm=unorm, cb_ext=cb_ext,
+                          custom_rules=custom_rules,
+                          ucmap=ucmap)
+    # =============================================================================
+    # Title metadata 
+    # =============================================================================
+    # ptitle = fig_title or f"{rname.title()} [{swp_mode}{elev_str}] -- {dt_str}"
+    # =============================================================================
+    # Cartopy features
+    # =============================================================================
+    default_cartopy_cfg = default_cartopy_config()
+    if cartopy_cfg is not None:
+        default_cartopy_cfg = _deep_update(default_cartopy_cfg, cartopy_cfg)
+    if default_cartopy_cfg["enable_cartopy"] and default_cartopy_cfg["data_crs"] is None:
+        raise ValueError("Cartopy plotting enabled but no data CRS provided. "
+                         "Set cartopy_cfg={'data_crs': <your CRS>}.")
+    if default_cartopy_cfg["enable_cartopy"]:
+        coord_names = projcoord_names
+    elif coord_sys == "rect":
+        coord_names = rectcoord_names
+    elif coord_sys == "polar":
+        coord_names = polarcoord_names
+    # =============================================================================
+    # Coordinates
+    # =============================================================================
+    # Safeguard plot mode combinations
+    # Cartopy + polar is invalid → force rect
+    if default_cartopy_cfg["enable_cartopy"]:
+        if coord_sys == "polar":
+            coord_sys = "rect"
+        polarplot = False
+    # Rectangular mode cannot use polarplot
+    if coord_sys == "rect":
+        polarplot = False
+    # Polar mode cannot use Cartopy
+    if coord_sys == "polar":
+        default_cartopy_cfg["enable_cartopy"] = False
+    coord_namex, coord_namey = resolve_rect_coords(xrds, coord_names)
+    has_polar = {polarcoord_names.get('rng'), polarcoord_names.get('azi')} <= set(xrds.coords)
+    has_rect = (coord_namex is not None and coord_namey is not None
+                and {coord_namex, coord_namey} <= set(xrds.coords))
+    rect_x = xrds.coords.get(coord_namex) if has_rect else None
+    rect_y = xrds.coords.get(coord_namey) if has_rect else None
+    if default_cartopy_cfg["enable_cartopy"]:
+        proj_x = xrds.coords.get(projcoord_names.get('x'))
+        proj_y = xrds.coords.get(projcoord_names.get('y'))
+        if proj_x is None or proj_y is None:
+            raise ValueError(
+                f"Cartopy plotting requested (enable_cartopy=True) but projected "
+                f"coordinates {projcoord_names.get('x')}' / '{projcoord_names.get('y')}' "
+                f"are missing in xrds.coords. Either disable Cartopy or provide "
+                f"projected coordinates.")
+    # =============================================================================
+    # Init figure    
+    # =============================================================================
+    if fig_size is None:
+        if coord_sys == "polar":
+            if polarplot:
+                fig_size = (6, 6.15)
+            else:
+                fig_size = (10, 6)
+        elif coord_sys == "rect":
+            if default_cartopy_cfg["enable_cartopy"]:
+                fig_size = (10, 6)
+            else:
+                fig_size = (6, 7)
+
+    if default_cartopy_cfg["enable_cartopy"]:
+        proj = default_cartopy_cfg["projection"]
+        subplot_kw = {"projection": proj}
+        use_constrained = True
+    elif polarplot:
+        subplot_kw = {"projection": "polar"}
+        use_constrained = False
+    else:
+        subplot_kw = {}
+        use_constrained = False
+    if fig is None or ax1 is None:
+        fig, ax1 = plt.subplots(figsize=fig_size, subplot_kw=subplot_kw,
+                                constrained_layout=use_constrained)
+    # =============================================================================
+    # Plot polar plot
+    # =============================================================================
+    if coord_sys == "polar":
+        if has_polar:
+            az = xrds[polarcoord_names.get('azi')]
+            if polarplot:
+                az = np.deg2rad(az)
+            r = convert(xrds[polarcoord_names["rng"]], "km")
+            # Broadcast to 2D grid
+            az_grid, r_grid_km = xr.broadcast(az, r)
+        else:
+            az_grid = r_grid_km = None
+        if has_polar and az_grid is not None:
+            # xrdsvar_sorted = xrds[var2plot].sortby("azimuth", ascending=True)
+            xrdsvar_sorted = xrds[var2plot]
+            mappable = ax1.pcolormesh(
+                az_grid, r_grid_km, xrdsvar_sorted, shading="auto",
+                cmap=pltprms.cmap, norm=pltprms.norm)
+            if polarplot:
+                ax1.set_theta_zero_location('N')
+                ax1.set_theta_direction(-1)
+                ax1.set_thetagrids(np.arange(0, 360, 90))
+                ax1.set_yticklabels([])
+                ax1.axes.set_aspect('equal')
+                if plot_grid:
+                    ax1.grid(color='gray', linestyle=':')
+            ax1.tick_params(axis='both', labelsize=fsizes['fsz_axlb'])
+            ax1.axes.set_aspect('equal')
+    # =============================================================================
+    # Plot plot in rect coord_sys, but no cartopy
+    # =============================================================================
+    elif coord_sys == 'rect' and default_cartopy_cfg['enable_cartopy'] is False:
+        xrdsvar_sorted = None
+        az_grid=None
+        r_grid_km=None
+        if has_rect and rect_x is not None and rect_y is not None:
+            mappable = ax1.pcolormesh(rect_x, rect_y, xrds[var2plot],
+                                      shading="auto", cmap=pltprms.cmap,
+                                      norm=pltprms.norm)
+    # =============================================================================
+    # Plot plot in proj coord_sys, using cartopy
+    # =============================================================================
+    elif default_cartopy_cfg["enable_cartopy"]:
+        # 1. Set extent if provided
+        if xlims and ylims:
+            ax1.set_extent([*xlims, *ylims], crs=proj)
+        # 2. Add tiles
+        _add_cartopy_tiles(ax1, default_cartopy_cfg)
+        # 3. Add features
+        _add_cartopy_features(ax1, default_cartopy_cfg)
+        # 4. Add gridlines
+        # _add_cartopy_gridlines(ax1, default_cartopy_cfg)
+        # 5. Print licensing information
+        _print_cartopy_licenses(default_cartopy_cfg)
+        # 6. Plot the radar field
+        mappable = ax1.pcolormesh(proj_x, proj_y, xrds[var2plot],
+                                  transform=default_cartopy_cfg['data_crs'],
+                                  shading="auto", cmap=pltprms.cmap,
+                                  norm=pltprms.norm,
+                                  alpha=default_cartopy_cfg["alpha_rad"])
+    if mappable is None:
+        raise RuntimeError(
+            "plot_ppi could not find the appropiate coords for the selected"
+            " plotting params:\n"
+            f"coord_sys='{coord_sys}', but has_polar={has_polar}, has_rect={has_rect}, "
+            f"cartopy_enabled={default_cartopy_cfg['enable_cartopy']}.\n"
+            "Dataset coords: " + ", ".join(list(xrds.coords)))
+
+    # =============================================================================
+    # Creates colorbar         
+    # =============================================================================
+    vunits = _safe_units(xrds[var2plot])
+    if add_colorbar:
+        _add_colorbar(fig, ax1, mappable, pltprms, fsizes, vunits,
+                      coord_sys=coord_sys,
+                      cartopy_enabled=default_cartopy_cfg["enable_cartopy"])
+    # =============================================================================
+    # Plot Artist objects     
+    # =============================================================================
+    mappable._pltprms = pltprms
+    # Optional melting layer overlay
+    if plot_mlyr:
+        _addML2plot(ax1, coord_sys, xrds, mlyr_bnames=mlyr_bnames,
+                    coord_names=coord_names, polarplot=polarplot,
+                    cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
+                    data_crs=default_cartopy_cfg["data_crs"],
+                    projcoord_names=projcoord_names)
+    if range_rings is not None:
+        _plot_range_rings(ax1, xrds, range_rings, coord_sys=coord_sys,
+                          polarplot=polarplot, coord_names=coord_names)
+    if plot_contourl:
+        ctrprms = plot_params(plot_contourl, xrds, vars_bounds=vars_bounds,
+                              unorm=unorm, cb_ext=cb_ext,
+                              custom_rules=custom_rules,
+                              ucmap=ucmap)
+    
+        ckw = {"levels": ctrprms.norm_boundaries, "norm": ctrprms.norm, 
+               "cmap": ctrprms.cmap}
+        if contour_kw:
+            ckw.update(contour_kw)
+        _plot_contours(ax1, xrds, plot_contourl, coord_sys=coord_sys,
+                       polarplot=polarplot, coord_names=coord_names,
+                       contour_kw=ckw, fs_label=fsizes["fsz_cbt"], 
+                       xrdsvar_sorted=xrdsvar_sorted, az_grid=az_grid,
+                       r_grid_km=r_grid_km)
+    if points2plot is not None:
+        _plot_points(ax1, points2plot, coord_names=coord_names,
+                     ptsvar=ptsvar2plot if len(points2plot) >= 3 else None,
+                     norm=pltprms.norm, cmap=pltprms.cmap, size=szpnts)
+    if pixel_midp:
+        _plot_pixel_midpoints(ax1, xrds, coord_names=coord_names,
+                              proj_x=proj_x, proj_y=proj_y,
+                              data_crs=default_cartopy_cfg["data_crs"])
+    if rd_maxrange:
+        _plot_max_range(ax1, xrds, coord_names=coord_names, proj_x=proj_x,
+                        proj_y=proj_y, data_crs=default_cartopy_cfg["data_crs"])
+    # =============================================================================
+    # Set plot params
+    # =============================================================================
+    if plot_grid:
+        ax1.grid(True)
+    if coord_sys == "rect" and has_rect:
+        if plot_axislabels:
+            if default_cartopy_cfg["enable_cartopy"]:
+                # da_x = xrds[coord_namex]
+                # da_y = xrds[coord_namey]
+                # x_std = da_x.attrs.get("standard_name", coord_namex)
+                # y_std = da_y.attrs.get("standard_name", coord_namey)
+                # x_unit = da_x.attrs.get("units", "")
+                # y_unit = da_y.attrs.get("units", "")
+                # x_label = f"{x_std} [{x_unit}]" if x_unit else x_std
+                # y_label = f"{y_std} [{y_unit}]" if y_unit else y_std
+                x_label = "longitude [degrees_east]"
+                y_label = "latitude [degrees_north]"
+                # Draw lon/lat ticks
+                # Determine extent for tick generation
+                if xlims is not None and ylims is not None:
+                    xmin, xmax = xlims
+                    ymin, ymax = ylims
+                else:
+                    # Get actual map extent in PlateCarree coordinates
+                    xmin, xmax, ymin, ymax = ax1.get_extent(
+                        crs=ccrs.PlateCarree())
+                dx = default_cartopy_cfg["tick_spacing"]["dx"]
+                dy = default_cartopy_cfg["tick_spacing"]["dy"]
+                # xticks = np.arange(np.floor(xlims[0]),
+                #                    np.ceil(xlims[1]) + dx, dx)
+                # yticks = np.arange(np.floor(ylims[0]),
+                #                    np.ceil(ylims[1]) + dy, dy)
+                xticks = np.arange(np.floor(xmin), np.ceil(xmax) + dx, dx)
+                yticks = np.arange(np.floor(ymin), np.ceil(ymax) + dy, dy)
+                ax1.set_xticks(xticks, crs=ccrs.PlateCarree())
+                ax1.set_yticks(yticks, crs=ccrs.PlateCarree())
+                ax1.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
+                ax1.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+            elif has_polar:
+                # Only use range labels when NOT in Cartopy mode
+                r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
+                r_unit_src = getcoordunits(xrds, polarcoord_names['rng'], "m")
+                r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+                x_label = f"{r_std} [{r_unit}]"
+                y_label = f"{r_std} [{r_unit}]"
+            else:
+                x_label = coord_namex
+                y_label = coord_namey
+            ax1.set_xlabel(x_label, fontsize=fsizes['fsz_axlb'])
+            ax1.set_ylabel(y_label, fontsize=fsizes['fsz_axlb'])
+        ax1.axes.set_aspect('equal')
+    elif coord_sys == "polar" and has_polar and not polarplot:
+        if plot_axislabels:
+            a_std = xrds[polarcoord_names.get('azi')].attrs.get("standard_name", "Azimuth")
+            a_unit = "rad" if polarplot else getcoordunits(xrds, polarcoord_names.get('azi'), "deg")
+            r_std = xrds[polarcoord_names.get('rng')].attrs.get("standard_name", "Range")
+            r_unit_src = getcoordunits(xrds, polarcoord_names.get('rng'), "m")
+            r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+            x_label = f"{a_std} [{a_unit}]"
+            y_label = f"{r_std} [{r_unit}]"
+            ax1.set_xlabel(x_label, fontsize=fsizes['fsz_axlb'])
+            ax1.set_ylabel(y_label, fontsize=fsizes['fsz_axlb'])
+    # =============================================================================
+    # Resolve title
+    # =============================================================================
+    if fig_title is not None:
+        if coord_sys == "rect" and not default_cartopy_cfg["enable_cartopy"]:
+            fig.suptitle(fig_title, fontsize=fsizes["fsz_pt"])
+        else:
+            ax1.set_title(fig_title, fontsize=fsizes["fsz_pt"])
+    else:
+        ptitle = f"{rname.title()} -- {dt_str}"
+        auto_title = f"{ptitle}\n{elev_str} {swp_mode}\nPPI {var2plot} [{vunits}]"
+        if coord_sys == "rect" and not default_cartopy_cfg["enable_cartopy"]:
+            fig.suptitle(auto_title, fontsize=fsizes["fsz_pt"])
+        else:
+            ax1.set_title(auto_title, fontsize=fsizes["fsz_pt"])
+    if default_cartopy_cfg['enable_cartopy'] is False:
+        if xlims:
+            ax1.set_xlim(xlims)
+        if ylims:
+            ax1.set_ylim(ylims)
+        fig.tight_layout()
+    return mappable, ax1
+
+
+def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
+                ncols=None, nrows=None, fig_size=None, fig_title=None,
+                # polarcoord_names = {"azi": "azimuth", "rng": "range"},
+                # rectcoord_names = {"x": "grid_rectx", "y": "grid_recty"},
+                add_colorbar=False, **ppi_kwargs):
+    """
+    Plot a set of PPIs from a single xarray.Dataset using plot_ppi().
+    """
+    # =============================================================================
+    # Title metadata 
+    # =============================================================================
+    # Extract metadata safely
+    meta = _safe_metadata(xrds)
+    elev_str = meta["elev_str"]
+    dt_str = meta["dt_str"]
+    rname = meta["rname"]
+    swp_mode = meta["swp_mode"]
+
+    ptitle = fig_title or f"{rname.title()} [{swp_mode}] -- {dt_str}"
+
+    # Variables to plot 
+    if varnames is None:
+        varnames = list(xrds.data_vars.keys())
+    valid_vars = []
+    for name in varnames:
+        da = xrds[name]
+        if da.ndim == 2 and set(da.dims) == {"azimuth", "range"}:
+            valid_vars.append(name)
+        # else:
+        #     print(f"Skipping {name!r}: dims={da.dims} (expected ('azimuth', 'range')).")
+        
+    nvars = len(valid_vars)
+
+    # Grid layout 
+    if nrows is None and ncols is None:
+        ncols = int(np.ceil(np.sqrt(nvars)))
+        nrows = int(np.ceil(nvars / ncols))
+    elif nrows is None:
+        nrows = int(np.ceil(nvars / ncols))
+    elif ncols is None:
+        ncols = int(np.ceil(nvars / nrows))
+    if fig_size is None:
+        fig_size = (6 * ncols, 6 * nrows)
+
+    # Inti figure
+    cartopy_cfg = ppi_kwargs.get("cartopy_cfg", None)
+    if cartopy_cfg and cartopy_cfg.get("enable_cartopy", False):
+        # proj = cartopy_cfg["projection"]
+        proj = cartopy_cfg.get("projection", ccrs.PlateCarree())
+        subplot_kw = {"projection": proj}
+        use_constrained = True
+        sharex, sharey = False, False
+    elif coord_sys == "polar" and polarplot:
+        subplot_kw = {"projection": "polar"}
+        use_constrained = False
+        sharex, sharey = False, False
+    else:
+        subplot_kw = {}
+        use_constrained = False
+        sharex, sharey = True, True
+    fig, axes = plt.subplots(nrows, ncols, figsize=fig_size, sharex=sharex,
+                             sharey=sharey, subplot_kw=subplot_kw,
+                             constrained_layout=use_constrained)
+    axes = np.atleast_1d(axes).flatten()
+
+    # Plot each variable using plot_ppi
+    for ax, vname in zip(axes, valid_vars):
+        pcm, ax1 = plot_ppi_xr(
+                xrds,
+                var2plot=vname,
+                coord_sys=coord_sys,
+                polarplot=polarplot,
+                # cartopy_cfg=cartopy_cfg,
+                # coord_names=coord_names,
+                # xlims=xlims,
+                # ylims=ylims,
+                fig=fig,
+                ax1=ax,
+                add_colorbar=False,
+                fig_title=None,
+                plot_axislabels=False,
+                **ppi_kwargs
+            )
+        ax1.grid(True)
+        vunits = _safe_units(xrds[vname])
+        ax1.set_title(f'{vname} [{vunits}]', fontsize=12)
+        if add_colorbar:
+            pltprms = pcm._pltprms
+            if 'rhohv' in vname.lower():
+                clb = ax1.figure.colorbar(
+                    pcm, ax=ax1, ticks=pltprms.norm_boundaries)
+            else:
+                clb = ax1.figure.colorbar(pcm, ax=ax1,)
+            if pltprms.ticklabels is not None:
+                clb.set_ticks(pltprms.norm_boundaries)
+                clb.set_ticklabels(pltprms.ticklabels)
+                clb.ax.tick_params(direction="in")
+
+    # Label only first column and last row 
+    if coord_sys == "rect":
+        r_std = xrds["range"].attrs.get("standard_name", "Range")
+        r_unit_src = getcoordunits(xrds, "range", "m")
+        r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+        x_label = f"{r_std} [{r_unit}]"
+        y_label = f"{r_std} [{r_unit}]"
+    elif coord_sys == "polar" and not polarplot:
+        a_std = xrds["azimuth"].attrs.get("standard_name", "Azimuth")
+        a_unit = "rad" if polarplot else getcoordunits(xrds, "azimuth", "deg")
+        r_std = xrds["range"].attrs.get("standard_name", "Range")
+        r_unit_src = getcoordunits(xrds, "range", "m")
+        r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+        x_label = f"{a_std} [{a_unit}]"
+        y_label = f"{r_std} [{r_unit}]"
+    elif coord_sys == "polar" and polarplot:
+        x_label = ""
+        y_label = ""
+    else:
+        x_label = "X"
+        y_label = "Y"
+    for i in range(nrows):
+        axes[i*ncols].set_ylabel(y_label, fontsize=12)
+    for j in range(ncols):
+        axes[(nrows-1)*ncols + j].set_xlabel(x_label, fontsize=12)
+    # Remove unused axes 
+    for ax in axes[nvars:]:
+        ax.remove()
+    fig.suptitle(ptitle, fontsize=16)
+    # fig.tight_layout()
+    
+    return fig, axes
+
+# =============================================================================
+# %%% Methodolgies
+# =============================================================================
+
 def _plot_rhohvmethod_single(snr_edges, rho_edges, hist, snr_db, rhohv_na,
                              snr_centers, theo_line, histmax, opt_noise,
                              fig_size=(8, 6)):
@@ -2906,7 +4385,7 @@ def _plot_rhohvmethod_grid(Z, rng_km, rhohv_na, mode="linear", exp_curvet=20.0,
             else:
                 title_color, weight = "tab:grey", "normal"
 
-            ax.set_title(f"{rc:.1f} dB", color=title_color, fontweight=weight)
+            ax.set_title(f"{rc:.2f} dB", color=title_color, fontweight=weight)
             ax.plot(snr_edges[1:], maxima, color="k", lw=2, ls=":",
                     label="histogram maxima")
             ax.plot(snr_centers, theo_line, color="tab:purple", lw=2,
@@ -2922,3 +4401,385 @@ def _plot_rhohvmethod_grid(Z, rng_km, rhohv_na, mode="linear", exp_curvet=20.0,
     fig.supxlabel("SNR [dB]")
     fig.supylabel(r"$\rho_{HV}$ [-]")
     plt.show()
+
+# =============================================================================
+# %%% Profiles
+# =============================================================================
+
+def _add_colored_profile(ax, x, y, cmap, norm, ticks=None, fmt="%.1f"):
+    """
+    Plot a coloured profile (value vs height) using LineCollection.
+    """
+    points = np.array([x, y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+    lc = LineCollection(segments, cmap=cmap, norm=norm)
+    lc.set_array(x)
+    lc.set_linewidth(2)
+    ax.add_collection(lc)
+
+    # Colorbar
+    cbar = ax.get_figure().colorbar(lc, ax=ax, orientation="horizontal")
+    if ticks is not None:
+        cbar.set_ticks(ticks)
+        cbar.ax.set_xticklabels([fmt % t for t in ticks])
+    cbar.ax.tick_params(labelsize=10)
+
+    # Set x-limits based on data
+    if np.isfinite(np.nanmin(x)) and np.isfinite(np.nanmax(x)):
+        ax.set_xlim(np.nanmin(x), np.nanmax(x))
+
+
+def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
+                  vars_bounds=None, ucmap=None, unorm=None,
+                  cb_ext=None, fig_title=None, fig_size=None, ylims=None):
+    """
+    Plot radar profiles (QVPs, VPs, or RD-QVPs) contained in a dataset.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Profile dataset containing one or more variables defined on a 1D
+        ``height`` coordinate.
+    stats : {'std', 'sem'} or None, default None
+        If not None, shade each profile using either the standard deviation
+        (``'std'``) or standard error of the mean (``'sem'``), when the
+        corresponding statistic variable (``f"{stats}_{var}"``) is present
+        in ``ds``.
+    colours : bool, default False
+        If False, plot each profile as a black line. If True, plot each
+        profile as a colour-mapped ``LineCollection`` and attach a colourbar
+        using parameters from ``plot_params``.
+    mlyr_top : float or None, default None
+        Height (km) of the melting-layer top. If not None, a horizontal
+        dashed line is drawn at this height.
+    mlyr_btm : float or None, default None
+        Height (km) of the melting-layer bottom. If not None, a horizontal
+        dashed line is drawn at this height.
+    vars_bounds : dict or None, default None
+        Optional per-variable bounds overriding the defaults used by
+        ``plot_params``. Keys are variable names, values are ``(vmin, vmax)``.
+    ucmap : dict or None, default None
+        Optional per-variable colormap overrides passed to ``plot_params``.
+        Keys are variable names, values are Matplotlib colormap names or
+        objects.
+    unorm : dict or None, default None
+        Optional per-variable normalisation objects for colour mapping,
+        passed to ``plot_params``.
+    cb_ext : dict or None, default None
+        Optional per-variable colourbar extension settings, passed to
+        ``plot_params``.
+    fig_title : str or None, default None
+        Custom figure title. If None, a title is constructed from dataset
+        metadata (profile type, elevation, radar name, and scan time).
+    fig_size : tuple of float or None, default None
+        Figure size in inches. If None, defaults to ``(14, 10)``.
+    ylims : tuple of float or None, default None
+        Vertical limits for the height axis as ``(min_height, max_height)``.
+        If None, defaults to ``(0, 10)`` km.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created figure.
+    axes : list of matplotlib.axes.Axes
+        List of axes corresponding to each plotted variable.
+    mappables : list of matplotlib.artist.Artist
+        The line or ``LineCollection`` objects associated with each panel,
+        useful for further customisation or colourbar manipulation.
+
+    Notes
+    -----
+    * Statistical variables with prefixes ``std_``, ``min_``, ``max_``,
+      ``sem_`` and vertical-resolution diagnostics (``VRES1``, ``VRES2``,
+      ``VRES``) are excluded from the main plotting loop.
+    * Variable-specific plotting parameters (colormap, normalisation,
+      bounds, colourbar settings) are obtained from
+      ``towerpy.datavis.rad_display.plot_params``.
+    """
+
+    # 1. Resolve variables to plot (exclude stats variables)
+    exclude = {"VRES1", "VRES2", "VRES"}
+    vars_to_plot = [v for v in ds.data_vars
+                    if not (v.startswith(("std_", "min_", "max_", "sem_"))
+                            or v in exclude)]
+    # 2. INit Figure and axes
+    if fig_size is None:
+        fig_size = (14, 10)
+    fig, axes = plt.subplots(1, len(vars_to_plot), figsize=fig_size,
+                             sharey=True)
+    if len(vars_to_plot) == 1:
+        axes = [axes]
+    # 3. Title from metadata
+    meta = _safe_metadata(ds)
+    dt_str = meta["dt_str"]
+    rname = meta["rname"]
+    # swp_mode = meta["swp_mode"]
+    elev_str = meta["elev_str"]
+    # ptitle = f"{rname.title()} [{swp_mode}] -- {dt_str}"
+    ptitle = (f"{ds.attrs.get('profs_type', 'Profiles')} [{elev_str}] \n"
+              f"{rname.title()} -- {dt_str}")
+    fig.suptitle(fig_title or ptitle, fontsize=20)
+    # 4. Loop over variables and plot
+    height = ds["height"].values
+    mappables = []   # <-- collect mappables here
+    for ax, var in zip(axes, vars_to_plot):
+        da = ds[var]
+        x = da.values
+        units = _safe_units(da)
+        # 4a. Get plotting parameters
+        params = plot_params(var, ds, vars_bounds=vars_bounds, unorm=unorm,
+                             cb_ext=cb_ext, ucmap=ucmap)
+        # 4b. Black-line profile
+        if not colours:
+            line, = ax.plot(x, height, "k")
+            mappables.append(line)
+        # 4c. Coloured profile using LineCollection
+        else:
+            points = np.array([x, height]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, cmap=params.cmap, norm=params.norm)
+            lc.set_array(x)
+            lc.set_linewidth(2)
+            ax.add_collection(lc)
+            mappables.append(lc)
+            # Colorbar
+            _add_colorbar(fig, ax, lc, params, fsizes={"fsz_cb": 10},
+                          vunits=units, coord_sys="rect", rotangle=90)
+        # 5. Stats shading (std or sem)
+        if stats in ("std", "sem"):
+            stat_var = f"{stats}_{var}"
+            if stat_var in ds:
+                s = ds[stat_var].values
+                ax.fill_betweenx(height, x - s, x + s, alpha=0.3, color="gray")
+        # 6. Melting layer
+        if mlyr_top is not None:
+            ax.axhline(mlyr_top, c="tab:blue", ls="--", lw=3, alpha=0.5)
+        if mlyr_btm is not None:
+            ax.axhline(mlyr_btm, c="tab:purple", ls="--", lw=3, alpha=0.5)
+        # 7. Labels, limits, grid
+        ax.grid(True)
+        ax.set_facecolor("none")
+        if colours:
+            bnd = params.norm_boundaries
+            if bnd is not None and len(bnd) > 1:
+                ax.set_xlim(bnd.min(), bnd.max())
+        # Y-limits
+        if ylims:
+            ax.set_ylim(ylims)
+        else:
+            ax.set_ylim(0, 10)
+        # X-label
+        short = da.attrs.get("short_name", var)
+        label = f"{short} [{units}]" if units else short
+        ax.set_xlabel(label, fontsize=14)
+    hunits = ds["height"].attrs.get('units', 'km')
+    axes[0].set_ylabel(f"Height [{hunits}]", fontsize=14)
+    plt.tight_layout()    
+    return fig, axes, mappables
+
+
+def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
+               mlyr_btm=None, vars_bounds=None, unorm=None, cb_ext=None,
+               ucmap=None, ylims=None, fig_size=None, spec_range=None,
+               fig_title=None, elev_cmap="Spectral"):
+    """
+    Plot a Range‑Defined Quasi‑Vertical Profile (RD‑QVP) and, optionally,
+    the contributing QVPs.
+
+    Parameters
+    ----------
+    rdqvp : xarray.Dataset
+        RD‑QVP dataset containing one or more variables defined on a 1D
+        ``height`` coordinate. May include:
+        - ``qvp_interp`` : interpolated QVPs with dims ``(elevation, variable, height)``
+        - ``scan_datetime`` : optional coordinate for scan start/end times
+    dss : list of xarray.Dataset or None, default None
+        Optional list of individual QVP scan datasets used to draw the
+        geometry panel (range–height curves).
+    all_desc : bool, default True
+        If True, plot individual QVPs (from ``qvp_interp``) coloured by
+        elevation angle. If False, only the RD‑QVP is plotted.
+    stats : {'std', 'sem'} or None, default None
+        If not None, shade each RD‑QVP profile using the corresponding
+        statistic (``'std'`` or ``'sem'``) when the variable
+        ``f"{stats}_{var}"`` exists in ``rdqvp``.
+    mlyr_top : float or None, default None
+        Height (km) of the melting‑layer top. If provided, a horizontal
+        dashed line is drawn.
+    mlyr_btm : float or None, default None
+        Height (km) of the melting‑layer bottom. If provided, a horizontal
+        dashed line is drawn.
+    vars_bounds : dict or None, default None
+        Optional per‑variable bounds overriding defaults from ``plot_params``.
+        Keys are variable names; values are ``(vmin, vmax)``.
+    unorm : dict or None, default None
+        Optional per‑variable normalisation objects for colour mapping,
+        passed to ``plot_params``.
+    cb_ext : dict or None, default None
+        Optional per‑variable colourbar extension settings.
+    ucmap : dict or None, default None
+        Optional per‑variable colormap overrides passed to ``plot_params``.
+    ylims : tuple of float or None, default None
+        Vertical limits for the height axis as ``(min_height, max_height)``.
+        If None, defaults to ``(0, max(height))``.
+    fig_size : tuple of float or None, default None
+        Figure size in inches. If None, defaults to ``(14, 10)``.
+    spec_range : float or None, default None
+        If provided, draw a vertical line in the geometry panel marking the
+        RD‑QVP range (km).
+    fig_title : str or None, default None
+        Custom figure title. If None, a title is constructed from dataset
+        metadata (profile type, radar name, and scan time).
+    elev_cmap : str, default 'Spectral'
+        Colormap used to colour individual QVPs by elevation angle.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created figure.
+    axes : list of matplotlib.axes.Axes
+        Axes corresponding to each plotted variable (and optional geometry panel).
+    mappables : list of matplotlib.artist.Artist
+        The line objects associated with each RD‑QVP panel, useful for
+        further customisation or colourbar manipulation.
+
+    Notes
+    -----
+    * Variables with prefixes ``std_``, ``min_``, ``max_``, ``sem_`` and
+      variables in ``{"VRES1", "VRES2", "VRES", "qvp_interp"}`` are excluded
+      from the main plotting loop.
+    * If ``qvp_interp`` is present and ``all_desc=True``, individual QVPs are
+      plotted using a colormap indexed by elevation angle.
+    * When ``dss`` is provided, an additional geometry panel is added showing
+      range–height curves for each contributing scan.
+    * Variable‑specific plotting parameters (colormap, normalisation, bounds,
+      colourbar settings) are obtained from
+      ``towerpy.datavis.rad_display.plot_params``.
+    """
+
+    # 1. Resolve variables to plot (exclude stats, VRES, qvp_interp)
+    exclude = {"VRES1", "VRES2", "VRES", "qvp_interp"}
+    vars_to_plot = [v for v in rdqvp.data_vars
+                    if not (v.startswith(("std_", "min_", "max_", "sem_"))
+                            or v in exclude)]
+    if fig_size is None:
+        fig_size = (14, 10)
+    # Geometry panel if dss is provided
+    n_main = len(vars_to_plot)
+    n_panels = n_main + (1 if dss is not None else 0)
+    fig, axes = plt.subplots(1, n_panels, figsize=fig_size, sharey=True)
+    if n_panels == 1:
+        axes = [axes]
+    # 2. Title from metadata / scan datetimes
+    meta = _safe_metadata(rdqvp)
+    rname = meta["rname"]
+    profs_type = rdqvp.attrs.get("profs_type", "Profiles")
+    if "scan_datetime" in rdqvp.coords:
+        dts = [d for d in rdqvp["scan_datetime"].values if d is not None]
+        try:
+            dt1, dt2 = min(dts), max(dts)
+            dt_str = f"{dt1:%Y-%m-%d %H:%M:%S} – {dt2:%H:%M:%S}"
+        except Exception:
+            dt_str = meta["dt_str"]
+    else:
+        dt_str = meta["dt_str"]
+    ptitle = fig_title or f"{profs_type} (RD‑QVP) \n{rname.title()} -- {dt_str}"
+    fig.suptitle(ptitle, fontsize=20)
+
+    height = rdqvp["height"].values
+    hunits = rdqvp["height"].attrs.get("units", "km")
+
+    # Colormap for elevations (for individual QVPs)
+    qvp_interp = rdqvp.data_vars.get("qvp_interp", None)
+    if qvp_interp is not None and all_desc:
+        elev_angles = rdqvp.coords.get("elevation_angle", None)
+        n_elev = qvp_interp.sizes.get("elevation", 0)
+        cmap_elev = mpl.colormaps[elev_cmap](np.linspace(0, 1, n_elev))
+    else:
+        elev_angles = None
+        n_elev = 0
+        cmap_elev = None
+    # 3. Loop over variables and plot RD‑QVP (+ optional QVPs)
+    mappables = []
+    for i, var in enumerate(vars_to_plot):
+        ax = axes[i]
+        da = rdqvp[var]
+        x = da.values
+        units = _safe_units(da)
+        # Plotting parameters for RD‑QVP
+        # params = plot_params(var, rdqvp, vars_bounds=vars_bounds,
+        #                      unorm=unorm, cb_ext=cb_ext,
+        #                      ucmap=ucmap)
+        # 3a. Optional individual QVPs (coloured by elevation)
+        if qvp_interp is not None and all_desc:
+            # qvp_interp: (elevation, variable, height)
+            for j in range(n_elev):
+                qvp_j = qvp_interp.isel(elevation=j).sel(variable=var)
+                xj = qvp_j.values
+                col = cmap_elev[j]
+                label = None
+                if elev_angles is not None:
+                    elev_j = float(elev_angles.values[j])
+                    label = f"{elev_j:.1f}" + r"$^{\circ}$"
+                ax.plot(xj, height, ls="--", color=col, alpha=0.7,
+                        label=label if i == 0 else None)
+        # 3b. RD‑QVP profile (black)
+        line, = ax.plot(x, height, "k", lw=2, label="RD‑QVP")
+        mappables.append(line)
+        # 3c. Stats shading (std or sem)
+        if stats in ("std", "sem"):
+            stat_var = f"{stats}_{var}"
+            if stat_var in rdqvp:
+                s = rdqvp[stat_var].values
+                ax.fill_betweenx(height, x - s, x + s, alpha=0.3, color="gray")
+        # 3d. Melting layer
+        if mlyr_top is not None:
+            ax.axhline(mlyr_top, c="tab:blue", ls="--", lw=3, alpha=0.5)
+        if mlyr_btm is not None:
+            ax.axhline(mlyr_btm, c="tab:purple", ls="--", lw=3, alpha=0.5)
+        # 3e. Axes styling
+        ax.grid(True)
+        ax.set_facecolor("none")
+        # X-limits from vars_bounds or plot_params
+        # if vars_bounds and var in vars_bounds:
+        #     ax.set_xlim(vars_bounds[var])
+        # else:
+        #     bnd = params.norm_boundaries
+        #     if bnd is not None and len(bnd) > 1:
+        #         ax.set_xlim(bnd.min(), bnd.max())
+        # Y-limits
+        if ylims:
+            ax.set_ylim(ylims)
+        else:
+            ax.set_ylim(0, np.nanmax(height))
+        # Labels
+        short = da.attrs.get("short_name", var)
+        label = f"{short} [{units}]" if units else short
+        ax.set_xlabel(label, fontsize=14)
+    axes[0].set_ylabel(f"Height [{hunits}]", fontsize=14)
+    # 4. Optional geometry panel
+    if dss is not None:
+        axg = axes[-1]
+        # Build elevation colormap consistent with QVPs
+        if elev_angles is not None:
+            cmap_geom = cmap_elev
+        else:
+            # Fallback: colour by index
+            cmap_geom = mpl.colormaps[elev_cmap](np.linspace(0, 1, len(dss)))
+        for j, ds in enumerate(dss):
+            rng_km = convert(ds["range"], "km")
+            if "beamc_height" in ds:
+                bh = ds["beamc_height"].mean(dim="azimuth")
+            else:
+                # Fallback: use height from RD‑QVP if available
+                bh = rdqvp["height"]
+            axg.plot(rng_km.values, bh.values, ls="--", color=cmap_geom[j])
+        if spec_range is not None:
+            axg.axvline(spec_range, c="k", lw=2, label=f"RD={spec_range:g} km")
+        axg.set_xlabel("Range [km]", fontsize=14)
+        axg.grid(True)
+        axg.set_facecolor("none")
+    plt.tight_layout()
+    return fig, axes, mappables
+

@@ -1,5 +1,5 @@
 {% set name = "towerpy" %}
-{% set version = "1.1.0" %}
+{% set version = "2.0.0" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/uobwatergroup/towerpy/archive/v{{ version }}.tar.gz
-  sha256: d5973b101616b9af9b2f26507ccb98b6747e01d43c522492438bdfecbe7a965b
+  sha256: f6033883491503dab673371b2139bf4803c563774b02398203d82750034d04af
 
 build:
   noarch: python
@@ -18,17 +18,19 @@ build:
 
 requirements:
   host:
-    - python >=3
+    - python >=3.9,<3.13
     - pip
     - setuptools_scm
+    - numpy >=1.26
   run:
-    - python >=3.9
-    - numpy >= 2.0.0
-    - matplotlib-base >=3.8.0
-    - xarray >= 2025.6.1
-    - scipy
+    - python >=3.9,<3.13
     - cartopy
-    - netCDF4
+    - matplotlib-base >=3.8.0
+    - numpy >=1.26
+    - scikit-learn
+    - scipy
+    - xarray >=2025.6.1
+    - xradar >=0.10.0
 
 test:
   imports:
@@ -42,7 +44,7 @@ about:
   home: https://github.com/uobwatergroup/towerpy
   summary: 'Towerpy, an open-source toolbox for processing polarimetric radar data'
   license: "GPL-3.0-or-later"
-  license_file: ["LICEN[CS]E*"]
+  license_file: ["LICENSE"]
   
   description: |
     Towerpy is a Python toolbox designed to read, process and display polarimetric radar data.

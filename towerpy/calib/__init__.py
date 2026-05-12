@@ -6,3 +6,4 @@ Calibrate radar variables.
 from . import calib_zdr
 from . import calib_phidp
 from . import calib_rhohv
+from . import calib_polvars

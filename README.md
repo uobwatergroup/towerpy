@@ -4,6 +4,7 @@
 
 # :satellite: TOWERPY
 Towerpy is an open-source toolbox designed for reading, processing and displaying polarimetric weather radar data.
+*Xarray implementation*
 
 <p align="left">
   <img alt="Platforms" src="https://img.shields.io/badge/ =&nbsp&nbsp OS &nbsp&nbsp&nbsp;=-critical?style=for-the-badge" />
@@ -102,15 +103,15 @@ Or install Towerpy in “editable” mode::
 
 Package | Required
 ------------ | -------------
-xarray       | v2025.6.1+
-NumPy        | v1.21+
-SciPy        | v1.7.1+
-Matplotlib   | v3.5.2+
-Cartopy      | v0.19+
-netCDF4      | v1.5.8+
+Cartopy      | v0.25+
+Matplotlib   | v3.8.0+
+NumPy        | v2.0+
+Scikit-learn | v1.7.2+
+SciPy        | v1.15.2+
+Xarray       | v2025.6.1+
+Xradar       | v0.10.0+
 
-\*Some modules within _towerpy_ run using shared objects/dynamic link libraries (.so, .dll). These libraries are automatically installed during the _towerpy_ installation.
-
+\*Towerpy includes a small number of pre‑compiled shared libraries (.so for Linux and .dll for Windows) that provide high‑performance routines for radar data ingestion, clutter classification, and attenuation correction. These components are implemented in lower‑level languages to deliver the computational speed required for operational weather‑radar processing, and they are bundled directly with the Python package so that users do not need to compile anything during installation.
 
 # :thought_balloon: Missing a specific feature? Found a bug?
 Feel free to post a message to our [discussions page](https://github.com/uobwatergroup/towerpy/discussions) or have a look at our [contribution guidelines](.github/CONTRIBUTING.md) to find out about our coding standards.
@@ -123,5 +124,12 @@ Towerpy is created and maintained by
   <img alt="GitHub User's stars" src="https://img.shields.io/github/stars/uobwatergroup?style=social"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/uobwatergroup/towerpy">
 </p>
 
-[![Sparkline](https://stars.medv.io/uobwatergroup/towerpy.svg)](https://stars.medv.io/uobwatergroup/towerpy)
+## Star History
 
+<a href="https://www.star-history.com/#uobwatergroup/towerpy&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=uobwatergroup/towerpy&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=uobwatergroup/towerpy&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=uobwatergroup/towerpy&type=date&legend=top-left" />
+ </picture>
+</a>

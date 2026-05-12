@@ -1,10 +1,13 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
-import warnings
-import numpy as np
 import copy
-from ..utils.radutilities import find_nearest
+import warnings
+
+import numpy as np
+import xarray as xr
+
 from ..datavis import rad_display
+from ..utils.radutilities import find_nearest, find_nearest_index, record_provenance
 
 
 class ZDR_Calibration:
@@ -301,3 +304,300 @@ class ZDR_Calibration:
             data2cc = copy.deepcopy(data2correct)
             data2cc.update({'ZDR [dB]': zdr_oc})
             self.vars = data2cc
+
+# =============================================================================
+# %% xarray implementation
+# =============================================================================
+
+def _empty_stats():
+    return xr.Dataset({"offset_max": ((), np.nan), "offset_min": ((), np.nan),
+                       "offset_std": ((), np.nan), "offset_sem": ((), np.nan)})
+
+
+def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
+                           zhmin=5.0, zhmax=30.0, rhvmin=0.98,
+                           return_stats=False):
+    r"""
+    Compute the ZDR calibration offset using vertical profiles (VPS)
+    following Gorgucci et al. (1999) and Sanchez-Rivas & Rico-Ramirez (2022).
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        VPS dataset containing ZDR, ZH, RHOHV, and a height coordinate.
+    mlyr : xarray.Dataset or None, optional
+        Dataset containing the melting-layer boundaries height.
+        ``[MLYRTOP, MLYRBTM, MLYRTHK]``. Only gates below the melting layer
+        bottom (i.e. the rain region below the melting layer) are included in
+        the computation.
+    inp_names : dict, optional
+        Mapping for variable/attribute names in the dataset. Defaults:
+        ``{"ZDR": "ZDR", "ZH": "DBZH", "RHOHV": "RHOHV", "height": "height"}``
+    min_h : float, default 1.1
+        Minimum height (km) above ground to include in the VPS analysis.
+    minbins : int, default 2
+        Minimum number of valid bins required to compute the offset.
+    zhmin : float, default 5.0
+        Minimum ZH threshold (dBZ) for selecting light-rain gates.
+    zhmax : float, default 30.0
+        Maximum ZH threshold (dBZ) for selecting light-rain gates.
+    rhvmin : float, default 0.98
+        Minimum RHOHV threshold for selecting light-rain gates.
+    return_stats : bool, default False
+        If True, return (offset, stats_dataset).
+
+    Returns
+    -------
+    offset : xr.Dataset
+        Scalar ZDR offset, in dB.
+    stats : xr.Dataset, optional
+        Dataset with offset_max, offset_min, offset_std, offset_sem.
+    
+    Notes
+    -----
+    * The method estimates the differential reflectivity offset following [2]_:
+          .. math:: Z^{O_{VP}}_{DR} = \frac{1}{n} \sum_{i=1}^{n} Z_{{DR}_{i}}
+    * Only gates between `min_h` and the melting-layer bottom are used.
+    * Only light-rain gates are used, using threshold in RHOHV and ZH, 
+      according to [1]_
+    
+    References
+    ----------
+    .. [1] Gorgucci, E., Scarchilli, G., & Chandrasekar, V. (1999). A procedure
+        to calibrate multiparameter weather radar using properties of the rain
+        medium. IEEE Transactions on Geoscience and Remote Sensing, 37(1),
+        269–276. https://doi.org/10.1109/36.739161
+    .. [2] Sanchez-Rivas, D., & Rico-Ramirez, M. A. (2022). Calibration of
+        radar differential reflectivity using quasi-vertical profiles.
+        Atmospheric Measurement Techniques, 15(2), 503–520.
+        https://doi.org/10.5194/amt-15-503-2022
+    """
+    # 1. Canonical variable mapping
+    defaults = {"ZDR": "ZDR", "ZH": "DBZH", "RHOHV": "RHOHV",
+                "height": "height"}
+    names = {**defaults, **(inp_names or {})}
+    height = ds[names["height"]]
+    # 2. Determine melting-layer geometry
+    # if detect_mlyr:
+    #     mlyr_kwargs = mlyr_kwargs or {}
+    #     mlyr = detect_mlyr_from_profiles(ds, **mlyr_kwargs)
+    if mlyr is None:
+        ml_top = 5.0
+        ml_thk = 0.75
+        ml_bottom = ml_top - ml_thk
+    else:
+        ml_top = float(mlyr["MLYRTOP"])
+        ml_bottom = float(mlyr["MLYRBTM"])
+        ml_thk = float(mlyr["MLYRTHK"])
+    # 3. Height slicing using find_nearest_index
+    hvals = height.values
+    # Invalid MLyr → offset = 0
+    if np.isnan(ml_bottom) or np.isnan(ml_top):
+        offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+        stats = _empty_stats() if return_stats else None
+    else:
+        i0 = find_nearest_index(hvals, min_h)
+        i1 = find_nearest_index(hvals, ml_bottom)
+
+        if i1 <= i0:
+            offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+            stats = _empty_stats() if return_stats else None
+        else:
+            ds_sel = ds.isel({names["height"]: slice(i0, i1)})
+            zdr_sel = ds_sel[names["ZDR"]]
+            zh_sel = ds_sel[names["ZH"]]
+            rho_sel = ds_sel[names["RHOHV"]]
+            # 4. Apply light-rain filtering
+            mask = ((zh_sel >= zhmin) & (zh_sel <= zhmax) & (rho_sel >= rhvmin))
+            zdr_filt = zdr_sel.where(mask)
+            # 5. minbins
+            valid_bins = zdr_filt.count(dim=names["height"])
+            if valid_bins <= minbins:
+                offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+                stats = _empty_stats() if return_stats else None
+            else:
+                # 6. Compute offset
+                offset = zdr_filt.mean(dim=names["height"], skipna=True)
+                offset = offset.rename("ZDR_OFFSET")
+                # 7. Compute stats
+                if return_stats:
+                    stats = xr.Dataset(
+                        {"offset_max": zdr_filt.max(dim=names["height"],
+                                                    skipna=True),
+                         "offset_min": zdr_filt.min(dim=names["height"],
+                                                    skipna=True),
+                         "offset_std": zdr_filt.std(dim=names["height"],
+                                                    skipna=True),
+                         "offset_sem": 
+                             (zdr_filt.std(dim=names["height"], skipna=True)
+                              / np.sqrt(valid_bins)),})
+                else:
+                    stats = None
+    # 8. Build output dataset
+    coords = {name: coord for name, coord in ds.coords.items()
+              if coord.dims == ()}  # keep scalar coords only
+    data_vars = {"ZDR_OFFSET": offset}
+    if return_stats and stats is not None:
+        for k, v in stats.data_vars.items():
+            data_vars[k] = v
+    ds_out = xr.Dataset(data_vars, coords=coords)
+    # 9. Record dataset-level provenance
+    #TODO: add step_description
+    extra = {'step_description': ('')}
+    params = {"min_h": min_h, "zhmin": zhmin, "zhmax": zhmax, "rhvmin": rhvmin,
+              "minbins": minbins, "ml_top": ml_top, "ml_bottom": ml_bottom,
+              "ml_thickness": ml_thk}
+    outputs = 'ZDR_OFFSET'
+    ds_out = record_provenance(
+        ds_out, step="zdr_offsetdetection_vp",
+        inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,
+        parameters=params, extra_attrs=extra,
+        module_provenance="towerpy.calib.calib_zdr.zdr_offsetdetection_vp")
+    return ds_out
+
+
+def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
+                            zhmin=0., zhmax=20., rhvmin=0.985, minbins=4,
+                            zdr_0=0.182, return_stats=False):
+    r"""
+    Compute the ZDR calibration offset using quasi‑vertical profiles (QVPs),
+    following Sanchez‑Rivas & Rico‑Ramirez (2022).
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        QVP dataset containing ZDR, ZH, RHOHV, and a height coordinate.
+    mlyr : xarray.Dataset or None, optional
+        Dataset containing the melting-layer boundaries height.
+        ``[MLYRTOP, MLYRBTM, MLYRTHK]``. Only gates below the melting layer
+        bottom (i.e. the rain region below the melting layer) are included in
+        the computation.
+    inp_names : dict, optional
+        Mapping for variable/attribute names in the dataset. Defaults:
+        ``{"ZDR": "ZDR", "ZH": "DBZH", "RHOHV": "RHOHV", "height": "height"}``.
+    min_h : float, default 0.
+        Minimum height (km) to include in the QVP analysis.
+    max_h : float, default 3.
+        Maximum height (km) to include in the QVP analysis.
+    zhmin : float, default 0.
+        Minimum :math:`Z_H` threshold (dBZ) for selecting light‑rain gates.
+    zhmax : float, default 20.
+        Maximum :math:`Z_H` threshold (dBZ) for selecting light‑rain gates.
+    rhvmin : float, default 0.985
+        Minimum :math:`\rho_{HV}` threshold for selecting light‑rain gates.
+    minbins : int, default 4
+        Minimum number of valid :math:`Z_{DR}` bins required to compute
+        the offset.
+    zdr_0 : float, default 0.182
+        Intrinsic value of :math:`Z_{DR}` in light rain at ground level.
+    return_stats : bool, default False
+        If ``True``, return both the offset and a dataset of summary statistics.
+
+    Returns
+    -------
+    offset : xarray.Dataset
+        Scalar ZDR calibration offset, in dB:
+    stats : xarray.Dataset, optional
+        Dataset containing ``offset_max``, ``offset_min``, ``offset_std``,
+        and ``offset_sem``. Returned only if ``return_stats=True``.
+
+    Notes
+    -----
+    * The method estimates the intrinsic differential reflectivity offset by
+      computing the difference between the mean observed Z_DR and the expected
+      intrinsic value in light rain, as follws:
+          .. math:: Z^{O_{QVP}}_{DR} = \left(\frac{1}{n} \sum_{i=1}^{n} Z_{{DR}_i} \right) - Z_{DR}^{gl}
+    * Only gates between ``min_h`` and the melting‑layer bottom are used.
+    * Only light‑rain gates are selected, using thresholds in ZH and RHOHV.
+    * The method follows the QVP‑based calibration approach described in [1]_.
+
+    References
+    ----------
+    .. [1] Sanchez-Rivas, D., & Rico-Ramirez, M. A. (2022). Calibration of
+        radar differential reflectivity using quasi-vertical profiles.
+        Atmospheric Measurement Techniques, 15(2), 503–520.
+        https://doi.org/10.5194/amt-15-503-2022
+    """
+    # 1. Canonical variable mapping
+    defaults = {"ZDR": "ZDR", "ZH": "DBZH", "RHOHV": "RHOHV",
+                "height": "height"}
+    names = {**defaults, **(inp_names or {})}
+    height = ds[names["height"]]
+    # 2. Determine melting-layer geometry
+    # if detect_mlyr:
+    #     mlyr_kwargs = mlyr_kwargs or {}
+    #     mlyr = detect_mlyr_from_profiles(ds, **mlyr_kwargs)
+    if mlyr is None:
+        ml_top = 5.0
+        ml_thk = 0.75
+        ml_bottom = ml_top - ml_thk
+    else:
+        ml_top = float(mlyr["MLYRTOP"])
+        ml_bottom = float(mlyr["MLYRBTM"])
+        ml_thk = float(mlyr["MLYRTHK"])
+    # 3. Height slicing using find_nearest_index
+    hvals = height.values
+    # Invalid MLyr → offset = 0
+    if np.isnan(ml_bottom) or np.isnan(ml_top):
+        offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+        stats = _empty_stats() if return_stats else None
+    else:
+        i0 = find_nearest_index(hvals, min_h)
+        i1 = find_nearest_index(hvals, ml_bottom)
+        if i1 <= i0:
+            offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+            stats = _empty_stats() if return_stats else None
+        else:
+            ds_sel = ds.isel({names["height"]: slice(i0, i1)})
+            zdr_sel = ds_sel[names["ZDR"]]
+            zh_sel = ds_sel[names["ZH"]]
+            rho_sel = ds_sel[names["RHOHV"]]
+            h_sel = ds_sel[names["height"]]
+            # 4. Apply light-rain filtering
+            mask = ((zh_sel >= zhmin) & (zh_sel <= zhmax) & (rho_sel >= rhvmin)
+                    & (h_sel <= max_h))
+            zdr_filt = zdr_sel.where(mask)
+            # 5. minbins
+            valid_bins = zdr_filt.count(dim=names["height"])
+            if valid_bins <= minbins:
+                offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+                stats = _empty_stats() if return_stats else None
+            else:
+                # 6. Compute offset
+                mean_zdr = zdr_filt.mean(dim=names["height"], skipna=True)
+                offset = (mean_zdr - zdr_0).rename("ZDR_OFFSET")
+                # 7. Compute stats
+                if return_stats:
+                    stats = xr.Dataset(
+                        {"offset_max": zdr_filt.max(dim=names["height"],
+                                                    skipna=True),
+                         "offset_min": zdr_filt.min(dim=names["height"],
+                                                    skipna=True),
+                         "offset_std": zdr_filt.std(dim=names["height"],
+                                                    skipna=True),
+                         "offset_sem":
+                             (zdr_filt.std(dim=names["height"], skipna=True)
+                              / np.sqrt(valid_bins))})
+                else:
+                    stats = None
+    # 8. Build output dataset
+    coords = {name: coord for name, coord in ds.coords.items()
+              if coord.dims == ()}  # keep scalar coords only
+    data_vars = {"ZDR_OFFSET": offset}
+    if return_stats and stats is not None:
+        for k, v in stats.data_vars.items():
+            data_vars[k] = v
+    ds_out = xr.Dataset(data_vars, coords=coords)
+    # 9. Record dataset-level provenance
+    #TODO: add step_description
+    extra = {'step_description': ('')}
+    params = {"min_h": min_h, "max_h": max_h, "zhmin": zhmin, "zhmax": zhmax,
+              "rhvmin": rhvmin, "minbins": minbins, "zdr_0": zdr_0,
+              "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk}
+    outputs = 'ZDR_OFFSET'
+    ds_out = record_provenance(
+        ds_out, step="zdr_offsetdetection_qvp",
+        inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,
+        parameters=params, extra_attrs=extra,
+        module_provenance="towerpy.calib.calib_zdr.zdr_offsetdetection_qvp")
+    return ds_out

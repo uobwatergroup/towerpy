@@ -1,20 +1,30 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
-from pathlib import Path
-import ctypes as ctp
 import copy
+import ctypes as ctp
 import platform
+from pathlib import Path
+
 import numpy as np
 import numpy.ctypeslib as npct
+import xarray as xr
 from scipy import optimize
+
 from ..base import TowerpyError
-from ..utils.radutilities import find_nearest
-from ..utils.radutilities import rolling_window
-from ..utils.radutilities import maf_radial
-from ..utils.radutilities import interp_nan
-from ..utils.radutilities import fillnan1d
 from ..datavis import rad_display
-from ..ml.mlyr import MeltingLayer
+from ..io import modeltp as mdtp
+from ..ml.mlyr import MeltingLayer, attach_melting_layer
+from ..utils.radutilities import (
+    add_correction_step,
+    fillnan1d,
+    find_nearest,
+    interp_nan,
+    maf_radial,
+    record_provenance,
+    rolling_window,
+    safe_assign_variable,
+)
+from ..utils.unit_conversion import convert
 
 
 class AttenuationCorrection:
@@ -592,7 +602,6 @@ class AttenuationCorrection:
             Technology, 22(11), 1621-1632. https://doi.org/10.1175/JTECH1803.1
 
         """
-        
         # =====================================================================
         # Parameter setup
         # =====================================================================
@@ -639,7 +648,7 @@ class AttenuationCorrection:
 
         idxzdrattcorr = [i for i in range(nrays)
                          if any(attcorr_vars['alpha [-]'][i, :] > 0)]
-        
+
         zdrattcorr, adpif, betaof, zdrstat = [], [], [], []
 
         alphacopy = np.array(attcorr_vars['alpha [-]'], copy=True)
@@ -912,3 +921,978 @@ class AttenuationCorrection:
                 rad_params['datetime'] = None
             rad_display.plot_zdrattcorr(rad_georef, rad_params, attvars,
                                         attcorr1, mlyr=mlyr)
+
+
+# =============================================================================
+# %% xarray implementation
+# =============================================================================
+
+def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
+                              attc_method='ABRI', mlyr_top=5., mlyr_thk=0.75,
+                              mlyr_btm=None, phidp0=0., pdp_dmin=20,
+                              pdp_pxavr_rng=7, pdp_pxavr_azm=1, niter=500,
+                              coeff_alpha=[0.020, 0.1, 0.073],
+                              coeff_a=[1e-5, 9e-5, 3e-5],
+                              coeff_b=[0.65, 0.85, 0.78], merge_into_ds=False,
+                              replace_vars=False, modify_output=None):
+    r"""
+    Perform attenuation correction of :math:`Z_H` using one of the algorithms
+    described in Rico‑Ramirez (2012).
+
+    Parameters
+    ----------
+    dsattvars : xarray.Dataset
+        Dataset containing polarimetric variables filtered by noise, along
+        with the polar coordinates (range, azimuth, elevation).
+    cclass : xarray.Dataarray
+        Clutter, noise and weather echoes classification. Attributes must
+        describe the flags used for classification, e.g.:
+        {'pcpn': 0, 'noise': 3, 'clutter': 5}
+    inp_names : dict, optional
+        Mapping for variable/attribute names in the dataset. Defaults:
+        ``{'azi': 'azimuth', 'rng': 'range', 'elv': 'elevation', "ZH": "DBZH",
+        "RHOHV": "RHOHV", "PHIDP": "PHIDP"}``
+    attc_method : str, default 'ABRI'
+        Attenuation correction algorithm to be used:
+
+            ``'ABRI'`` = Bringi (optimised).
+
+            ``'AFV'`` = Final value (optimised).
+
+            ``'AHB'`` = Hitschfeld and Bordan (optimised).
+
+            ``'ZPHI'`` = Testud (constant parameters).
+
+            ``'BRI'`` = Bringi (constant parameters).
+
+            ``'FV'`` = Final value (constant parameters).
+
+            ``'HB'`` = Hitschfeld and Bordan (constant parameters).
+    mlyr_top, mlyr_thk, mlyr_btm : float or array, optional
+        Heights of the melting layer boundaries, in km. Only gates below the
+        melting layer bottom (i.e. the rain region below the melting layer)
+        are included in the computation.
+    pdp_dmin : float, default 20
+        Minimum total :math:`\Delta\Phi_{DP}` expected in a ray to perform
+        attenuation correction (at least 10–20 degrees).
+    pdp_pxavr_rng : int, default 7
+        Pixels to average in :math:`\Phi_{DP}` along range: odd number
+        equivalent to about 4 km, i.e. 4 km / range_resolution.
+    pdp_pxavr_azm : int, default 1
+        Pixels to average in :math:`\Phi_{DP}` along azimuth. Must be an
+        odd number.
+    coeff_alpha : 3-element tuple or list, optional
+        [Min, max, fixed value] of coeff :math:`\alpha`. These bounds are
+        used to find the optimum value of :math:`\alpha` from
+        :math:`A_H = \alpha K_{DP}`. Default values are
+        [0.020, 0.1, 0.073], derived for C-band.
+    coeff_a : 3-element tuple or list, optional
+        [Min, max, fixed value] of coeff :math:`a`. These bounds are
+        used to find the optimum value of :math:`a` from
+        :math:`A_H = a Z_{H}^b`. Default values are [1e-5, 9e-5, 3e-5],
+        derived for C-band.
+    coeff_b : 3-element tuple or list, optional
+        [Min, max, fixed value] of coeff :math:`b`. These bounds are used
+        to find the optimum value of :math:`b` from
+        :math:`A_H = a Z_{H}^b`. Default values are [0.65, 0.85, 0.78],
+        derived for C-band.
+    niter : int, default 500
+        Number of iterations to find the optimised values of the coeffs
+        :math:`a, b, \alpha`.
+    phidp0 : int or float or None, default 0
+        Adjusts the value (in deg) of :math:`\Phi_{DP}(r0)` for the whole
+        scan. If None, the function computes the value of the offset by
+        averaging the value of :math:`\Phi_{DP}` in the first ten
+        consecutive bins classified as rain.
+    merge_into_ds : bool, default False
+        If True, corrected variables are merged into the full dataset.
+        If False, return a dataset containing only the corrected outputs.
+    replace_vars : bool, default False
+        If True, overwrite existing variables (ZH, PHIDP, etc.).
+        If False, corrected variables receive an "_ATTC" suffix unless
+        explicit names are provided via modify_output.
+    modify_output : bool | list[str] | dict[str, str] | None
+        Controls which variables receive the corrected outputs and how they
+        are named:
+
+        - None: apply correction only to the primary variables
+          (ZH, PHIDP, AH, ALPHA, KDP, PIA).
+        - True: apply correction to all primary variables.
+        - list: apply correction only to the listed variables.
+        - dict: map input variable names to explicit output names.
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset containing the attenuation‑corrected variables:
+
+        ZH : dBZ
+            Corrected horizontal reflectivity.
+        AH : dB/km
+            Specific horizontal attenuation.
+        PHIDP : deg
+            Processed and adjusted differential phase.
+        PHIDP_CALC : deg
+            Computed differential phase: Its availability depends on the
+            selected method.
+        KDP : deg/km
+            Specific differential phase, calculated using the equation
+            :math:`K_{DP}=A_H/\alpha`.
+        PIA : dB
+            Path-Integrated Attenuation, calculated using the equation
+            :math:`PIA=\Phi_{DP}*\alpha`.
+        ALPHA :
+            parameter :math:`\alpha` that represents the ratio
+            :math:`A_H/K_{DP}`.
+
+    Notes
+    -----
+    * This function operates in native polar radar coordinates.
+    * The attenuation is computed up to a user-defined melting level
+      height.
+    * This function uses the shared object *'lnxlibattenuationcorrection'*
+      or the dynamic link library *'w64libattenuationcorrection'* depending on
+      the operating system (OS).
+    * Units for range, azimuth and elevation are inspected and converted to
+      the appropriate units (m, rad) when necessary.
+
+    References
+    ----------
+    .. [1] Rico-Ramirez, M. A. (2012). Adaptive attenuation correction
+        techniques for C-Band polarimetric weather radars. IEEE Transactions
+        on Geoscience and Remote Sensing, 50(12), 5061–5071.
+        https://doi.org/10.1109/tgrs.2012.2195228
+    """
+    sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
+    # =============================================================================
+    # Resolve variable names
+    # =============================================================================
+    defaults = {'azi': 'azimuth', 'rng': 'range', 'elv': 'elevation',
+                "ZH": "DBZH", "RHOHV": "RHOHV", "PHIDP": "PHIDP"}
+    names = {**defaults, **(inp_names or {})}
+    # =============================================================================
+    # Prepare ctypes interface
+    # =============================================================================
+    array1d = npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS')
+    array2d = npct.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
+    if platform.system() == 'Linux':
+        libattc = 'lnxlibattenuationcorrection.so'
+        load_libattc = npct.load_library(
+            libattc, Path(__file__).parent.absolute())
+        # load_libattc = npct.load_library(libattc, Path.cwd())
+    elif platform.system() == 'Windows':
+        libattc = 'w64libattenuationcorrection.dll'
+        load_libattc = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}/'
+                                     + libattc)
+    else:
+        load_libattc = None
+        libattc = 'no_libraryOS'
+        raise ValueError(f'The {platform.system()} OS is not currently'
+                         'compatible with this version of Towerpy')
+    load_libattc.attenuationcorrection.restype = None
+    load_libattc.attenuationcorrection.argtypes = [
+        ctp.c_int, ctp.c_int, array2d, array2d, array2d, array2d, array2d,
+        array1d, array1d, array1d, array1d, array2d, array2d, array2d, array2d,
+        array2d]
+    # =============================================================================
+    #  Prepare dataset, melting-layer grid and cclass
+    # =============================================================================
+    # Convert the ML height into a 2‑D grid
+    ds = dsattvars.copy(deep=False)
+    ds = attach_melting_layer(ds, mlyr_top=mlyr_top, mlyr_bottom=mlyr_btm,
+                              mlyr_thickness=mlyr_thk, units="km",
+                              source="user-defined", method="zh_attc",
+                              overwrite=True)
+    # Convert km -> m
+    ml_top_m = convert(ds.MLYRTOP, 'm')
+    # Expand to (azimuth, range)
+    mlgrid = ml_top_m.broadcast_like(ds[names["ZH"]])
+    # Extract raw contiguous numpy array for the C library
+    mlgrid = np.ascontiguousarray(mlgrid.values, dtype=np.float64)
+    # Remap classification IDs
+    echoesID = {'pcpn': 0, 'noise': 3, 'clutter': 5}
+    flagsID = {'pcpn': cclass.attrs['flags']['pcpn'],
+               'noise': cclass.attrs['flags']['noise'],
+               'clutter': cclass.attrs['flags']['clutter']}
+    cclass_arr = cclass.copy()
+    cclass_arr.values[cclass_arr.values == flagsID['pcpn']] = echoesID['pcpn']
+    cclass_arr.values[cclass_arr.values == flagsID['noise']] = echoesID['noise']
+    cclass_arr.values[cclass_arr.values == flagsID['clutter']] = echoesID['clutter']
+    cclass_arr = np.ascontiguousarray(cclass_arr.values, dtype=np.float64)
+    # =============================================================================
+    # Build parameter vector for C routine
+    # =============================================================================
+    param_atc = np.zeros(16, dtype=np.float64)
+
+    if attc_method == 'ABRI':
+        param_atc[0] = 0
+    elif attc_method == 'AFV':
+        param_atc[0] = 1
+    elif attc_method == 'AHB':
+        param_atc[0] = 2
+    elif attc_method == 'ZPHI':
+        param_atc[0] = 3
+    elif attc_method == 'BRI':
+        param_atc[0] = 4
+    elif attc_method == 'FV':
+        param_atc[0] = 5
+    elif attc_method == 'HB':
+        param_atc[0] = 6
+    else:
+        raise ValueError('Please select a valid attenuation correction'
+                           ' method')
+    param_atc[1] = pdp_pxavr_rng
+    param_atc[2] = pdp_pxavr_azm
+    param_atc[3] = pdp_dmin
+    param_atc[4] = coeff_a[2]  # a_opt
+    param_atc[5] = coeff_b[2]  # b_opt
+    param_atc[6] = coeff_alpha[2]  # alpha_opt
+    param_atc[7] = coeff_a[0]  # mina
+    param_atc[8] = coeff_a[1]  # maxa
+    param_atc[9] = coeff_b[0]  # minb
+    param_atc[10] = coeff_b[1]  # maxb
+    param_atc[11] = coeff_alpha[0]  # minalpha
+    param_atc[12] = coeff_alpha[1]  # maxalpha
+    param_atc[13] = niter  # number of iterations
+    param_atc[14] = mlyr_thk * 1000  # BB thickness in meters
+    if isinstance(phidp0, (int, float)):
+        param_atc[15] = phidp0
+    else:
+        param_atc[15] = -999  # PhiDP offset
+    # =============================================================================
+    # Allocate output arrays and prepare inputs
+    # =============================================================================
+    nrays = ds.sizes[names["azi"]]
+    nbins = ds.sizes[names["rng"]]
+    zhh_Ac = np.full((nrays, nbins), np.nan)
+    Ah = np.full((nrays, nbins), np.nan)
+    phidp_m = np.full((nrays, nbins), np.nan)
+    phidp_c = np.full((nrays, nbins), np.nan)
+    alpha = np.full((nrays, nbins), np.nan)
+    # Z = ds[names["rng"]].fillna(-50.0)
+    Z = np.ascontiguousarray(ds[names["ZH"]].values, dtype=np.float64)
+    PHIDP = np.ascontiguousarray(ds[names["PHIDP"]].values, dtype=np.float64)
+    RHOHV = np.ascontiguousarray(ds[names["RHOHV"]].values, dtype=np.float64)
+    # Geometry normalisation
+    rng_m = convert(ds[names["rng"]], "m")
+    azi_rad = convert(ds[names["azi"]], "rad")
+    elv_rad = convert(ds[names["elv"]], "rad")
+    rng_m = np.ascontiguousarray(rng_m.values, dtype=np.float64)
+    azi_rad = np.ascontiguousarray(azi_rad.values, dtype=np.float64)
+    elv_rad = np.ascontiguousarray(elv_rad.values, dtype=np.float64)
+    # =============================================================================
+    # Call C routine for attc
+    # =============================================================================
+    load_libattc.attenuationcorrection(nrays, nbins, Z, PHIDP, RHOHV, mlgrid,
+                                       cclass_arr, rng_m, azi_rad, elv_rad,
+                                       param_atc, zhh_Ac, Ah, phidp_m, phidp_c,
+                                       alpha)
+    # =============================================================================
+    # Post-processing: PIA, KDP, clipping, cumulative max, masking
+    # =============================================================================
+    attcorr = {"ZH_ATT": zhh_Ac, "AH": Ah, "ALPHA": alpha, "PHIDP_m": phidp_m,
+               "PHIDP_CALC": phidp_c}
+    # PIA = PhiDP_m * alpha
+    pia = attcorr["PHIDP_m"] * attcorr["ALPHA"]
+    pia[pia < 0] = 0.0
+    # Cumulative max of PIA along range
+    pia_cum = pia.copy()
+    for i in range(nrays):
+        idmx = np.nancumsum(pia_cum[i]).argmax()
+        if idmx != 0:
+            pia_cum[i, idmx + 1 :] = pia_cum[i, idmx]
+    attcorr["PIA"] = pia_cum
+    # AH must be non-negative
+    Ah[Ah < 0] = 0.0
+    attcorr["AH"] = Ah
+    # KDP = AH / alpha (avoid NaNs blowing up)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        kdp = np.nan_to_num(attcorr["AH"] / attcorr["ALPHA"])
+    attcorr["KDP"] = kdp
+    # Mask non-meteorological gates (cclass != 0)
+    for key, values in attcorr.items():
+        if values.ndim == 2:
+            values[cclass_arr != echoesID["pcpn"]] = np.nan
+    # =============================================================================
+    # Build xarray.Dataset output
+    # =============================================================================
+    # Determine which outputs to include (minimal new logic)
+    primary_outputs = {key: key for key in attcorr.keys()}
+    # Determine selected outputs
+    if modify_output is None or modify_output is True:
+        selected = list(primary_outputs.keys())
+    elif isinstance(modify_output, list):
+        selected = modify_output
+    elif isinstance(modify_output, dict):
+        selected = list(modify_output.keys())
+    else:
+        raise TypeError("modify_output must be None, bool, list, or dict")
+    # Start from original dataset or empty dataset WITH coords + attrs
+    if merge_into_ds:
+        ds_out = ds.copy()
+    else:
+        ds_out = xr.Dataset(coords=ds.coords, attrs=ds.attrs.copy())
+    created_vars = []
+    for logical_name in selected:
+        arr = attcorr[logical_name]
+        # Determine parent variable
+        if logical_name == "ZH_ATT":
+            parent_name = names["ZH"]
+        elif logical_name in ("PHIDP_m", "PHIDP_CALC"):
+            parent_name = names["PHIDP"]
+        else:
+            parent_name = logical_name
+        # Determine output name
+        if isinstance(modify_output, dict):
+            out_name = modify_output.get(logical_name, logical_name)
+        else:
+            if logical_name == "PHIDP_CALC":
+                # PHIDP_CALC is always a separate diagnostic field
+                out_name = f"{names['PHIDP']}_CALC"
+            elif replace_vars:
+                out_name = parent_name
+            else:
+                out_name = f"{parent_name}_ATTC"
+        # Build attrs
+        parent_attrs = ds[parent_name].attrs.copy() if parent_name in ds else {}
+        canonical_attrs = sweep_vars_attrs_f.get(out_name, {}).copy()
+        attrs = {**parent_attrs, **canonical_attrs}
+        attrs = add_correction_step(
+            parent_attrs=attrs, step="attc_dbz",
+            parent=parent_name,
+            params={"method": attc_method,
+                    "phidp0_input": phidp0,
+                    "phidp0_calc": float(param_atc[15]),
+                    "coeff_a": coeff_a,
+                    "coeff_b": coeff_b,
+                    "coeff_alpha": coeff_alpha,
+                    "niter": niter,
+                    "mlyr_top_km (mean)": float(mlyr_top.mean()),
+                    "mlyr_bottom_km (mean)": (
+                        float(mlyr_btm.mean()) if mlyr_btm is not None else None),
+                    "mlyr_thickness_km (mean)": float(mlyr_thk.mean()),
+                    },
+            outputs=[out_name],
+            mode="overwrite" if replace_vars else "preserve",
+            module_provenance="towerpy.attc.attc.attenuation_correction_zh")
+        da = xr.DataArray(arr, dims=(names["azi"], names["rng"]),
+                          coords={names["azi"]: ds[names["azi"]],
+                                  names["rng"]: ds[names["rng"]]},
+                          attrs=attrs,)
+        ds_out = safe_assign_variable(ds_out, out_name, da)
+        created_vars.append(out_name)
+    # Dataset-level provenance
+    #TODO: add step_description
+    extra = {"step_description": ''}
+    ds_out = record_provenance(
+        ds_out, step="attenuation_correction_dbz",
+        inputs=[names["ZH"], names["PHIDP"], names["RHOHV"]],
+        outputs=created_vars,
+        parameters={
+            "method": attc_method,
+            "phidp0_input": phidp0,
+            "phidp0_calc": float(param_atc[15]),
+            "coeff_a": coeff_a,
+            "coeff_b": coeff_b,
+            "coeff_alpha": coeff_alpha,
+            "niter": niter,
+            "mlyr_top_km (mean)": float(mlyr_top.mean()),
+            "mlyr_bottom_km (mean)": (
+                float(mlyr_btm.mean()) if mlyr_btm is not None else None),
+            "mlyr_thickness_km (mean)": float(mlyr_thk.mean()),
+            "merge_into_ds": bool(merge_into_ds),
+            "replace_vars": bool(replace_vars),
+            "modify_output": modify_output}, extra_attrs=extra,
+        module_provenance="towerpy.attc.attc.attenuation_correction_zh")
+    return ds_out
+
+
+def _theoretical_zdr(zh, model, params):
+    """
+    Compute theoretical ZDR corresponding to a given ZH, using either the
+    linear or exponential ZH–ZDR model.
+
+    Parameters
+    ----------
+    zh : float
+        Mean reflectivity (dBZ) at the far side of the rain cell.
+    model : {"linear", "exp"}
+        ZH–ZDR relationship type.
+    params : dict
+        Dictionary containing the required coefficients:
+            For linear:
+                "ZH_lower_lim"
+                "ZH_upper_lim"
+                "coeff_a"
+                "coeff_b"
+                "zdr_max"
+            For exp:
+                "coeff_a"
+                "coeff_b"
+
+    Returns
+    -------
+    zdr_theoretical : float
+    """
+
+    if np.isnan(zh):
+        return np.nan
+
+    if model == "linear":
+        zh_low  = params["ZH_lower_lim"]
+        zh_high = params["ZH_upper_lim"]
+        a = params["coeff_a"]
+        b = params["coeff_b"]
+        zdr_max = params["zdr_max"]
+
+        if zh <= zh_low:
+            return 0.0
+        elif zh_low < zh <= zh_high:
+            return a * zh - b
+        elif zh > zh_high:
+            return zdr_max
+        else:
+            return np.nan
+
+    elif model == "exp":
+        a = params["coeff_a"]
+        b = params["coeff_b"]
+        return a * (zh ** b)
+
+    else:
+        raise ValueError(f"Unknown ZH–ZDR model: {model}")
+
+
+def _find_rain_cells(zdr_mvav, minbins, mask):
+    """
+    Identify rain cells using the mask from np.ma.convolve
+
+    Parameters
+    ----------
+    zdr_mvav : 1D ndarray
+        Moving-average filtered ZDR values (data only).
+    mask : 1D boolean array
+        Mask from masked convolution (True = invalid).
+    minbins : int
+        Minimum contiguous length required.
+
+    Returns
+    -------
+    longest : (idxrs, idxrf) or None
+    full_span : (idxrs_full, idxrf_full) or None
+    """
+    isnan = mask
+
+    if np.all(isnan):
+        return None, None
+
+    segments = []
+    in_seg = False
+    start = None
+    n = len(zdr_mvav)
+    for i, flag in enumerate(isnan):
+        if not flag and not in_seg:
+            in_seg = True
+            start = i
+        elif flag and in_seg:
+            in_seg = False
+            end = i - 1
+            if end - start + 1 >= minbins:
+                segments.append((start, end))
+
+    if in_seg:
+        end = n - 1
+        if end - start + 1 >= minbins:
+            segments.append((start, end))
+
+    if not segments:
+        return None, None
+
+    lengths = [end - start + 1 for start, end in segments]
+    i_max = int(np.argmax(lengths))
+    longest = segments[i_max]
+    full_span = (segments[0][0], segments[-1][1])
+
+    return longest, full_span
+
+
+def _optimise_beta(zdrmrf, zdrerf, phidp_rf, phidp_rs, pia_segment, alpha_rf,
+                   alpha_min_ray, coeff_beta, beta_alpha_ratio, bracket,
+                   second_attempt=False):
+    """
+    beta optimisation.
+
+    Returns
+    -------
+    beta : float
+    status : int
+        1 = optimised (primary)
+        2 = optimised (secondary)
+        0 = fixed ratio fallback
+    """
+    # 0. BRI -> no optimisation at all
+    if bracket is None:
+        return beta_alpha_ratio, 0
+    # 1. Initial betai
+    dphidp = phidp_rf - phidp_rs
+    if dphidp == 0 or np.isnan(dphidp):
+        return beta_alpha_ratio, 0
+    betai = abs(zdrmrf - zdrerf) / dphidp
+    # 2. ZDR corrected using betai
+    pia_mean = np.nanmean(pia_segment)
+    if alpha_rf == 0 or np.isnan(alpha_rf):
+        return beta_alpha_ratio, 0
+    zdrirfpia = zdrmrf + (betai / alpha_rf) * pia_mean
+    # If perfect match -> no root solving, just clamp betai
+    if abs(zdrirfpia - zdrerf) == 0:
+        beta = betai
+        beta = max(coeff_beta[0], min(coeff_beta[1], beta))
+        if np.isnan(beta):
+            beta = coeff_beta[2]
+        return beta, 1 if not second_attempt else 2
+    # 3. Root-solving for β
+    def f(betaif):
+        return zdrmrf + (betaif / alpha_rf) * pia_mean - zdrerf
+    # x0: np.nanmin(alphacopy[i]) * beta_alpha_ratio
+    x0 = alpha_min_ray * beta_alpha_ratio
+    try:
+        sol = optimize.root_scalar(f, bracket=bracket, x0=x0,
+                                   method="brentq")
+        beta = sol.root
+    except Exception:
+        # caller decides whether to retry with full-span or fall back
+        raise
+    # 4. Clamp and finalise
+    beta = max(coeff_beta[0], min(coeff_beta[1], beta))
+    if np.isnan(beta):
+        beta = coeff_beta[2]
+    return beta, 1 if not second_attempt else 2
+
+
+def _attc_zdr_1d(zh, zdr, rhohv, phidp, pia, ah, alpha, ml_bottom_gate, cclass,
+                 coeff_beta, beta_alpha_ratio, rhv_thld, mov_avrgf_len,
+                 minbins, p2avrf, params, attc_method):
+    """
+    Per‑ray ZDR attenuation correction.
+
+    Returns
+    -------
+    zdr_corr : 1D array
+    adp      : 1D array
+    beta_arr : 1D array
+    status   : int (0=fixed, 1=optimised_1, 2=optimised_2)
+    """
+    ng = len(zdr)
+    gates = np.arange(ng)
+
+    below_ml = gates <= ml_bottom_gate
+    met = (cclass == 0)
+    valid_alpha = (alpha > 0)
+    valid = below_ml & met & valid_alpha
+    # 1. fixed β/α branch (BRI or fallback)
+    def _fixed_beta_branch():
+        # ZDR correction along the whole ray
+        zdr_corr_loc = zdr + beta_alpha_ratio * pia
+        # ADP and β along the whole ray, then restricted
+        adp_loc = beta_alpha_ratio * ah
+        beta_arr_loc = alpha * beta_alpha_ratio
+        # Above ML -> 0 for ADP and β
+        adp_loc[~below_ml] = 0.0
+        beta_arr_loc[~below_ml] = 0.0
+        # Non‑met -> NaN
+        zdr_corr_loc[~met] = np.nan
+        adp_loc[~met] = np.nan
+        beta_arr_loc[~met] = np.nan
+        return zdr_corr_loc, adp_loc, beta_arr_loc
+    # 1a. No α below ML -> fixed ratio
+    if not np.any(valid):
+        return *_fixed_beta_branch(), 0
+    # 1b. BRI -> always fixed ratio
+    if attc_method == "BRI":
+        return *_fixed_beta_branch(), 0
+    # 2. ρHV filtering + moving average
+    mask_rhv = (rhohv < rhv_thld)
+    zdr_ma = np.ma.array(zdr, mask=mask_rhv)
+    zh_ma = np.ma.array(zh,  mask=mask_rhv)
+    kernel = np.ones(mov_avrgf_len) / mov_avrgf_len
+    zdr_mv_ma = np.ma.convolve(zdr_ma, kernel, mode="same")
+    zh_mv_ma = np.ma.convolve(zh_ma,  kernel, mode="same")
+    zdr_mv = zdr_mv_ma.data
+    zh_mv = zh_mv_ma.data
+    zdr_mv_mask = zdr_mv_ma.mask
+    # 3. Rain cells
+    longest, full_span = _find_rain_cells(zdr_mv, minbins, mask=zdr_mv_mask)
+    if longest is None:
+        return *_fixed_beta_branch(), 0
+    idxrs, idxrf = longest
+    # 4. Means at far side
+    zhcrf = np.nanmean(zh_mv[idxrf - p2avrf + 1 : idxrf + 1])
+    zdrmrf = np.nanmean(zdr_mv[idxrf - p2avrf + 1 : idxrf + 1])
+    # 5. Theoretical ZDR
+    zdrerf = _theoretical_zdr(zhcrf, params["ZH-ZDR model"], params)
+    if zdrerf <= zdrmrf:
+        return *_fixed_beta_branch(), 0
+    # 6. ABRI optimisation
+    alpha_min_ray = np.nanmin(alpha[valid])
+    beta = beta_alpha_ratio
+    status = 0
+    try:
+        beta, status = _optimise_beta(
+            zdrmrf, zdrerf, phidp[idxrf], phidp[idxrs],
+            pia[idxrf - p2avrf + 1 : idxrf + 1], alpha[idxrf], alpha_min_ray,
+            coeff_beta, beta_alpha_ratio, bracket=coeff_beta[:2])
+    except ValueError:
+        if full_span is not None:
+            idxrs2, idxrf2 = full_span
+            zhcrf2 = np.nanmean(zh_mv[idxrf2 - p2avrf + 1 : idxrf2 + 1])
+            zdrmrf2 = np.nanmean(zdr_mv[idxrf2 - p2avrf + 1 : idxrf2 + 1])
+            zdrerf2 = _theoretical_zdr(zhcrf2, params["ZH-ZDR model"], params)
+            try:
+                beta, status = _optimise_beta(
+                    zdrmrf2, zdrerf2, phidp[idxrf2], phidp[idxrs2],
+                    pia[idxrf2 - p2avrf + 1 : idxrf2 + 1], alpha[idxrf2],
+                    alpha_min_ray, coeff_beta, beta_alpha_ratio,
+                    bracket=coeff_beta[:2], second_attempt=True)
+            except ValueError:
+                return *_fixed_beta_branch(), 0
+        else:
+            return *_fixed_beta_branch(), 0
+    if status == 0:
+        return *_fixed_beta_branch(), 0
+    # 7. Apply optimised correction (ABRI)
+    # ZDR correction along the whole ray
+    corr_term = np.zeros_like(zdr)
+    mask_alpha = (alpha > 0)
+    corr_term[mask_alpha] = (beta / alpha[mask_alpha]) * pia[mask_alpha]
+    zdr_corr = zdr + corr_term
+    # ADP along the whole ray, then restricted
+    adp = np.zeros_like(zdr)
+    adp[mask_alpha] = (beta / alpha[mask_alpha]) * ah[mask_alpha]
+    # β along the whole ray (scalar per ray), then restricted
+    beta_arr = np.zeros_like(alpha)
+    beta_arr[mask_alpha] = beta
+    # Above ML -> 0 for ADP and β
+    adp[~below_ml] = 0.0
+    beta_arr[~below_ml] = 0.0
+    # Non‑met -> NaN
+    zdr_corr[~met] = np.nan
+    adp[~met] = np.nan
+    beta_arr[~met] = np.nan
+
+    return zdr_corr, adp, beta_arr, status
+
+
+def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
+                               attc_method="BRI", mlyr_top=5., mlyr_thk=0.75,
+                               mlyr_btm=None, coeff_beta=[0.008, 0.1, 0.04],
+                               beta_alpha_ratio=0.265, rhv_thld=0.985,
+                               mov_avrgf_len=9, minbins=10, p2avrf=5,
+                               zh_zdr_model="linear", rparams=None,
+                               merge_into_ds=False, replace_vars=False,
+                               modify_output=None,):
+    r"""
+    Perform attenuation correction of :math:`Z_{DR}` using the algorithm
+    described in Bringi et al. (2001).
+    
+    Parameters
+    ----------
+    dsattvars : xarray.Dataset
+        Dataset containing polarimetric variables filtered by noise, along
+        with the polar coordinates (range, azimuth, elevation).
+    cclass : xarray.Dataarray
+        Clutter, noise and weather echoes classification. Attributes must
+        describe the flags used for classification, e.g.:
+        {'pcpn': 0, 'noise': 3, 'clutter': 5}
+    inp_names : dict, optional
+        Mapping for variable/attribute names in the dataset. Defaults:
+        ``{"azi": "azimuth", "rng": "range", "elv": "elevation", "ZH": "DBZH",
+        "ZDR": "ZDR", "RHOHV": "RHOHV", "PHIDP": "PHIDP", "PIA": "PIA",
+        "AH": "AH", "ALPHA": "ALPHA"}``
+    attc_method : str, default "BRI"
+        Attenuation‑correction method. Supported options are:
+
+            'ABRI': Bringi method with optimised β.
+
+            'BRI': Bringi method with fixed β/α ratio.
+    mlyr_top, mlyr_thk, mlyr_btm : float or array, optional
+        Heights of the melting layer boundaries, in km. Only gates below the
+        melting layer bottom (i.e. the rain region below the melting layer)
+        are included in the computation.
+    coeff_beta : list or tuple, default [0.008, 0.1, 0.04]
+        [Min, max, fixed value] of coeff β. These bounds are used to find the
+        optimum value of β. Default values are derived for C‑band.
+    beta_alpha_ratio : float, default 0.265
+        Ratio β / α used in A_DP = (β / α) A_H.
+    rhv_thld : float, default 0.985
+        Minimum value of ρ_HV expected in the rain medium.
+    mov_avrgf_len : int, default 9
+        Odd number used to apply a moving average filter to each beam and
+        smooth the signal.
+    minbins : int, default 10
+        Minimum number of bins related to the length of each rain cell
+        along the beam.
+    p2avrf : int, default 5
+        Number of bins to average on the far side of the rain cell.
+    zh_zdr_model : {"linear", "exp"}, default "linear"
+        Model used to estimate the intrinsic (unattenuated) Z_DR–Z_H
+        relationship.
+    rparams : dict, optional
+        Additional parameters controlling the Z_H–Z_DR relationship.
+        Defaults depend on the selected model. See Notes for details.
+    merge_into_ds : bool, default False
+        If True, corrected variables are merged into a full copy of the input
+        dataset. If False, return a dataset containing only the corrected
+        outputs (same coords and attrs).
+    replace_vars : bool, default False
+        If True, overwrite existing variables (e.g. ZDR, ADP, BETA) where
+        applicable. If False, corrected variables receive an "_ATTC" suffix
+        unless explicit names are provided via ``modify_output``.
+    modify_output : bool | list[str] | dict[str, str] | None
+        Controls which logical outputs are written and how they are named.
+        Logical outputs are: ``"ZDR_ATTC"``, ``"ADP"``, ``"BETA"``.
+        
+        - None: write all logical outputs with default naming rules.
+        - True: same as None (all outputs).
+        - list[str]: only write the listed logical outputs.
+        - dict[str, str]: map logical output names to explicit output names.
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset containing the attenuation‑corrected variables:
+
+        ZDR : dB
+            Attenuation-corrected differential reflectivity.
+        ADP : dB/km
+            Specific differential attenuation.
+        BETA :
+           parameter :math:`\beta` optimised for each beam.
+
+    Notes
+    -----
+    * This function operates in native polar radar coordinates.
+    * This method assumes that :math:`Z_H` has already been corrected for
+      attenuation, e.g. using the methods described in [1]_.
+    * The attenuation is computed up to a user-defined melting level
+      height.
+    * ZH–ZDR relationship - Linear model:
+        .. math::
+            \overline{Z}_{DR} =
+            \Biggl\{ 0 \rightarrow  \overline{Z_H}(r_m)<=Z_H(lowerlim) \\
+                    a*Z_H-b \rightarrow Z_H(lowerlim)<Z_H(r_m)<=Z_H(upperlim) \\
+                        Z_{DR}(max) \rightarrow Z_H(r_m)>Z_H(upperlim) \Biggl\}
+        where:
+            - ZH_lower_lim: 20 dBZ
+            - ZH_upper_lim: 45 dBZ
+            - coeff_a: 0.048
+            - coeff_b: 0.774
+            - zdr_max: 1.4
+
+    * ZH–ZDR relationship - Exponential model:
+        .. math::
+            \overline{Z}_{DR} = \Biggl\{ a*Z_H^{b} \Biggl\}
+        where:
+            - coeff_a: 0.00012
+            - coeff_b: 2.5515
+
+    References
+    ----------
+    .. [1] Rico-Ramirez, M. A. (2012). Adaptive attenuation correction
+        techniques for C-Band polarimetric weather radars. IEEE Transactions
+        on Geoscience and Remote Sensing, 50(12), 5061–5071.
+        https://doi.org/10.1109/tgrs.2012.2195228
+
+    .. [2] Bringi, V., Keenan, T., & Chandrasekar, V. (2001). Correcting C-band
+        radar reflectivity and differential reflectivity data for rain
+        attenuation: a self-consistent method with constraints. IEEE
+        Transactions on Geoscience and Remote Sensing, 39(9), 1906–1915.
+        https://doi.org/10.1109/36.951081
+
+    .. [3] Gou, Y., Chen, H., & Zheng, J. (2019). An improved self-consistent
+        approach to attenuation correction for C-band polarimetric radar
+        measurements and its impact on quantitative precipitation estimation.
+        Atmospheric Research, 226, 32–48.
+        https://doi.org/10.1016/j.atmosres.2019.03.006
+
+    .. [4] Park, S., Bringi, V. N., Chandrasekar, V., Maki, M., & Iwanami, K.
+        (2005). Correction of radar reflectivity and differential reflectivity
+        for rain attenuation at X Band. Part I: Theoretical and Empirical
+        basis. Journal of Atmospheric and Oceanic Technology, 22(11), 1621–1632.
+        https://doi.org/10.1175/jtech1803.1
+    """
+    sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
+    # 1. Resolve variable names
+    defaults = {"azi": "azimuth", "rng": "range", "elv": "elevation",
+                "ZH": "DBZH", "ZDR": "ZDR", "RHOHV": "RHOHV",
+                "PHIDP": "PHIDP", "PIA": "PIA", "AH": "AH", "ALPHA": "ALPHA"}
+    names = {**defaults, **(inp_names or {})}
+    # 2. Remap classification to {0,3,5}
+    echoesID = {"pcpn": 0, "noise": 3, "clutter": 5}
+    flagsID = cclass.attrs["flags"]
+    cclass_arr = cclass.copy()
+    cclass_arr = xr.where(cclass_arr == flagsID["pcpn"], echoesID["pcpn"],
+                          cclass_arr)
+    cclass_arr = xr.where(cclass_arr == flagsID["noise"], echoesID["noise"],
+                          cclass_arr)
+    cclass_arr = xr.where(cclass_arr == flagsID["clutter"], echoesID["clutter"],
+                          cclass_arr)
+    # 3. Attach melting layer and compute bottom gate index per ray
+    ds = attach_melting_layer(dsattvars, mlyr_top=mlyr_top,
+                              mlyr_bottom=mlyr_btm,
+                              mlyr_thickness=mlyr_thk, units="km",
+                              source="user-defined", method="zdr_attc",
+                              overwrite=True)
+    ml_bottom_km = ds.MLYRTOP - ds.MLYRTHK
+    ml_bottom_m = convert(ml_bottom_km, "m")
+    mlb_grid = ml_bottom_m.broadcast_like(ds[names["ZH"]])
+    beam_height = ds.beamc_height  # dims: (azimuth, range)
+    # Correct per-ray ML bottom gate index
+    ml_bottom_gate = np.abs(beam_height - mlb_grid).argmin(dim=names["rng"])
+    # 4. Build ZH–ZDR model params dict
+    params = {"ZH-ZDR model": zh_zdr_model,
+              "ZH_lower_lim": 20.0,
+              "ZH_upper_lim": 45.0,
+              "coeff_a": 0.048,
+              "coeff_b": 0.774,
+              "zdr_max": 1.4}
+    if zh_zdr_model == "exp":
+        params["coeff_a"] = 0.00012
+        params["coeff_b"] = 2.5515
+    if rparams is not None:
+        params.update(rparams)
+    # 5. Apply per-ray ZDR attenuation correction
+    zdr_corr, adp, beta, status = xr.apply_ufunc(
+        _attc_zdr_1d, ds[names["ZH"]], ds[names["ZDR"]], ds[names["RHOHV"]],
+        ds[names["PHIDP"]], ds[names["PIA"]], ds[names["AH"]],
+        ds[names["ALPHA"]],
+        ml_bottom_gate,          # shape (azimuth,)
+        cclass_arr,
+        kwargs=dict(
+            coeff_beta=coeff_beta,
+            beta_alpha_ratio=beta_alpha_ratio,
+            rhv_thld=rhv_thld,
+            mov_avrgf_len=mov_avrgf_len,
+            minbins=minbins,
+            p2avrf=p2avrf,
+            params=params,
+            attc_method=attc_method),
+        input_core_dims=[
+            [names["rng"]],      # ZH
+            [names["rng"]],      # ZDR
+            [names["rng"]],      # RHOHV
+            [names["rng"]],      # PHIDP
+            [names["rng"]],      # PIA
+            [names["rng"]],      # AH
+            [names["rng"]],      # ALPHA
+            [],                  # <-- ml_bottom_gate is a scalar per ray
+            [names["rng"]],      # cclass_arr
+        ],
+        output_core_dims=[[names["rng"]], [names["rng"]], [names["rng"]], []],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[float, float, float, int])
+    # 6. Build output dataset and attrs
+    outputs = {"ZDR_ATTC": zdr_corr, "ADP": adp, "BETA": beta}
+    # Determine which logical outputs to include
+    logical_keys = list(outputs.keys())
+    if modify_output is None or modify_output is True:
+        selected = logical_keys
+    elif isinstance(modify_output, list):
+        selected = modify_output
+    elif isinstance(modify_output, dict):
+        selected = list(modify_output.keys())
+    else:
+        raise TypeError("modify_output must be None, bool, list, or dict")
+    # Start from original dataset or empty dataset WITH coords + attrs
+    if merge_into_ds:
+        ds_out = ds.copy()
+    else:
+        ds_out = xr.Dataset(coords=ds.coords, attrs=ds.attrs.copy())
+    created_vars = []
+    for logical_name in selected:
+        arr = outputs[logical_name]
+        # Determine parent variable
+        if logical_name == "ZDR_ATTC":
+            parent_name = names["ZDR"]
+        else:
+            parent_name = logical_name
+        # Determine output name
+        if isinstance(modify_output, dict):
+            out_name = modify_output.get(logical_name, logical_name)
+        else:
+            if logical_name == "ZDR_ATTC":
+                if replace_vars:
+                    out_name = names["ZDR"]
+                else:
+                    out_name = f"{names['ZDR']}_ATTC"
+            else:
+                if replace_vars:
+                    out_name = parent_name
+                else:
+                    # Only suffix if there is a collision
+                    if parent_name in ds_out:
+                        out_name = f"{parent_name}_ATTC"
+                    else:
+                        out_name = parent_name
+        created_vars.append(out_name)
+        # Build attrs: parent + canonical
+        parent_attrs = ds[parent_name].attrs.copy() if parent_name in ds else {}
+        canonical_attrs = sweep_vars_attrs_f.get(out_name, {}).copy()
+        attrs = {**parent_attrs, **canonical_attrs}
+        if logical_name == "ZDR_ATTC":
+            attrs["description"] = (
+                "Corrected differential reflectivity for attenuation in rain.")
+        elif logical_name == "ADP":
+            attrs["description"] = (
+                "Specific differential attenuation derived from attenuation correction.")
+        elif logical_name == "BETA":
+            attrs["description"] = (
+                "Optimised β parameter for ZDR attenuation correction.")
+        # Add correction step provenance
+        attrs = add_correction_step(
+            parent_attrs=attrs, step="attc_zdr",
+            parent=parent_name,
+            params={"method": attc_method, "coeff_beta": coeff_beta,
+                    "beta_alpha_ratio": beta_alpha_ratio, "rhv_thld": rhv_thld,
+                    "mov_avrgf_len": mov_avrgf_len, "minbins": minbins,
+                    "p2avrf": p2avrf, "zh_zdr_model": zh_zdr_model,
+                    "rparams": rparams,
+                    "mlyr_top_km (mean)": float(mlyr_top.mean()),
+                    "mlyr_bottom_km (mean)": (
+                        float(mlyr_btm.mean()) if mlyr_btm is not None else None),
+                    "mlyr_thickness_km (mean)": float(mlyr_thk.mean())},
+            outputs=[out_name],
+            mode="overwrite" if replace_vars else "preserve",
+            module_provenance="towerpy.attc.attc.attenuation_correction_zdr")
+        # Create DataArray and assign
+        da = xr.DataArray(arr, dims=(names["azi"], names["rng"]),
+                          coords={names["azi"]: ds[names["azi"]],
+                                  names["rng"]: ds[names["rng"]]},
+                          attrs=attrs)
+        ds_out = safe_assign_variable(ds_out, out_name, da)
+    # Dataset-level provenance
+    #TODO: add step_description
+    extra = {"step_description": ""}
+    ds_out = record_provenance(
+        ds_out, step="attenuation_correction_zdr",
+        inputs=[names["ZH"], names["ZDR"], names["PHIDP"],
+                names["RHOHV"], names["PIA"], names["AH"], names["ALPHA"]],
+        outputs=created_vars,
+        parameters={"method": attc_method,
+                    "coeff_beta": coeff_beta,
+                    "beta_alpha_ratio": beta_alpha_ratio,
+                    "rhv_thld": rhv_thld,
+                    "mov_avrgf_len": mov_avrgf_len,
+                    "minbins": minbins,
+                    "p2avrf": p2avrf,
+                    "zh_zdr_model": zh_zdr_model,
+                    "rparams": rparams,
+                    "mlyr_top_km (mean)": float(mlyr_top.mean()),
+                    "mlyr_bottom_km (mean)": (
+                        float(mlyr_btm.mean()) if mlyr_btm is not None else None),
+                    "mlyr_thickness_km (mean)": float(mlyr_thk.mean()),
+                    "merge_into_ds": bool(merge_into_ds),
+                    "replace_vars": bool(replace_vars),
+                    "modify_output": modify_output}, extra_attrs=extra,
+        module_provenance="towerpy.attc.attc.attenuation_correction_zdr")
+    return ds_out

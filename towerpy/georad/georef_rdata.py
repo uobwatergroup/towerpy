@@ -1,7 +1,8 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import numpy as np
-
+from ..utils.unit_conversion import convert
+from ..utils.radutilities import get_attrval
 
 def cart2pol(x, y):
     """
@@ -104,7 +105,7 @@ def height_beamc(elev_angle, rad_range, e_rad=6378, std_refr=4/3):
     return h
 
 
-def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
+def earth_arc_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
     r"""
     Compute the distance (arc length) from the radar to the bins.
 
@@ -124,16 +125,17 @@ def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
     Returns
     -------
     s: array
-        Distance (arc length) from the radar to the bins in kilometres.
+        Ground‑range arc length (km) along the effective Earth sphere.
 
     Notes
     -----
-    The distance in Cartesian coordinates is calculated by adapting equations
-    (2.28b and 2.28c) in [1]_:
+    * The distance in Cartesian coordinates is calculated by adapting equations
+      (2.28b and 2.28c) in [1]_:
 
-    :math:`h = \sqrt{r^2+(\frac{4}{3} E_r)^2+2r(\frac{4}{3} E_r)\sin\Theta}-\frac{4}{3} E_r`
+      .. math::
+          h = \sqrt{r^2+(\frac{4}{3} E_r)^2+2r(\frac{4}{3} E_r)\sin\Theta}-\frac{4}{3} E_r
 
-    :math:`s = \frac{4}{3} E_r * arcsin(\frac{r*cos(\Theta)}{\frac{4}{3} E_r+h})`
+          s = \frac{4}{3} E_r * arcsin(\frac{r*cos(\Theta)}{\frac{4}{3} E_r+h})
 
     References
     ----------
@@ -142,14 +144,13 @@ def cartesian_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
         San Diego: Academic Press, Second Edition.
         https://doi.org/10.1016/B978-0-12-221422-6.50007-3
     """
-    s = (std_refr*e_rad) * np.arcsin(rad_range
-                                     * np.cos(np.deg2rad(elev_angle))
-                                     / (std_refr*e_rad+hbeam))
+    s = (std_refr*e_rad) * np.arcsin(
+        rad_range * np.cos(np.deg2rad(elev_angle)) / (std_refr*e_rad+hbeam))
     return s
 
 
 def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
-               gate0=0, gateres=250):
+               gate0=0, gateres=250, bh_geom=True):
     """
     Create georeferenced grid for PPI radar scans.
 
@@ -207,29 +208,162 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
         rng  = gate0 + np.arange(rparams['ngates'], dtype=float) * gateres
     
     elev_deg = np.rad2deg(elev)
-    bw = rparams['beamwidth [deg]']
+    if bh_geom:
+        bw = rparams['beamwidth [deg]']
     rng_km = rng / 1000.0  # convert to km for height_beamc
 
     # Beam heights
     bhkm  = np.array([height_beamc(ray, rng_km) for ray in elev_deg])
-    bbhkm = np.array([height_beamc(ray - bw/2, rng_km) for ray in elev_deg])
-    bthkm = np.array([height_beamc(ray + bw/2, rng_km) for ray in elev_deg])
+    if bh_geom:
+        bbhkm = np.array([height_beamc(ray - bw/2, rng_km) for ray in elev_deg])
+        bthkm = np.array([height_beamc(ray + bw/2, rng_km) for ray in elev_deg])
 
     # Cartesian conversion
-    s = np.array([cartesian_distance(ray, rng_km, bhkm[i])
+    s = np.array([earth_arc_distance(ray, rng_km, bhkm[i])
                   for i, ray in enumerate(elev_deg)])
     a = [pol2cart(arcl, azim) for arcl in s.T]
     xgrid = np.array([i[1] for i in a]).T
     ygrid = np.array([i[0] for i in a]).T
 
     # Build georef dict
-    geogrid = {
-        'grid_rectx': xgrid,
-        'grid_recty': ygrid,
-        'beam_height [km]': bhkm,
-        'beambottom_height [km]': bbhkm,
-        'beamtop_height [km]': bthkm,
-    }
+    geogrid = {'grid_rectx': xgrid, 'grid_recty': ygrid,
+               'beam_height [km]': bhkm}
+    if bh_geom:
+        geogrid['beambottom_height [km]'] = bbhkm
+        geogrid['beamtop_height [km]'] = bthkm
 
     base = {'azim [rad]': azim, 'elev [rad]': elev, 'range [m]': rng}
     return geogrid, base
+
+
+# =============================================================================
+# %% xarray implementation
+# =============================================================================
+
+def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
+    r"""
+    Create georeferenced Cartesian coordinates and beam‑height fields for a
+    Plan Position Indicator (PPI) radar sweep.
+    
+    Parameters
+    ----------
+    sweep : xarray.Dataset
+        Dataset containing azimuth, elevation, and range.
+    beamwidth : float, optional
+        Beamwidth in degrees. If not provided, the function attempts to
+        extract it from sweep.attrs using known conventions. The value is
+        required to compute beam‑top and beam‑bottom heights.
+    
+    Returns
+    -------
+    sweep : xarray.Dataset
+        The input dataset with additional 2‑D georeferenced coordinates:
+           
+        - ``grid_rectx`` : Cartesian x‑coordinate (km)
+        - ``grid_recty`` : Cartesian y‑coordinate (km)
+        - ``beamc_height`` : beam‑centre height (km)
+        - ``beamb_height`` : beam‑bottom height (km)
+        - ``beamt_height`` : beam‑top height (km)
+       
+        All returned fields are aligned with the ``(azimuth, range)`` grid and
+        include appropriate metadata (units, long_name, short_name).
+
+    Notes
+    -----
+    * Internally, this function calls :func:`ppi_georef` to compute the
+      georeferenced grid and beam‑height geometry.
+    * Elevation, azimuth, and range are converted to radians/metres as needed.
+    * Cartesian coordinates are returned in kilometres.
+    """
+    # Resolve beamwidth
+    bw = get_attrval("beamwidth", sweep, default=beamwidth)
+
+    # Build georef dict from dataset coords
+    georef = {"azim [rad]": convert(sweep.coords["azimuth"], "rad").values,
+              "elev [rad]": convert(sweep.coords["elevation"], "rad").values,
+              "range [m]": convert(sweep.coords["range"], "m").values}
+    rparams = dict(sweep.attrs)  # copy
+    if bh_geom:
+        rparams["beamwidth [deg]"] = float(bw)
+    geogrid, _ = ppi_georef(rparams, georef=georef, bh_geom=bh_geom)
+    # Attach as 2D coords aligned with (azimuth, range)
+    if bh_geom:
+        sweep = sweep.assign_coords({
+            "grid_rectx": (("azimuth", "range"), geogrid["grid_rectx"]),
+            "grid_recty": (("azimuth", "range"), geogrid["grid_recty"]),
+            "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
+            "beamb_height": (("azimuth", "range"), geogrid["beambottom_height [km]"]),
+            "beamt_height": (("azimuth", "range"), geogrid["beamtop_height [km]"]),
+            })
+    else:
+        sweep = sweep.assign_coords({
+            "grid_rectx": (("azimuth", "range"), geogrid["grid_rectx"]),
+            "grid_recty": (("azimuth", "range"), geogrid["grid_recty"]),
+            "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
+            })
+    # Add metadata
+    # sweep["grid_rectx"].attrs.update(
+    #     {"units": "km", "long_name": "rectangular coordinates x"})
+    # sweep["grid_recty"].attrs.update(
+    #     {"units": "km", "long_name": "rectangular coordinates y"})
+    # sweep["beamc_height"].attrs.update(
+    #     {"units": "km", "long_name": "beam centre height",
+    #      'short_name': 'BEAM_HEIGHT'})
+    sweep["grid_rectx"].attrs.update({
+        "units": "km",
+        "long_name": "radar-centric Cartesian x-coordinate",
+        "short_name": "XRECT",
+        "standard_name": "radar_cartesian_x_coordinate",
+        "description": ("Cartesian x-coordinate (km) derived from azimuth and"
+                        " range, with origin at the radar location."),
+        "coordinate_system": "radar_cartesian",
+        "reference_point": "radar_location",
+        "axis": "X"})
+    sweep["grid_recty"].attrs.update({
+        "units": "km",
+        "long_name": "radar-centric Cartesian y-coordinate",
+        "short_name": "YRECT",
+        "standard_name": "radar_cartesian_y_coordinate",
+        "description": ("Cartesian y-coordinate (km) derived from azimuth and"
+                        " range, with origin at the radar location."),
+        "coordinate_system": "radar_cartesian",
+        "reference_point": "radar_location",
+        "axis": "Y"})
+    sweep["beamc_height"].attrs.update({
+        "units": "km",
+        "long_name": "beam centre height",
+        "short_name": "BEAM_HEIGHT",
+        "standard_name": "radar_beam_centre_height",
+        "description": ("Height of the radar beam centre (km), computed from "
+                        "elevation, range, and Earth curvature."),
+        "axis": "Z",
+        "coordinate_system": "radar_vertical",
+        "reference_point": "radar_location",
+        })
+    if bh_geom:
+        sweep["beamb_height"].attrs.update({
+            "units": "km",
+            "long_name": "beam bottom height",
+            "short_name": "BEAM_BOTTOM_HEIGHT",
+            "standard_name": "radar_beam_bottom_height",
+            "description": ("Height of the lower edge of the radar beam (km),"
+                            " computed from elevation, range, beamwidth, and"
+                            " Earth curvature."),
+            "axis": "Z",
+            "coordinate_system": "radar_vertical",
+            "reference_point": "radar_location",
+        })
+        sweep["beamt_height"].attrs.update({
+            "units": "km",
+            "long_name": "beam top height",
+            "short_name": "BEAM_TOP_HEIGHT",
+            "standard_name": "radar_beam_top_height",
+            "description": ("Height of the upper edge of the radar beam (km),"
+                            " computed from elevation, range, beamwidth, and"
+                            " Earth curvature."),
+            "axis": "Z",
+            "coordinate_system": "radar_vertical",
+            "reference_point": "radar_location",
+        })
+
+    return sweep

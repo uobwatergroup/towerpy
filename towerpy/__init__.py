@@ -11,6 +11,8 @@ from . import ml
 from . import profs
 from . import qpe
 from . import utils
+from . import xarray
+
 
 _welcome_text = """
 You are using the Towerpy framework, an open source library for
@@ -25,4 +27,4 @@ https://doi.org/10.1016/j.envsoft.105746.2023
 print(_welcome_text)
 
 name = 'towerpy'
-__version__ = "v1.1.0"
+__version__ = "v2.0.0"

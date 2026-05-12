@@ -6,3 +6,4 @@ Read-in radar data.
 from . import empty
 from . import ncas
 from . import ukmo
+from . import modeltp

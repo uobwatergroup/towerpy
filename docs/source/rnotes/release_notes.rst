@@ -6,8 +6,26 @@ What’s New In Towerpy
 Summary – Release highlights
 ----------------------------
 
-**Latest release: v1.1.0**
+**Latest release: v2.0.0**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Towerpy v2.0.0
+~~~~~~~~~~~~~~
+::
+  **Towerpy v2.0.0**
+  
+    **Release Date:** 2026
+
+
+    **New features**
+      #. **xarray**: Towerpy now uses xarray for data handling, improving performance and enabling more efficient data manipulation.
+      #. **Enhanced visualisation**: New plotting functions and improved interactivity for better data exploration.
+      #. **Improved documentation**: Comprehensive updates to the documentation.
+
+    **Deprecations**
+      #. **Legacy data handling**: Support for older data formats will be removed in favor of xarray.
+      #. **Obsolete functions**: Older functions based on python dictionaries and lists, or numpy arrays will be deprecated in favor of xarray-based functions.
+
 
 Towerpy v1.1.0
 ~~~~~~~~~~~~~~
