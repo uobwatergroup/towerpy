@@ -318,8 +318,11 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
                            zhmin=5.0, zhmax=30.0, rhvmin=0.98,
                            return_stats=False):
     r"""
-    Compute the ZDR calibration offset using vertical profiles (VPS)
-    following Gorgucci et al. (1999) and Sanchez-Rivas & Rico-Ramirez (2022).
+    Estimate the :math:`Z_{DR}` calibration offset from vertical profiles.
+
+    The offset is estimated following Gorgucci et al. (1999) [1]_, using 
+    birdtbath data and configurable thresholds for reflectivity, copolar
+    correlation, and minimum valid samples.
 
     Parameters
     ----------
@@ -348,9 +351,9 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
 
     Returns
     -------
-    offset : xr.Dataset
+    offset : xarray.Dataset
         Scalar ZDR offset, in dB.
-    stats : xr.Dataset, optional
+    stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
     
     Notes
@@ -391,7 +394,7 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
         ml_thk = float(mlyr["MLYRTHK"])
     # 3. Height slicing using find_nearest_index
     hvals = height.values
-    # Invalid MLyr → offset = 0
+    # Invalid MLyr -> offset = 0
     if np.isnan(ml_bottom) or np.isnan(ml_top):
         offset = xr.DataArray(0.0, name="ZDR_OFFSET")
         stats = _empty_stats() if return_stats else None
@@ -442,12 +445,21 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
             data_vars[k] = v
     ds_out = xr.Dataset(data_vars, coords=coords)
     # 9. Record dataset-level provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Estimated the ZDR calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "zhmin": zhmin, "zhmax": zhmax, "rhvmin": rhvmin,
               "minbins": minbins, "ml_top": ml_top, "ml_bottom": ml_bottom,
               "ml_thickness": ml_thk}
     outputs = 'ZDR_OFFSET'
+    # 9a. Attach provenance of input datasets
+    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
+    ml_chain = copy.deepcopy(
+        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
+    ds_out.attrs["source_input_processing_chains"] = []
+    if ds_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
+    if ml_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
     ds_out = record_provenance(
         ds_out, step="zdr_offsetdetection_vp",
         inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,
@@ -460,8 +472,12 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
                             zhmin=0., zhmax=20., rhvmin=0.985, minbins=4,
                             zdr_0=0.182, return_stats=False):
     r"""
-    Compute the ZDR calibration offset using quasi‑vertical profiles (QVPs),
-    following Sanchez‑Rivas & Rico‑Ramirez (2022).
+    Estimate the :math:`Z_{DR}` offset from quasi-vertical profiles.
+
+    The calibration offset is estimated from quasi-vertical profiles (QVPs)
+    following Sanchez-Rivas and Rico-Ramirez (2022) [1]_, using configurable
+    height, reflectivity, and copolar-correlation thresholds to identify
+    suitable radar gates.
 
     Parameters
     ----------
@@ -537,7 +553,7 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
         ml_thk = float(mlyr["MLYRTHK"])
     # 3. Height slicing using find_nearest_index
     hvals = height.values
-    # Invalid MLyr → offset = 0
+    # Invalid MLyr -> offset = 0
     if np.isnan(ml_bottom) or np.isnan(ml_top):
         offset = xr.DataArray(0.0, name="ZDR_OFFSET")
         stats = _empty_stats() if return_stats else None
@@ -589,12 +605,22 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
             data_vars[k] = v
     ds_out = xr.Dataset(data_vars, coords=coords)
     # 9. Record dataset-level provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Estimated the ZDR calibration offset from quasi-vertical profiles "
+        "using selected quality-controlled radar gates.")}
     params = {"min_h": min_h, "max_h": max_h, "zhmin": zhmin, "zhmax": zhmax,
               "rhvmin": rhvmin, "minbins": minbins, "zdr_0": zdr_0,
               "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk}
     outputs = 'ZDR_OFFSET'
+    # 9a. Attach provenance of input datasets
+    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
+    ml_chain = copy.deepcopy(
+        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
+    ds_out.attrs["source_input_processing_chains"] = []
+    if ds_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
+    if ml_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
     ds_out = record_provenance(
         ds_out, step="zdr_offsetdetection_qvp",
         inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,

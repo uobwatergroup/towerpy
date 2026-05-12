@@ -543,7 +543,7 @@ class MeltingLayer:
     #     nrays = rad_params['nrays']
     #     ngates = rad_params['ngates']
         
-    #     # --- normalise ml_top ---
+    #     # normalise ml_top
     #     if np.isscalar(ml_top):
     #         ml_top_arr = np.full(nrays, ml_top, dtype=float)
     #     else:
@@ -686,7 +686,7 @@ def _normalise_ml_input(x, ds, azimuth_dim="azimuth"):
 
     arr = np.asarray(x)
 
-    # Scalar or 0‑D array → convert to float
+    # Scalar or 0‑D array -> convert to float
     if arr.shape == ():
         return float(arr)
 
@@ -698,23 +698,27 @@ def _normalise_ml_input(x, ds, azimuth_dim="azimuth"):
                      f" got shape {arr.shape}")
 
 
-def attach_melting_layer(ds, mlyr_top=None, mlyr_bottom=None, mlyr_thickness=None,
-                         units="km", source="user-defined", method=None,
-                         overwrite=False, delimit_mlyrinppi=False, classid=None,
-                         beam_cone="centre"):
+def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
+                         mlyr_thickness=None, source="user-defined",
+                         method=None, overwrite=False, delimit_mlyrinppi=False,
+                         classid=None, beam_cone="centre"):
     """
     Attach melting-layer metadata to a radar sweep dataset.
 
+    Melting-layer top, bottom, and thickness are stored as dataset metadata
+    variables. If requested, the attached melting-layer information is also
+    used to classify precipitation regions in PPI coordinates.
+
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         Input radar sweep dataset.
+    units : str, default: "km"
+        Units assigned to the melting-layer metadata variables.
     mlyr_top, mlyr_bottom, mlyr_thickness : float, array-like, or DataArray
         Melting-layer top height, bottom height, and thickness. Scalars,
         NumPy arrays, and 1D DataArrays over ``azimuth`` are accepted. Any two
         must be provided; the third is derived.
-    units : str, optional
-        Units assigned to the melting-layer metadata variables (default: "km").
     source : str, optional
         Provenance tag describing the origin of the melting-layer estimate.
     method : str, optional
@@ -723,19 +727,26 @@ def attach_melting_layer(ds, mlyr_top=None, mlyr_bottom=None, mlyr_thickness=Non
         If False (default), an error is raised when melting-layer metadata
         already exist in the dataset.
     delimit_mlyrinppi : bool, optional
-        If True, compute melting-layer precipitation-region classification
-        using the attached metadata and add the resulting fields to the dataset.
-    beam_cone : {'centre', 'top', 'bottom', 'all'}, optional
-        Beam-height descriptor(s) to use when performing classification.
-        Passed directly to `mlyr_ppidelimitation`.
+        If True, classify precipitation regions in PPI coordinates using the
+        attached melting-layer metadata.
     classid : dict, optional
         Optional mapping overriding the default region identifiers used in
         classification.
-    
+    beam_cone : {'centre', 'top', 'bottom', 'all'}, optional
+        Beam-height descriptor(s) to use when performing classification.
+        Passed directly to `mlyr_ppidelimitation`.
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset with attached melting-layer metadata and, if requested,
+        precipitation-region classification fields.
+
     Notes
     -----
-    1. Any two of (mlyr_top, mlyr_bottom, mlyr_thickness) must be provided. The third
-    is computed automatically. All three are validated for consistency.
+    * Any two of mlyr_top, mlyr_bottom, mlyr_thickness must be provided.
+      The third is computed automatically and all three are validated for
+      consistency.
     """
     # Avoid overwriting
     existing = {"mlyr_top", "mlyr_bottom", "mlyr_thickness"} & set(ds.data_vars)
@@ -809,12 +820,12 @@ def attach_melting_layer(ds, mlyr_top=None, mlyr_bottom=None, mlyr_thickness=Non
               "overwrite": bool(overwrite),
               "delimit_mlyrinppi": bool(delimit_mlyrinppi)}
     if delimit_mlyrinppi:
-        extra = {"step_description":
-                 ("Attach melting-layer metadata (top, bottom, thickness) and "
-                  "classify precipitation regions in PPI.")}
+        extra = {"step_description":(
+            "Attached melting-layer metadata and classified precipitation "
+            "regions in the PPI.")}
     else:
-        extra = {"step_description":
-                 ("Attach melting-layer metadata (top, bottom, thickness.")}
+        extra = {"step_description": (
+            "Attached melting-layer top, bottom, and thickness metadata.")}
     ds2 = record_provenance(
         ds2, step="attach_melting_layer",
         inputs=inputs,
@@ -827,12 +838,16 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
                          beam_cone="centre", classid=None,
                          azimuth_dim="azimuth", range_dim="range"):
     """
-    Classify radar bins into rain, mixed-phase, and solid-precipitation
-    regions using melting-layer top and bottom heights.
+    Classify PPI radar bins into rain, melting-layer, and solid-precipitation
+    regions.
+
+    Radar bins are classified by comparing beam-height fields with the
+    melting-layer top and bottom heights. Classification can be based on the
+    beam centre, top, bottom, or all available beam-height descriptors.
 
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         Radar dataset containing beam‑height coordinates:
         ``beamc_height``, ``beamb_height``, ``beamt_height`` with dimensions
         ``(azimuth, range)``.
@@ -841,14 +856,19 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
         NumPy arrays, and 1D DataArrays over ``azimuth`` are accepted. NaN
         values in ``mlyr_bottom`` are replaced by ``mlyr_top - mlyr_thickness``.
     beam_cone : {'centre', 'top', 'bottom', 'all'}, optional
-        Selects which beam‑height descriptor(s) to use:
-            - 'centre' → ``beamc_height`` (default)
-            - 'top'    → ``beamt_height``
-            - 'bottom' → ``beamb_height``
-            - 'all'    → all three
+        Beam-height descriptor or descriptors used for the classification:
+
+        * ``"centre"`` : use ``beamc_height``.
+        * ``"top"`` : use ``beamt_height``.
+        * ``"bottom"`` : use ``beamb_height``.
+        * ``"all"`` : use all three beam-height fields.
     classid : dict, optional
         Optional mapping overriding the default region identifiers:
             {'rain': 1.0, 'mlyr': 2.0, 'solid_pcp': 3.0}
+    azimuth_dim : str, default: "azimuth"
+        Name of the azimuth dimension.
+    range_dim : str, default: "range"
+        Name of the range dimension.
 
     Returns
     -------
@@ -914,7 +934,7 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
     return out
 
 
-def compute_profile_peaks_props(profile_v, profile_h, param_k):
+def _compute_profile_peaks_props(profile_v, profile_h, param_k):
     """
     Detect peaks in a 1D radar profile and derive height‑based peak properties.
 
@@ -992,7 +1012,7 @@ def _mlyr_detection_engine(height, dbz, rhohv, zdr, phidp, gradv, profile_type,
     # 4. pre-detection profile
     profcombdbz_rhv = dbz_norm[min_hidx:max_hidx] * (
         1.0 - rho_norm[min_hidx:max_hidx])
-    pks_pre = compute_profile_peaks_props(
+    pks_pre = _compute_profile_peaks_props(
         profcombdbz_rhv, height[min_hidx:max_hidx], param_k=param_k)
     if (np.isnan(pks_pre["peakmaxvalue"]) or pks_pre["peakmaxvalue"] < param_k):
         # No ML detected
@@ -1116,7 +1136,7 @@ def _mlyr_detection_engine(height, dbz, rhohv, zdr, phidp, gradv, profile_type,
     # 8. Peak detection per combination
     mlrand = []
     for prof in comb_mult_w:
-        res_pk = compute_profile_peaks_props(prof, h_win, param_k=param_k)
+        res_pk = _compute_profile_peaks_props(prof, h_win, param_k=param_k)
         if (np.isnan(res_pk["peakmaxvalue"])
             or res_pk["peakmaxvalue"] <= param_k
             or res_pk["mltop"] < min_h
@@ -1171,15 +1191,20 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
                               gradv_peak="left", return_diagnostics=True,
                               return_internal=False):
     """	
-    Detect melting layer signatures from polarimetric radar profiles appliyng
-    the MLyr detection methodology of Sanchez-Rivas and Rico-Ramirez (2021).
+    Detect melting-layer signatures from polarimetric radar profiles.
+
+    The melting-layer top, bottom, and thickness are estimated following the
+    profile-based detection methodology of Sanchez-Rivas and Rico-Ramirez
+    (2021) [1]_. The method evaluates combinations of available polarimetric
+    profiles and identifies melting-layer signatures from normalised profile
+    features.
 
     Parameters
     ----------
     ds : xarray.Dataset
         Input dataset containing height and polarimetric profile variables.
     inp_names : dict or None, default None
-        Mapping for variable/attribute names in the dataset. Defaults:
+        Mapping for variable/attribute names in the dataset. Defaults to
         ``{'height': 'height', "DBZ": "DBZH", "ZDR": "ZDR", "RHOHV": "RHOHV",
         "PHIDP": "PHIDP", 'GRADV': "GRAD_VRADV"}``
     profile_type : {'vp', 'qvp', 'rdqvp'}, default 'qvp'
@@ -1348,8 +1373,8 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
         vars_used["PHIDP"] = names["PHIDP"]
     if names["GRADV"] in ds:
         vars_used["GRADV"] = names["GRADV"]
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Detected melting-layer boundaries from polarimetric radar profiles.")}
     profs_type = ds.attrs.get("profs_type", profile_type)
     out = record_provenance(
         out, step=f"mlyr_detection_from_{profs_type}",

@@ -6,22 +6,20 @@ from ..utils.radutilities import get_attrval
 
 def cart2pol(x, y):
     """
-    Transform Cartesian coordinates to Polar.
+    Convert Cartesian coordinates to polar coordinates.
 
     Parameters
     ----------
-    x, y : array
+    x, y : array_like
         Cartesian coordinates
 
     Returns
     -------
-    rho : array
-        Radial coordinate, rho is the distance from the origin to a
-        point in the x-y plane.
-    theta : array
-        Angular coordinates is the counterclockwise angle in the x-y
-        plane measured in radians from the positive x-axis. The value
-        of the angle is in the range [-pi, pi].
+    rho : array_like
+        Radial distance from the origin to each point in the x-y plane.
+    theta : array_like
+        Counter-clockwise angle, in radians, measured from the positive
+        x-axis. Values are returned in the range [-pi, pi].
 
     """
     rho = np.hypot(x, y)
@@ -31,23 +29,20 @@ def cart2pol(x, y):
 
 def pol2cart(rho, theta):
     """
-    Transform polar coordinates to Cartesian.
+    Convert polar coordinates to Cartesian coordinates.
 
     Parameters
     ----------
-    rho : array
-        Radial coordinate, rho is the distance from the origin to a
-        point in the x-y plane.
-    theta : array
-        Angular coordinates is the counterclockwise angle in the x-y plane
-        measured in radians from the positive x-axis. The value of the angle
-        is in the range [-pi, pi].
+    rho : array_like
+        Radial distance from the origin to each point in the x-y plane.
+    theta : array_like
+        Counter-clockwise angle, in radians, measured from the positive
+        x-axis. Values are expected in the range [-pi, pi].
 
     Returns
     -------
-    x, y : array
+    x, y : array_like
         Cartesian coordinates.
-
     """
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
@@ -56,7 +51,7 @@ def pol2cart(rho, theta):
 
 def height_beamc(elev_angle, rad_range, e_rad=6378, std_refr=4/3):
     r"""
-    Calculate the height of the centre of the radar beam above Earth's surface.
+    Calculate the height of the radar beam centre above Earth's surface.
 
     Parameters
     ----------
@@ -72,12 +67,12 @@ def height_beamc(elev_angle, rad_range, e_rad=6378, std_refr=4/3):
     Returns
     -------
     h : array
-        Height of the centre of the radar beam in kilometres.
+        Height of the radar beam centre above Earth's surface, in kilometres.
 
     Notes
     -----
-    The beam height above sea level or radar level for a standard atmosphere
-    is calculated by adapting equation (2.28b) in [1]_:
+    * Beam height is calculated for a standard atmosphere by adapting
+      Eq. (2.28b) of Doviak and Zrnic (1993):
 
         :math:`h = \sqrt{r^2+(\frac{4}{3} E_r)^2+2r(\frac{4}{3} E_r)\sin\Theta}-\frac{4}{3} E_r`
 
@@ -90,11 +85,14 @@ def height_beamc(elev_angle, rad_range, e_rad=6378, std_refr=4/3):
         :math:`\Theta` : elevation angle of beam in degree
 
         :math:`E_r` : effective Earth's radius [approximately 6378 km]
+        
+        :math:`k_e` : effective-radius factor, typically :math:`4/3` under
+        standard refraction.
 
     References
     ----------
     .. [1] Doviak, R., & Zrnic, D. S. (1993). Electromagnetic Waves and
-        Propagation in Doppler Radar and Weather Observations (pp. 10-29).
+        Propagation in *Doppler Radar and Weather Observations* (pp. 10-29).
         San Diego: Academic Press, Second Edition.
         https://doi.org/10.1016/B978-0-12-221422-6.50007-3
     """
@@ -152,41 +150,46 @@ def earth_arc_distance(elev_angle, rad_range, hbeam, e_rad=6378, std_refr=4/3):
 def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
                gate0=0, gateres=250, bh_geom=True):
     """
-    Create georeferenced grid for PPI radar scans.
+    Create a georeferenced grid for PPI radar scans.
 
     Parameters
     ----------
     rparams : dict
-        Radar parameters dictionary. Must contain:
-            - 'nrays' : int, number of rays
-            - 'ngates' : int, number of range gates
-            - 'beamwidth [deg]' : float, beamwidth in degrees
+        Radar parameters dictionary containing:
+            - 'nrays' : int
+                number of rays
+            - 'ngates' : int
+                number of range gates
+            - 'beamwidth [deg]' : float, optional
+                Antenna beamwidth, in degrees. Required if ``bh_geom=True``.
     georef : dict, optional
         Existing georeference dictionary with keys 'azim [rad]',
         'elev [rad]', 'range [m]'. Required if `polarc_exist=True`.
-    polarc_exist : bool
+    polarc_exist : bool, default True
         If True, polar coordinates (range, azimuth, elevation) are
         read directly from the georef attribute. If False,
         synthesise elevation, azimuth, and range.
         The default is True
-    elev : float
+    elev : float, default 0.5
         Elevation angle in degrees (used if `polarc_exist=False`).
-        The default is 0.5
-    gate0 : float
+    gate0 : float, default 0
         Starting range gate in metres (used if `polarc_exist=False`).
-        The default is 0
-    gateres : float
+    gateres : float, default 250
         Gate resolution in metres (used if `polarc_exist=False`).
-        The default is 250
+    bh_geom : bool, default True
+        If True, compute beam-bottom and beam-top heights using the antenna
+        beamwidth. The beam-centre height is always computed.
 
     Returns
     -------
     geogrid : dict
         Dictionary containing georeferenced arrays:
-            - 'grid_rectx', 'grid_recty' : Cartesian grid coordinates in kilometres
-            - 'beam_height [km]' : beam centre heights in kilometres
-            - 'beambottom_height [km]' : beam bottom heights in kilometres
-            - 'beamtop_height [km]' : beam top heights in kilometres
+            - 'grid_rectx', 'grid_recty' : Cartesian grid coordinates in km,
+            - 'beam_height [km]' : beam centre heights in km.
+            - 'beambottom_height [km]' : beam bottom heights in km. Included
+             only if ``bh_geom=True``.
+            - 'beamtop_height [km]' : beam top heights in km. Included only
+             if ``bh_geom=True``.
     base : dict
         Dictionary with base polar coordinates (always in radians/metres):
             - 'azim [rad]' : azimuth angles in radians
@@ -195,7 +198,7 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
 
     Notes
     -----
-    1. The rectangular grid is returned in kilometres to match convention.
+    * The rectangular grid is returned in kilometres to match convention.
     """
     # Elevation, azimuth, range setup
     if polarc_exist and georef is not None:
@@ -242,17 +245,22 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
 
 def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
     r"""
-    Create georeferenced Cartesian coordinates and beam‑height fields for a
+    Add georeferenced Cartesian coordinates and beam‑height fields for a
     Plan Position Indicator (PPI) radar sweep.
     
     Parameters
     ----------
     sweep : xarray.Dataset
-        Dataset containing azimuth, elevation, and range.
+        Input dataset containing at least ``azimuth``, ``elevation`` and
+        ``range`` coordinates defined on a ``(azimuth, range)`` grid.
+    bh_geom : bool, optional
+        If ``True`` (default), compute full beam‑height geometry including
+        beam‑top and beam‑bottom heights. If ``False``, only the beam‑centre
+        height is computed.
     beamwidth : float, optional
-        Beamwidth in degrees. If not provided, the function attempts to
-        extract it from sweep.attrs using known conventions. The value is
-        required to compute beam‑top and beam‑bottom heights.
+        Antenna beamwidth, in degrees. If not provided, the function attempts
+        to retrieve it from ``sweep`` using known metadata conventions.
+        Required only if ``bh_geom=True``.
     
     Returns
     -------
@@ -275,15 +283,14 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
     * Elevation, azimuth, and range are converted to radians/metres as needed.
     * Cartesian coordinates are returned in kilometres.
     """
-    # Resolve beamwidth
-    bw = get_attrval("beamwidth", sweep, default=beamwidth)
-
     # Build georef dict from dataset coords
     georef = {"azim [rad]": convert(sweep.coords["azimuth"], "rad").values,
               "elev [rad]": convert(sweep.coords["elevation"], "rad").values,
               "range [m]": convert(sweep.coords["range"], "m").values}
     rparams = dict(sweep.attrs)  # copy
     if bh_geom:
+        # Resolve beamwidth
+        bw = get_attrval("beamwidth", sweep, default=beamwidth, required=False)
         rparams["beamwidth [deg]"] = float(bw)
     geogrid, _ = ppi_georef(rparams, georef=georef, bh_geom=bh_geom)
     # Attach as 2D coords aligned with (azimuth, range)
@@ -302,13 +309,6 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
             "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
             })
     # Add metadata
-    # sweep["grid_rectx"].attrs.update(
-    #     {"units": "km", "long_name": "rectangular coordinates x"})
-    # sweep["grid_recty"].attrs.update(
-    #     {"units": "km", "long_name": "rectangular coordinates y"})
-    # sweep["beamc_height"].attrs.update(
-    #     {"units": "km", "long_name": "beam centre height",
-    #      'short_name': 'BEAM_HEIGHT'})
     sweep["grid_rectx"].attrs.update({
         "units": "km",
         "long_name": "radar-centric Cartesian x-coordinate",

@@ -4,7 +4,6 @@
 
 # :satellite: TOWERPY
 Towerpy is an open-source toolbox designed for reading, processing and displaying polarimetric weather radar data.
-*Xarray implementation*
 
 <p align="left">
   <img alt="Platforms" src="https://img.shields.io/badge/ =&nbsp&nbsp OS &nbsp&nbsp&nbsp;=-critical?style=for-the-badge" />
@@ -27,6 +26,11 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
   
 </p>
 
+# ⚠️ Towerpy 2.0
+
+> **towerpy 2.0 (xarray rewrite) is under active development.  
+> The latest stable release is `1.1.0`.  
+> The 2.0 alpha is available only on GitHub and is not on PyPI or conda.**
 
 # :books: Documentation
 [![Documentation Status](https://readthedocs.org/projects/towerpy/badge/?version=latest)](https://towerpy.readthedocs.io/en/latest/?badge=latest)

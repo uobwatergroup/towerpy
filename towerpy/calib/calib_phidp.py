@@ -474,88 +474,15 @@ def _empty_stats():
                        "offset_std": ((), np.nan), "offset_sem": ((), np.nan)})
 
 
-def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
-                     minthr_pdp0=-np.inf, rhohv_min=0.9, dbz_min=5., dbz_max=60.,
-                     range_dim="range", azimuth_dim="azimuth"):
-    r"""
-    Filter spurious values in :math:`\Phi_{DP}`.
-
-    Parameters
-    ----------
-    phidp : xr.DataArray
-        Input :math:`\Phi_{DP}` field (degrees).
-    rhohv : xr.DataArray, optional
-        :math:`\rho_{HV}` field used to remove non‑meteorological gates.
-    zh : xr.DataArray, optional
-        Reflectivity field (dBZ) used to remove non‑meteorological gates.
-    window : tuple of int, default (1, 3)
-        Rolling window size ``(m, n)`` where ``m`` is along azimuth and
-        ``n`` along range. ``n`` must be odd. Using ``(1, n)`` is recommended.
-    thr_spdp : float, default 10.0
-        Maximum allowed standard deviation (deg) of :math:`\Phi_{DP}`. Gates
-        exceeding this threshold are removed.
-    minthr_pdp0 : float, default -inf
-        Minimum allowed :math:`\Phi_{DP}` value. If finite, values below this
-        threshold are clipped before filtering.
-    rhohv_min : float, default 0.9
-        Minimum :math:`\rho_{HV}` threshold for retaining meteorological gates.
-    dbz_min : float, default 5.0
-        Minimum reflectivity threshold (dBZ).
-    dbz_max : float, default 60
-        Maximum reflectivity threshold (dBZ).
-    range_dim : str, default "range"
-        Name of the range dimension.
-    azimuth_dim : str, default "azimuth"
-        Name of the azimuth dimension.
-
-    Returns
-    -------
-    xr.DataArray
-        Filtered :math:`\Phi_{DP}` field with spurious gates masked (NaN).
-
-    Notes
-    * NaNs propagate through all masking steps.
-    * Only range‑dimension despiking is applied.
-    """
-
-    m, n = window
-    if n % 2 == 0:
-        raise ValueError("Range window length n must be odd.")
-    # minthr_pdp0 clipping
-    if np.isfinite(minthr_pdp0):
-        phidp = xr.where(phidp < minthr_pdp0, minthr_pdp0, phidp)
-    # Despike #1 (isolated PHIDP)
-    mask1 = despike_isolated(phidp, n, range_dim)
-    # ZH mask
-    if zh is not None:
-        mask1 = mask1 & (zh >= dbz_min) & (zh <= dbz_max)
-    # rhoHV mask
-    if rhohv is not None:
-        mask1 = mask1 & (rhohv >= rhohv_min)
-    # Apply mask to PHIDP
-    phidp_dspk_rhv = phidp.where(mask1)
-    # Rolling std
-    phidp_s = rolling_std_xr(phidp_dspk_rhv, mov_avrgf_len=window,
-                             azimuth_dim=azimuth_dim, range_dim=range_dim)
-    # Std threshold mask
-    mask2 = std_mask_threshold(phidp_s, thr_spdp, n, range_dim)
-    # Std isolated mask
-    mask3 = std_mask_isolated(phidp_s, n, range_dim)
-    mask_std = mask2 & mask3
-    # Apply std mask
-    phidp_f = phidp_dspk_rhv.where(mask_std)
-    # Final despike (isolated PHIDP)
-    mask4 = despike_isolated(phidp_f, n, range_dim)
-    phidp_f = phidp_f.where(mask4)
-    return phidp_f
-
-
 def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
                              minbins=2, dbz_min=20., dbz_max=60., rhv_min=0.98,
                              return_stats=False):
     r"""
-    Compute the :math:`\Phi_{DP}` calibration offset using vertical profiles
-    (VPS), following Frech, (2013).
+    Estimate the :math:`\Phi_{DP}` calibration offset from vertical profiles.
+
+    The offset is estimated following Frech (2013) [1]_, using 
+    birdtbath data and configurable thresholds for reflectivity, copolar
+    correlation, and minimum valid samples.
 
     Parameters
     ----------
@@ -585,9 +512,9 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
 
     Returns
     -------
-    offset : xr.Dataset
+    offset : xarray.Dataset
         Scalar :math:`\Phi_{DP}` calibration offset, in deg.
-    stats : xr.Dataset, optional
+    stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
 
     Notes
@@ -600,10 +527,9 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
 
     References
     ----------
-    .. [1] Frech, M., & Frech, M. (2013, September 17). Monitoring the data
-        quality of the new polarimetric weather radar network of the German
-        Meteorological Service.
-        https://ams.confex.com/ams/36Radar/webprogram/Paper228472.html
+    .. [1] Frech, M. (2013, September 17). Monitoring the data quality of the
+        new polarimetric weather radar network of the German Meteorological
+        Service. https://ams.confex.com/ams/36Radar/webprogram/Paper228472.html
     .. [2] Sanchez-Rivas, D., & Rico-Ramirez, M. A. (2023). Towerpy: An
         open-source toolbox for processing polarimetric weather radar data.
         Environmental Modelling & Software, 167, 105746.
@@ -677,12 +603,21 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
             data_vars[k] = v
     ds_out = xr.Dataset(data_vars, coords=coords)    
     # 9. Record provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Estimated the PhiDP calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "dbz_min": dbz_min, "dbz_max": dbz_max,
               "rhv_min": rhv_min, "minbins": minbins, "ml_top": ml_top,
               "ml_bottom": ml_bottom, "ml_thickness": ml_thk}
     outputs = 'PHIDP_OFFSET'
+    # 9a. Attach provenance of input datasets
+    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
+    ml_chain = copy.deepcopy(
+        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
+    ds_out.attrs["source_input_processing_chains"] = []
+    if ds_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
+    if ml_chain:
+        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
     ds_out = record_provenance(
         ds_out, step="compute_phidp0_vps",
         inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]], outputs=outputs,
@@ -691,13 +626,96 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
     return ds_out
 
 
+def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
+                     minthr_pdp0=-np.inf, rhohv_min=0.9, dbz_min=5., dbz_max=60.,
+                     range_dim="range", azimuth_dim="azimuth"):
+    r"""
+    Filter spurious values in :math:`\Phi_{DP}`.
+
+    Parameters
+    ----------
+    phidp : xarray.DataArray
+        Input :math:`\Phi_{DP}` field (degrees).
+    rhohv : xarray.DataArray, optional
+        :math:`\rho_{HV}` field used to remove non‑meteorological gates.
+    zh : xarray.DataArray, optional
+        Reflectivity field (dBZ) used to remove non‑meteorological gates.
+    window : tuple of int, default (1, 3)
+        Rolling window size ``(m, n)`` where ``m`` is along azimuth and
+        ``n`` along range. ``n`` must be odd. Using ``(1, n)`` is recommended.
+    thr_spdp : float, default 10.0
+        Maximum allowed standard deviation (deg) of :math:`\Phi_{DP}`. Gates
+        exceeding this threshold are removed.
+    minthr_pdp0 : float, default -inf
+        Minimum allowed :math:`\Phi_{DP}` value. If finite, values below this
+        threshold are clipped before filtering.
+    rhohv_min : float, default 0.9
+        Minimum :math:`\rho_{HV}` threshold for retaining meteorological gates.
+    dbz_min : float, default 5.0
+        Minimum reflectivity threshold (dBZ).
+    dbz_max : float, default 60
+        Maximum reflectivity threshold (dBZ).
+    range_dim : str, default "range"
+        Name of the range dimension.
+    azimuth_dim : str, default "azimuth"
+        Name of the azimuth dimension.
+
+    Returns
+    -------
+    xr.DataArray
+        Filtered :math:`\Phi_{DP}` field with spurious gates masked (NaN).
+
+    Notes
+    * NaNs propagate through all masking steps.
+    * Only range‑dimension despiking is applied.
+    """
+
+    m, n = window
+    if n % 2 == 0:
+        raise ValueError("Range window length n must be odd.")
+    # minthr_pdp0 clipping
+    if np.isfinite(minthr_pdp0):
+        phidp = xr.where(phidp < minthr_pdp0, minthr_pdp0, phidp)
+    # Despike #1 (isolated PHIDP)
+    mask1 = despike_isolated(phidp, n, range_dim)
+    # ZH mask
+    if zh is not None:
+        mask1 = mask1 & (zh >= dbz_min) & (zh <= dbz_max)
+    # rhoHV mask
+    if rhohv is not None:
+        mask1 = mask1 & (rhohv >= rhohv_min)
+    # Apply mask to PHIDP
+    phidp_dspk_rhv = phidp.where(mask1)
+    # Rolling std
+    phidp_s = rolling_std_xr(phidp_dspk_rhv, mov_avrgf_len=window,
+                             azimuth_dim=azimuth_dim, range_dim=range_dim)
+    # Std threshold mask
+    mask2 = std_mask_threshold(phidp_s, thr_spdp, n, range_dim)
+    # Std isolated mask
+    mask3 = std_mask_isolated(phidp_s, n, range_dim)
+    mask_std = mask2 & mask3
+    # Apply std mask
+    phidp_f = phidp_dspk_rhv.where(mask_std)
+    # Final despike (isolated PHIDP)
+    mask4 = despike_isolated(phidp_f, n, range_dim)
+    phidp_f = phidp_f.where(mask4)
+    # Force to zero rays that are all-nan
+    no_valid_after_final_despike = ~phidp_f.notnull().any(range_dim)
+    phidp_f = xr.where(no_valid_after_final_despike, 0, phidp_f)
+    return phidp_f
+
 
 def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
                               dbz_min=5., dbz_max=60., mov_avrgf_len=(1, 3),
                               thr_spdp=10, max_off=180, preset=None,
                               preset_tol=5):
     r"""
-    Estimate the differential phase offset :math:`\Phi_{DP}(0)` from PPI scans.
+    Estimate the initial differential phase offset (:math:`\Phi_{DP}(0)`) 
+    from PPI scans.
+
+    The offset is derived from selected quality-controlled radar gates using
+    configurable reflectivity, copolar-correlation, and differential-phase
+    texture thresholds.
 
     Parameters
     ----------
@@ -802,8 +820,9 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         coords[names["azi"]] = ds[names["azi"]]
     ds_out = xr.Dataset({out_name: out}, coords=coords)
     # 6. Record dataset-level provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Estimated the initial PhiDP offset from PPI scans using selected "
+        "quality-controlled radar gates.")}
     params = {"mov_avrgf_len": mov_avrgf_len, "thr_spdp": thr_spdp,
               "rhohv_min": rhohv_min, "dbz_min": dbz_min, "dbz_max": dbz_max,
               "max_off": max_off, "preset": preset, "preset_tol": preset_tol,
@@ -822,7 +841,11 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
                         mlyr_thk=0.75, mlyr_btm=None, mask=True,
                         replace_vars=False):
     r"""
-    Apply a full quality-control processing workflow to :math:`\Phi_{DP}`
+    Apply quality-control processing to differential phase (:math:`\Phi_{DP}`).
+
+    The workflow applies thresholding, masking, interpolation, and smoothing in
+    native polar radar coordinates, with optional initial-offset correction and
+    melting-layer handling.
 
     Parameters
     ----------
@@ -883,8 +906,8 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     Notes
     -----
     * This function operates in native polar radar coordinates.
-    * :math:`\Phi_{DP}` must be unfolded and offset-corrected before calling
-      this function.
+    * :math:`\Phi_{DP}` must be unfolded and optionally offset-corrected
+      before calling this function.
     * The processing workflow includes:
         - clipping of low :math:`\Phi_{DP}` values,
         - despiking of isolated gates,
@@ -951,15 +974,30 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     valid0 = phidp0 != 0
     median_valid0 = phidp0.where(valid0).median(azimuth_dim)
     phidp0 = phidp0.where(valid0, median_valid0)
+    # Identify rays with no valid meteorological gates
+    no_valid_ray = ~phidp_f.notnull().any(range_dim)
+    # Force to zero rays that are all-nan
+    phidp_f = xr.where(no_valid_ray, 0, phidp_f)
     # Apply PHIDP(0) only at the first valid gate (preserve NaN padding)
     first_idx = phidp_f.notnull().argmax(range_dim)
-    # Mask selecting only the first valid gate per ray
+    # Identify rays with no valid meteorological gates
+    all_nan_ray = ~phidp_f.notnull().any(range_dim)
+    # Force to zero rays that are all-nan
+    phidp_f = xr.where(all_nan_ray, 0, phidp_f)
+    phidp0   = xr.where(all_nan_ray, 0, phidp0)
+    # Only apply PHIDP(0) to rays that have valid gates
+    valid_ray = ~all_nan_ray
+    # Compute first valid gate index only for valid rays
+    first_idx = phidp_f.notnull().argmax(range_dim)
+    first_idx = first_idx.where(valid_ray, 0)
+    # Build mask for first valid gate
     first_gate_mask = xr.zeros_like(phidp_f, dtype=bool)
     first_gate_mask = first_gate_mask.isel(range=first_idx)
-    # Set that gate to PHIDP(0)
-    phidp_f = phidp_f.where(~first_gate_mask, phidp0)
-    # Subtract PHIDP(0) from the whole ray
-    phidp_f = phidp_f - phidp0
+    # Apply PHIDP(0) only to valid rays
+    phidp_f = xr.where(
+        valid_ray, phidp_f.where(~first_gate_mask, phidp0), phidp_f)
+    # Subtract PHIDP(0) only for valid rays
+    phidp_f = xr.where(valid_ray, phidp_f - phidp0, phidp_f)
     # Melting-layer filtering and interpolation
     if mlyr_intp:
         # 1. Normalise ML inputs (scalar or per-azimuth arrays)
@@ -1011,6 +1049,14 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     # Despike isolated gates after MAV
     mask_iso = despike_isolated(phidp_m, n, range_dim=range_dim)
     phidp_m = phidp_m.where(mask_iso)
+    # Rays that became fully invalid after MAV + despike
+    no_valid_after_mav = ~phidp_m.notnull().any(range_dim)    
+    # Force to zero rays that are all-nan
+    phidp_m = xr.where(no_valid_after_mav, 0, phidp_m)
+    # NEW: detect rays with only one valid gate
+    one_valid_gate = phidp_m.notnull().sum(range_dim) == 1
+    # Force to zero rays that are all-nan
+    phidp_m = xr.where(one_valid_gate, 0, phidp_m)
     # Interpolation + second MAV
     n = mov_avrgf_len[1]
     # Interpolate NaNs along range (no extrapolation)
@@ -1024,8 +1070,22 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     # Second MAV: include NaNs, extend valid
     phidp_maf = (phidp_i.rolling({range_dim: n}, center=True).mean())
     phidp_maf = fill_both(phidp_maf, dim=range_dim)
+    # Force to zero rays that are all-nan
+    no_valid_after_ma2 = ~phidp_maf.notnull().any(range_dim)
+    phidp_maf = xr.where(no_valid_after_ma2, 0, phidp_maf)
+    # detect rays with only one valid gate
+    one_valid_gate = phidp_maf.notnull().sum(range_dim) == 1
+    # Force to zero rays that are all-nan
+    phidp_maf = xr.where(one_valid_gate, 0, phidp_maf)
     # Final ZH mask: where ZH is NaN, set PHIDP to NaN
     phidp_maf = phidp_maf.where(zh.notnull())
+    # Identify rays with no valid ZH anywhere
+    no_zh_ray = ~zh.notnull().any(range_dim)
+    # Force to zero rays BEFORE applying the ZH mask
+    phidp_maf = xr.where(no_zh_ray, 0, phidp_maf)
+    # Force to zero rays that are all-nan
+    no_valid_after_zh = ~phidp_maf.notnull().any(range_dim)
+    phidp_maf = xr.where(no_valid_after_zh, 0, phidp_maf)
     # Determine output name
     ds_out = ds.copy()
     corrected_vars = []
@@ -1063,8 +1123,9 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
             ds_out = ds_out.drop_vars(var)
         corrected_vars.append(out_var)
     # Dataset-level provenance
-    extra = {'step_description': ('Quality-control processing workflow of'
-                                  ' PHIDP')}
+    extra = {'step_description': (
+        "Applied PhiDP quality control with thresholding, masking, "
+        "interpolation, and smoothing.")}
     ds_out = record_provenance(
         ds_out, step="phidp_qc_processing",
         inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]],

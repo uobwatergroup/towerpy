@@ -86,7 +86,7 @@ ANGLE_UNITS = {
     "rad": {"rad", "radian", "radians"},
     }
 
-# Reverse lookup: map any known string → canonical unit
+# Reverse lookup: map any known string -> canonical unit
 UNIT_LOOKUP = {
     u: canon for canon, variants in {**DISTANCE_UNITS, **ANGLE_UNITS}.items()
     for u in variants}
@@ -99,7 +99,7 @@ def convert(var, target_unit: str):
 
     Parameters
     ----------
-    var : xr.DataArray
+    var : xarray.DataArray
         Input array with a 'units' attribute.
     target_unit : str
         Canonical target unit, e.g. "m", "km", "rad", "deg".
@@ -142,7 +142,7 @@ def convert(var, target_unit: str):
         return _convert_angle(var, src_unit, target_unit)
 
     raise ValueError(
-        f"Incompatible unit conversion: {src_unit!r} → {target_unit!r}")
+        f"Incompatible unit conversion: {src_unit!r} -> {target_unit!r}")
 
 
 # Unit converters
@@ -155,7 +155,7 @@ def _convert_distance(var, src, dst):
     elif src == "km" and dst == "m":
         out = out * 1000
     else:
-        raise ValueError(f"Unsupported distance conversion {src} → {dst}")
+        raise ValueError(f"Unsupported distance conversion {src} -> {dst}")
 
     out.attrs = var.attrs.copy()
     out.attrs["units"] = dst
@@ -170,7 +170,7 @@ def _convert_angle(var, src, dst):
     elif src == "rad" and dst == "deg":
         out = np.rad2deg(out)
     else:
-        raise ValueError(f"Unsupported angle conversion {src} → {dst}")
+        raise ValueError(f"Unsupported angle conversion {src} -> {dst}")
 
     out.attrs = var.attrs.copy()
     out.attrs["units"] = dst
@@ -246,7 +246,7 @@ def np64_to_dtm(t):
     to Python datetime.datetime safely.
     """
 
-    # Case 0: xarray DataArray → extract scalar
+    # Case 0: xarray DataArray -> extract scalar
     if isinstance(t, xr.DataArray):
         t = t.item()
 
@@ -262,7 +262,7 @@ def np64_to_dtm(t):
 
     # Case 3: integer nanoseconds since epoch
     if isinstance(t, (int, np.integer)):
-        # Convert ns → ms
+        # Convert ns -> ms
         t_ms = t // 1_000_000
         return dt.datetime.utcfromtimestamp(t_ms / 1000)
 

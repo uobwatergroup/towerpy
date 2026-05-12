@@ -439,166 +439,6 @@ def linspace_step(start: float, stop: float, step: float) -> np.ndarray:
 # =============================================================================
 
 # =============================================================================
-# %%% UKMO datasets
-# =============================================================================
-
-def ukmo_year_directory(root_directory, year, rsite, modep, elev):
-    """
-    Build the canonical CEDA UKMO Nimrod single-site directory path.
-
-    Example:
-        <root>/ukmo-nimrod/data/single-site/storage_by_year/2023/chenies/raw-dual-polar/lpel0/
-    """
-    return (Path(root_directory) / 'ukmo-nimrod' / 'data' / 'single-site'
-            / "storage_by_year" / f"{year:04d}" / rsite / "raw-dual-polar"
-            / f"{modep}el{elev}")
-
-
-def find_UKMO_rfile(root_directory, rsite, moder, modep, elev, target_time,
-                    tolerance=dt.timedelta(minutes=5), return_time_diff=False):
-    """
-    Find the closest radar file to `target_time`.
-
-    Parameters
-    ----------
-    root_directory : Path-like
-        Directory containing radar files. The storage layout follows the CEDA
-        UKMO Nimrod single-site archive structure.
-    rsite : str
-        Radar site identifier (e.g., "jersey", "chenies"). 
-    moder : str
-        Dual-polarisation mode for the "aug" field ("zdr" or "ldr").
-    modep : str
-        Pulse mode ("sp" or "lp").
-    elev : int
-        Elevation angle (e.g., 4).
-    target_time : datetime.datetime
-        Desired timestamp to match.
-    tolerance : datetime.timedelta, optional
-        Maximum allowed absolute time difference. Default is ±5 minutes.
-    return_time_diff : bool, optional
-        If True, return both the file path and the signed time difference.
-        If False (default), return only the file path.
-
-    Returns
-    -------
-    Path or (Path, datetime.timedelta) or None
-        - If return_time_difference=False:
-              Path to the closest file, or None if no file is within tolerance.
-        - If return_time_difference=True:
-              (Path, signed_time_difference), or None if no file is within tolerance.
-
-        The signed time difference is:
-            file_time - target_time
-        Negative values indicate the file is earlier than the target time.
-
-    Notes
-    -----
-    Files are expected to follow the naming pattern:
-        metoffice-c-band-rain-radar_{rsite}_YYYYMMDDHHMM_raw-dual-polar-aug{moder}-{modep}-el{elev}.dat
-
-    The timestamp (YYYYMMDDHHMM) is extracted from the filename and compared to
-    `target_time`. The file with the smallest absolute time difference is selected.
-    If the closest file lies outside the specified `tolerance`, the function
-    returns None.
-    """
-
-    year_dir = ukmo_year_directory(root_directory, target_time.year, rsite,
-                                   modep, elev)
-
-    if not year_dir.is_dir():
-        return None
-
-    pattern = re.compile(rf"metoffice-c-band-rain-radar_{rsite}_([0-9]{{12}})"
-                         rf"_raw-dual-polar-aug{moder}-{modep}-el{elev}\.dat")
-    candidates = []
-    for f in year_dir.glob("*.dat"):
-        m = pattern.match(f.name)
-        if not m:
-            continue
-        timestamp_str = m.group(1)
-        file_time = dt.datetime.strptime(timestamp_str, "%Y%m%d%H%M")
-        diff = file_time - target_time
-        abs_diff = abs(diff)
-        candidates.append((abs_diff, diff, f))
-    if not candidates:
-        return None
-    # Pick the smallest absolute difference
-    candidates.sort(key=lambda x: x[0])
-    abs_diff, signed_diff, best_file = candidates[0]
-    if abs_diff > tolerance:
-        return None
-    if return_time_diff:
-        return best_file, signed_diff
-    return best_file
-
-
-def list_UKMO_rfiles(root_directory, rsite, moder, modep, elev, start_time,
-                     stop_time, return_time_diff=False):
-    """
-    List radar files whose timestamps fall between `start_time` and `stop_time`
-
-    Parameters
-    ----------
-    root_directory : Path-like
-        Directory containing radar files. The storage layout follows the CEDA
-        UKMO Nimrod single-site archive structure.
-    rsite : str
-        Radar site identifier (e.g., "jersey", "chenies"). 
-    moder : str
-        Dual-polarisation mode for the "aug" field ("zdr" or "ldr").
-    modep : str
-        Pulse mode ("sp" or "lp").
-    elev : int
-        Elevation angle (e.g., 4).
-    start_time : datetime.datetime
-        Start of the inclusive time window.
-    stop_time : datetime.datetime
-        End of the inclusive time window.
-    return_time_diff : bool, optional
-        If True, return (Path, file_time - start_time) tuples.
-        If False (default), return only Paths.
-
-    Returns
-    -------
-    list of Path or list of (Path, datetime.timedelta)
-        All matching files sorted by timestamp. If no files fall within the
-        specified time window, an empty list is returned.
-
-    Notes
-    -----
-    Files are expected to follow the naming pattern:
-        metoffice-c-band-rain-radar_{rsite}_YYYYMMDDHHMM_raw-dual-polar-aug{moder}-{modep}-el{elev}.dat
-    """
-
-    if start_time > stop_time:
-        raise ValueError("start_time must be <= stop_time")
-
-    pattern = re.compile(rf"metoffice-c-band-rain-radar_{rsite}_([0-9]{{12}})"
-                         rf"_raw-dual-polar-aug{moder}-{modep}-el{elev}\.dat")
-    results = []
-    # Loop over all years in the time window
-    for year in range(start_time.year, stop_time.year + 1):
-        year_dir = ukmo_year_directory(root_directory, year, rsite, modep, elev)
-        if not year_dir.is_dir():
-            continue
-        for f in year_dir.glob("*.dat"):
-            m = pattern.match(f.name)
-            if not m:
-                continue
-            timestamp_str = m.group(1)
-            file_time = dt.datetime.strptime(timestamp_str, "%Y%m%d%H%M")
-            if start_time <= file_time <= stop_time:
-                diff = file_time - start_time
-                results.append((file_time, diff, f))
-    # Sort chronologically
-    results.sort(key=lambda x: x[0])
-    if return_time_diff:
-        return [(f, diff) for _, diff, f in results]
-    else:
-        return [f for _, _, f in results]
-
-# =============================================================================
 # %%% Processing
 # =============================================================================
 def normalise_with_bounds(da, vmin, vmax):
@@ -792,7 +632,7 @@ def xr_hist2d(x, y, x_edges, y_edges, dim):
 
     Parameters
     ----------
-    x, y : xr.DataArray
+    x, y : xarray.DataArray
         Input variables to histogram over, sharing the same core dimensions.
     x_edges, y_edges : array-like
         Bin edges for the x and y axes, defining the histogram grid.
@@ -1110,27 +950,50 @@ def getcoordunits(ds, coord_name, default=""):
     return ds.coords[coord_name].attrs.get("units", default)
 
 
-def resolve_rect_coords(ds, coord_names=None):
+def resolve_rect_coords(ds, coord_names=None, zcoord=False):
     """
-    Resolve rectangular coordinate names using:
-    1. explicit user override
-    2. automatic detection
+    Resolve rectangular coordinate names.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+    coord_names : dict or None
+        Expected keys: 'x', 'y', and optionally 'z' if zcoord=True.
+    zcoord : bool
+        If True, also resolve a vertical coordinate ('z').
+
+    Returns
+    -------
+    (xname, yname) or (xname, yname, zname)
     """
     # 1. User override
     if coord_names:
         xname = coord_names.get("x")
         yname = coord_names.get("y")
-        if xname in ds.coords and yname in ds.coords:
-            return xname, yname
+        if zcoord:
+            zname = coord_names.get("z", "beamc_height")
+            if xname in ds.coords and yname in ds.coords and zname in ds.coords:
+                return xname, yname, zname
+        else:
+            if xname in ds.coords and yname in ds.coords:
+                return xname, yname
 
     # 2. Automatic detection
-    candidates = [("grid_rectx", "grid_recty"),
-                  ("x", "y"),
-                  ("xc", "yc"),
+    candidates = [("grid_rectx", "grid_recty"), ("x", "y"), ("xc", "yc"),
                   ("projection_x_coordinate", "projection_y_coordinate")]
     for xname, yname in candidates:
         if xname in ds.coords and yname in ds.coords:
-            return xname, yname
+            if not zcoord:
+                return xname, yname
+            break
+    # 3. Resolve z
+    if zcoord:
+        zname = coord_names.get("z", "beamc_height")
+        if zname in ds.coords:
+            return xname, yname, zname
+        raise ValueError(
+            f"Height coordinate '{zname}' not found in dataset. "
+            f"Specify rectcoord_names={{'x': ..., 'y': ..., 'z': ...}}.")
     return None, None
 
 
@@ -1243,46 +1106,6 @@ def resolve_attr(ds, key, default=None, return_all=False):
     return results[0] if results else default
 
 
-# def get_attrval(attr, sweep, default=None, required=True):
-#     """
-#     Resolve a metadata attribute from a sweep using flexible candidate paths.
-
-#     Parameters
-#     ----------
-#     sweep : xarray.Dataset
-#         Sweep dataset with nested attrs.
-#     attr : str
-#         Logical attribute name, e.g. "beamwidth", "radconstH".
-#     default : any
-#         Value returned if nothing is found (unless required=True).
-#     required : bool
-#         If True, raise KeyError when attribute is missing.
-
-#     Returns
-#     -------
-#     any
-#     """
-#     candidates = [f"how/{attr}",
-#                   f"what/{attr}",
-#                   f"where/{attr}",
-#                   attr,  # top-level
-#                   f"{attr}",
-#                   # f"{attr}_h",
-#                   # f"{attr}_v",
-#                   f"dataset*/how/{attr}",
-#                   f"dataset*/what/{attr}",
-#                   f"dataset*/where/{attr}",
-#                   f"scan*/how/{attr}",]
-
-#     for key in candidates:
-#         val = resolve_attr(sweep, key, default=None)
-#         if val is not None:
-#             return val
-#     if required:
-#         raise KeyError( f"Required attribute '{attr}' not found in metadata. "
-#                        f"Candidates tried: {candidates}" )
-#     return default
-
 def get_attrval(attr, sweep, default=None, required=True):
     """
     Resolve a metadata attribute from a sweep using flexible candidate paths.
@@ -1307,16 +1130,42 @@ def get_attrval(attr, sweep, default=None, required=True):
         # sanitized flattened
         candidates.append(f"{base}_how_{attr}")
 
-    # Try all candidates
+    # Try metadata candidates
     for key in candidates:
         val = resolve_attr(sweep, key, default=None)
         if val is not None:
             return val
 
+    # Direct lookup in data_vars
+    if attr in sweep.data_vars:
+        return sweep[attr]
+    # substring lookup in data_vars
+    matches = []
+    
+    # wildcard match
+    for k, v in sweep.data_vars.items():
+        if fnmatch.fnmatch(k, attr):
+            matches.append(v)
+    
+    # substring match if wildcard failed
+    if not matches:
+        norm_attr = attr.replace("_", "").replace("-", "").lower()
+        for k, v in sweep.data_vars.items():
+            norm_key = k.replace("_", "").replace("-", "").lower()
+            if norm_attr in norm_key:
+                matches.append(v)
+    
+    if matches:
+        # Prefer horizontal (_h) over vertical (_v)
+        for v in matches:
+            if v.name.lower().endswith("_h"):
+                return v
+        # Otherwise return the first match
+        return matches[0]
+
     if required:
-        raise KeyError(
-            f"Required attribute '{attr}' not found. Candidates tried: {candidates}"
-        )
+        raise KeyError(f"Required attribute '{attr}' not found."
+                       f" Candidates tried: {candidates}")
     return default
 
 
@@ -1336,13 +1185,16 @@ def _as_dataset(obj):
 
 
 def _safe_metadata(ds, elev_dim="elevation"):
-    """Return dict with safe radar metadata (elevation, time, radar name, sweep mode)."""
+    """
+    Return dict with safe radar metadata
+    (elevation, time, radar name, sweep mode).
+    """
 
     out = {}
 
-    # ------------------------------------------------------------------
+    
     # Elevation handling
-    # ------------------------------------------------------------------
+    
     if elev_dim in ds.coords:
         elev = ds[elev_dim].values
         # Convert to 1‑D array safely
@@ -1351,22 +1203,27 @@ def _safe_metadata(ds, elev_dim="elevation"):
             out["elev_str"] = ""
         else:
             # Check if all elevations are (almost) identical
-            if np.allclose(elev, elev[0], rtol=0, atol=1e-0):
+            if np.allclose(elev, elev[0], rtol=0, atol=1e-1):
                 out["elev_str"] = f"{float(elev[0]):.1f}deg"
+                # out["elev_str"] = rf"{float(elev[0]):.1f}$^\circ$"
             else:
                 # Mixed elevations -> show min–max
-                out["elev_str"] = f"{float(elev.min()):.2f}–{float(elev.max()):.2f}deg"
+                out["elev_str"] = (f"{float(elev.min()):.2f}"
+                                   f"–{float(elev.max()):.2f}deg")
+                # out["elev_str"] = (f"{float(elev.min()):.2f}"
+                #                    rf"–{float(elev.max()):.2f}$^\circ$")
     else:
         # Fallback: old attribute
         elev = ds.attrs.get("elev_ang")
         if isinstance(elev, (int, float)):
             out["elev_str"] = f"{elev:.1f}deg"
+            # out["elev_str"] = rf"{elev:.1f}$^\circ$"
         else:
             out["elev_str"] = ""
 
-    # ------------------------------------------------------------------
+    
     # Time handling
-    # ------------------------------------------------------------------
+    
     py_dt = None
     # 1. Try coordinate
     if "time" in ds.coords:
@@ -1382,9 +1239,9 @@ def _safe_metadata(ds, elev_dim="elevation"):
         py_dt = _extract_timestamp_from_attrs(ds.attrs)
     # 3. Format or fallback
     out["dt_str"] = py_dt.strftime("%Y-%m-%d %H:%M:%S") if py_dt else ""
-    # ------------------------------------------------------------------
+    
     # Radar name
-    # ------------------------------------------------------------------
+    
     # Radar name
     where = ds.attrs.get("where")
 
@@ -1394,13 +1251,25 @@ def _safe_metadata(ds, elev_dim="elevation"):
         out["rname"] = ds.attrs["site_name"]
     else:
         out["rname"] = "Radar"
-    # ------------------------------------------------------------------
+    
     # Sweep mode
-    # ------------------------------------------------------------------
-    try:
-        out["swp_mode"] = str(ds.sweep_mode.values)
-    except Exception:
-        out["swp_mode"] = ""
+    
+    swp = None
+    if "sweep_mode" in ds:
+        val = ds["sweep_mode"].data
+        # Convert numpy scalar -> Python type
+        if isinstance(val, bytes):
+            swp = val.decode("utf-8", errors="ignore")
+        elif hasattr(val, "item"):
+            item = val.item()
+            if isinstance(item, bytes):
+                swp = item.decode("utf-8", errors="ignore")
+            else:
+                swp = str(item)
+        else:
+            swp = str(val)
+    
+    out["swp_mode"] = swp or ""
 
     return out
 
@@ -1421,18 +1290,18 @@ def safe_assign_variable(ds, name, da, *, new_attrs=None):
 
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         Input dataset.
     name : str
         Variable name to assign/overwrite.
-    da : xr.DataArray
+    da : xarray.DataArray
         New data array.
     new_attrs : dict, optional
         Attributes to merge into the variable after assignment.
 
     Returns
     -------
-    xr.Dataset
+    xarray.Dataset
         Dataset with variable replaced and coordinate attrs preserved.
     """
 
@@ -1626,7 +1495,7 @@ def record_provenance(ds, step, outputs, parameters, inputs=None,
 
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         Dataset whose provenance metadata is to be updated.
     step : str
         Logical step name contributing to the correction chain, also used
@@ -1645,7 +1514,7 @@ def record_provenance(ds, step, outputs, parameters, inputs=None,
 
     Returns
     -------
-    xr.Dataset
+    xarray.Dataset
         The Dataset with an updated ``processing_chain`` attribute reflecting
         the new provenance entry.
     """
@@ -1718,30 +1587,36 @@ def record_provenance(ds, step, outputs, parameters, inputs=None,
 def add_correction_step(parent_attrs, *, step, parent, params, outputs,
                         mode=None, extra_attrs=None, module_provenance=None):
     """
-    Append a correction step to a variable's provenance chain and update
-    all associated provenance attributes in a consistent way.
+    Add a processing step to a provenance chain.
+
+    The step metadata, parent variable, parameters, outputs, and provenance
+    source are recorded in a consistent set of variable or dataset attributes.
 
     Parameters
     ----------
     parent_attrs : dict
         Existing attrs of the parent variable or dataset.
     step : str
-        Name of the processing step (e.g. "attenuation_correction").
+        Name of the processing step, for example ``"attenuation_correction"``.
     parent : str
-        Name of the parent variable.
+        Name of the parent variable or dataset.
     params : dict
-        Parameters used in this step. Must be JSON-serialisable.
+        Parameters used in the processing step. Values should be
+        JSON-serialisable.
     outputs : list[str]
         Names of output variables produced by this step.
     mode : {"overwrite", "preserve"}, optional
-        If None, defaults to "preserve".
+        Provenance update mode. If ``None``, defaults to ``"preserve"``.
+    extra_attrs : dict, optional
+        Additional attributes to include in the provenance record.
     module_provenance : str, default "Towerpy"
         Identifier for the provenance source.
 
     Returns
     -------
     dict
-        Updated attrs including correction_chain, provenance fields, and mode.
+        Updated attributes containing the provenance chain, processing-step
+        metadata, and update mode.
     """
     if module_provenance is None:
         module_provenance = "Towerpy"
@@ -1776,8 +1651,11 @@ def apply_correction_chain(ds, varname, step, params, mask=None, suffix="_corr",
                            corrected_field=None, module_provenance=None,
                            extra_attrs=None):
     """
-    Apply a correction mask to a variable and add it back into the Dataset,
-    appending provenance-aware metadata to track the full correction chain.
+    Apply a correction to a dataset variable and record provenance.
+
+    The corrected field is added to the dataset with provenance-aware metadata
+    describing the processing step, parameters, parent variable, and correction
+    chain.
 
     Parameters
     ----------
@@ -1785,22 +1663,29 @@ def apply_correction_chain(ds, varname, step, params, mask=None, suffix="_corr",
         Dataset containing the variable to correct.
     varname : str
         Name of the variable to correct.
-    mask : xarray.DataArray
-        Boolean or categorical mask aligned with ds[varname].
     step : str
-        Short tag describing the correction step (e.g. "SNR_correction").
+        Name of the correction step, for example ``"snr_correction"``.
     params : dict
-        Parameters used in the correction (e.g. {"min_snr": 5}).
-    suffix : str, optional
-        Suffix for the corrected variable name. Default "_corr".
+        Parameters used in the correction. Values should be JSON-serialisable.
+    mask : xarray.DataArray
+        Boolean or categorical mask aligned with ``ds[varname]``. If provided,
+        it is applied to the selected variable unless ``corrected_field`` is
+        given.
+    suffix : str, default: "_corr"
+        Suffix used to construct the corrected variable name.
     corrected_field : xarray.DataArray, optional
-        The corrected variable produced by this step. When provided, it will
-        be used as the output of the correction step.
+        Corrected variable produced by this step. If provided, it is used directly
+        as the output field.
+    module_provenance : str, optional
+        Identifier for the provenance source.
+    extra_attrs : dict, optional
+        Additional attributes to include in the provenance record.
 
     Returns
     -------
     ds : xarray.Dataset
-        Dataset with new corrected variable added.
+        Dataset with the corrected variable added and provenance metadata
+        updated.
     """
     if module_provenance is None:
         module_provenance = "Towerpy"
@@ -1854,25 +1739,31 @@ def apply_correction_chain(ds, varname, step, params, mask=None, suffix="_corr",
     return ds
 
 
-def merge_in_time(datasets, *, height_res=None, height_tol=1e-5,
-                  extra_attrs=None):
+def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
     """
-    Merge a list of time-indexed datasets into a single time-sorted dataset.
+    Merge time-indexed datasets into a single time-sorted dataset.
+
+    Input datasets are expanded or concatenated along ``time``. If requested,
+    datasets with a height dimension are interpolated onto a common height
+    grid before merging.
 
     Parameters
     ----------
-    datasets : list of xarray.Dataset
-        Each must contain a scalar ``time`` coordinate.
-        Optionally may contain a 1D ``height`` coordinate.
-    height_res : float or None, optional
-        If provided, interpolate all datasets with a ``height`` dimension
-        onto a common height grid with this vertical resolution (km).
+    datasets : sequence of xarray.Dataset
+        Input datasets to merge. Each dataset must contain a scalar ``time``
+        coordinate and may optionally contain a one-dimensional ``height``
+        coordinate.
+    height_res : float, optional
+        Vertical resolution, in kilometres, of the common height grid used for
+        interpolation. If ``None``, no height-grid interpolation is applied.
+    height_tol : float, default: 1e-5
+        Tolerance used when comparing or constructing height coordinates.
 
     Returns
     -------
     ds : xarray.Dataset
-        Dataset with dimension ``time`` (and ``height`` if present),
-        containing all variables stacked along time.
+        Time-sorted dataset with variables stacked along ``time`` and, where
+        applicable, interpolated onto a common ``height`` coordinate.
     """
     if not datasets:
         raise ValueError("merge_in_time: received an empty list.")
@@ -1917,9 +1808,24 @@ def merge_in_time(datasets, *, height_res=None, height_tol=1e-5,
     for attr in DROP_ATTRS:
         out.attrs.pop(attr, None)
     # Provenance
-    input_chains = [copy.deepcopy(ds.attrs["input_processing_chain"])
-                    for ds in datasets if "input_processing_chain" in ds.attrs]
-    out.attrs["source_input_processing_chains"] = input_chains
+    extra_attrs = {"step_description": (
+        "Merged time-indexed datasets into a single time-sorted dataset.")}
+    # input_chains = [copy.deepcopy(ds.attrs["input_processing_chain"])
+    #                 for ds in datasets if "input_processing_chain" in ds.attrs]
+    # out.attrs["source_input_processing_chains"] = input_chains
+    sipc = []
+    for ds in datasets:
+        # 1. input_processing_chain
+        if "input_processing_chain" in ds.attrs:
+            chain = copy.deepcopy(ds.attrs["input_processing_chain"])
+            if chain and chain not in sipc:
+                sipc.append(chain)
+        # 2. list of source_input_processing_chains
+        if "source_input_processing_chains" in ds.attrs:
+            for chain in ds.attrs["source_input_processing_chains"]:
+                if chain and chain not in sipc:
+                    sipc.append(copy.deepcopy(chain))
+    out.attrs["source_input_processing_chains"] = sipc
     out = record_provenance(
         out, step="merge_inputs_time",
         inputs=[v for ds in datasets for v in ds.data_vars],
@@ -1971,7 +1877,7 @@ def _validate_nested_chain(value, key):
             raise ValueError(f"{key} must be list-of-lists, got inner {type(inner)}")
 
 
-def encode_provenance(ds):
+def _encode_provenance(ds):
     ds = ds.copy()
     for key in _PROV_KEYS_DATASET:
         if key in ds.attrs:
@@ -1985,7 +1891,7 @@ def encode_provenance(ds):
                 attrs[key] = _maybe_json_encode(attrs[key])
     return ds
 
-def encode_cf_value(value):
+def _encode_cf_value(value):
     # Already a JSON string? leave it
     if isinstance(value, str):
         try:
@@ -2006,22 +1912,22 @@ def encode_cf_value(value):
     if isinstance(value, np.ndarray):
         return value
 
-    # Lists/tuples of numbers/bools → CF-safe list
+    # Lists/tuples of numbers/bools -> CF-safe list
     if isinstance(value, (list, tuple)):
         if all(isinstance(v, (int, float, bool, np.generic)) for v in value):
             return [v.item() if isinstance(v, np.generic) else v for v in value]
-        # structured list → JSON string
+        # structured list -> JSON string
         return json.dumps(_sanitize_for_json(value))
 
-    # Dicts → JSON string
+    # Dicts -> JSON string
     if isinstance(value, dict):
         return json.dumps(_sanitize_for_json(value))
 
-    # Fallback → JSON string
+    # Fallback -> JSON string
     return json.dumps(_sanitize_for_json(value))
 
 
-def encode_cf_flags(attrs):
+def _encode_cf_flags(attrs):
     if "flags" not in attrs:
         return attrs
 
@@ -2042,24 +1948,55 @@ def encode_cf_flags(attrs):
     return attrs
 
 
-def encode_cf_attrs(attrs):
-    attrs = encode_cf_flags(dict(attrs))
+def _encode_cf_attrs(attrs):
+    attrs = _encode_cf_flags(dict(attrs))
     for key, val in list(attrs.items()):
-        attrs[key] = encode_cf_value(val)
+        attrs[key] = _encode_cf_value(val)
     return attrs
 
 
 def encode_CF(ds):
-    ds = encode_provenance(ds)
+    """
+    Encode dataset attributes into CF-compliant serialisable forms.
+
+    Structured attributes, such as provenance chains, dictionaries, and nested
+    lists, are converted to JSON strings. If a ``flags`` mapping is present, CF
+    flag metadata is expanded into ``flag_values`` and ``flag_meanings``.
+    CF-safe types are preserved.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Input dataset whose dataset-level, variable-level, and coordinate-level
+        attributes will be encoded.
+
+    Returns
+    -------
+    xarray.Dataset
+        Copy of the input dataset with CF-compliant attribute encodings.
+
+    Notes
+    -----
+    * Only attribute metadata is modified; data variables are unchanged. The
+      function returns a new dataset and does not modify the input in place.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset(attrs={"processing_chain": [{"step": "qc"}]})
+    >>> out = encode_CF(ds)
+    >>> out.attrs["processing_chain"]
+    '[{"step": "qc"}]'
+    """
+    ds = _encode_provenance(ds)
     ds = ds.copy()
 
-    ds.attrs = encode_cf_attrs(ds.attrs)
+    ds.attrs = _encode_cf_attrs(ds.attrs)
 
     for var in ds.data_vars:
-        ds[var].attrs = encode_cf_attrs(ds[var].attrs)
+        ds[var].attrs = _encode_cf_attrs(ds[var].attrs)
 
     for coord in ds.coords:
-        ds[coord].attrs = encode_cf_attrs(ds[coord].attrs)
+        ds[coord].attrs = _encode_cf_attrs(ds[coord].attrs)
 
     return ds
 
@@ -2073,7 +2010,7 @@ def _maybe_json_decode(value):
     return value
 
 
-def decode_provenance(ds):
+def _decode_provenance(ds):
     ds = ds.copy()
 
     for key in _PROV_KEYS_DATASET:
@@ -2115,7 +2052,7 @@ def decode_provenance(ds):
     return ds
 
 
-def decode_cf_value(value):
+def _decode_cf_value(value):
     if isinstance(value, str):
         try:
             return json.loads(value)
@@ -2124,7 +2061,7 @@ def decode_cf_value(value):
     return value
 
 
-def decode_cf_flags(attrs):
+def _decode_cf_flags(attrs):
     if "flags" in attrs:
         return attrs
     if "flags_json" in attrs:
@@ -2135,23 +2072,53 @@ def decode_cf_flags(attrs):
     return attrs
 
 
-def decode_cf_attrs(attrs):
-    attrs = decode_cf_flags(dict(attrs))
+def _decode_cf_attrs(attrs):
+    attrs = _decode_cf_flags(dict(attrs))
     for key, val in list(attrs.items()):
-        attrs[key] = decode_cf_value(val)
+        attrs[key] = _decode_cf_value(val)
     return attrs
 
 
 def decode_CF(ds):
-    ds = decode_provenance(ds)
+    """
+    Decode CF-encoded attributes into structured Python objects.
+
+    JSON-encoded provenance attributes, dictionaries, and nested lists are
+    restored to their original Python structures. If ``flags_json`` is present,
+    a ``flags`` mapping is reconstructed unless one already exists.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Input dataset whose dataset-level, variable-level, and coordinate-level
+        attributes will be decoded.
+
+    Returns
+    -------
+    xarray.Dataset
+        Copy of the input dataset with decoded attribute metadata.
+
+    Notes
+    -----
+    * Only attribute metadata is modified; data variables are unchanged. The
+      function returns a new dataset and does not modify the input in place.
+
+    Examples
+    --------
+    >>> ds = xr.Dataset(attrs={"processing_chain": '[{"step": "qc"}]'})
+    >>> out = decode_CF(ds)
+    >>> out.attrs["processing_chain"]
+    [{'step': 'qc'}]
+    """
+    ds = _decode_provenance(ds)
     ds = ds.copy()
 
-    ds.attrs = decode_cf_attrs(ds.attrs)
+    ds.attrs = _decode_cf_attrs(ds.attrs)
 
     for var in ds.data_vars:
-        ds[var].attrs = decode_cf_attrs(ds[var].attrs)
+        ds[var].attrs = _decode_cf_attrs(ds[var].attrs)
 
     for coord in ds.coords:
-        ds[coord].attrs = decode_cf_attrs(ds[coord].attrs)
+        ds[coord].attrs = _decode_cf_attrs(ds[coord].attrs)
 
     return ds

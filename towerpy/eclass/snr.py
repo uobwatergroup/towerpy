@@ -153,7 +153,11 @@ class SNR_Classif:
 
 def signal2noiseratio(Z, rng_km, rc, scale="db"):
     """
-    Compute signal-to-noise ratio (SNR).
+    Compute the signal-to-noise ratio from radar reflectivity.
+
+    The signal-to-noise ratio (SNR) is estimated from reflectivity, range, and
+    the radar constant, and can be returned in logarithmic, linear, or both
+    scales.
 
     Parameters
     ----------
@@ -190,12 +194,16 @@ def signal2noiseratio(Z, rng_km, rc, scale="db"):
                            " expected 'db', 'lin', or 'both'.")
 
 
+#TODO: is `mask` an appropiate name?
 def snr_classif(ds, inp_names=None, min_snr=0, rcst_dB=None, classid=None,
                 snr_linu=False, mask=None, replace_vars=False):
     """
-    Compute the signal-to-noise ratio (SNR) and classify gates as signal or
-    noise using a reference noise value. Optionally apply SNR-based masking to
-    selected variables.
+    Compute signal-to-noise ratio and classify signal/noise gates.
+
+    The signal-to-noise ratio (SNR) is estimated from radar reflectivity using
+    a reference noise level. Gates below the configurable SNR threshold are
+    classified as noise, and optional SNR-based masking can be applied to
+    selected radar variables.
 
     Parameters
     ----------
@@ -333,9 +341,9 @@ def snr_classif(ds, inp_names=None, min_snr=0, rcst_dB=None, classid=None,
         corrected_vars.append(out_var)
     outputs.extend(corrected_vars)
     # Provenance
-    extra = {'step_description':
-             ('Quantifies the level of desired signal relative to background ' 
-              ' noise and removes data classified as noise.')}
+    extra = {'step_description': (
+        "Computed SNR and classified signal/noise gates, with optional "
+        "SNR-based masking of selected radar variables.")}
     params = {"min_snr_threshold": float(min_snr),
               "reflectivity_var": names["DBZ"],
               "range_var": names["rng"],

@@ -98,7 +98,7 @@ class Attn_Refl_Relation:
 
         Notes
         -----
-        Standard values according to [1]_
+        * Standard values according to [1]_
 
         References
         ----------
@@ -255,7 +255,7 @@ class Attn_Refl_Relation:
 
         Notes
         -----
-        Standard values according to [1]_
+        * Standard values according to [1]_
 
         References
         ----------
@@ -363,7 +363,7 @@ def _z_from_a_core(a_lin, a_coeff, b_coeff):
     return (a_lin / a_coeff)**(1.0 / b_coeff)
 
 
-def get_a_z_coeffs(pol="H", rband="C", temp=20, coeff_a_override=None,
+def _get_a_z_coeffs(pol="H", rband="C", temp=20, coeff_a_override=None,
                    coeff_b_override=None):
     """
     Return (a, b) coefficients for the A(Z) relation for either H or V
@@ -387,7 +387,7 @@ def get_a_z_coeffs(pol="H", rband="C", temp=20, coeff_a_override=None,
 
     Notes
     -----
-    1. Coefficients follow Diederich et al. (2015), JHM 16(2), 487–502.
+    * Coefficients follow Diederich et al. (2015), JHM 16(2), 487–502.
     """
     pol = pol.upper()
     rband = rband.upper()
@@ -431,7 +431,7 @@ def _compute_a_z(ds, *, pol, derive_from, z_name, a_name, out_name, diff_name,
 
     Parameters
     ----------
-    ds : xr.Dataset
+    ds : xarray.Dataset
         Input dataset.
     pol : {"H", "V"}
         Polarisation.
@@ -537,6 +537,59 @@ def _compute_a_z(ds, *, pol, derive_from, z_name, a_name, out_name, diff_name,
         ds_out = ds_out.assign({diff_name: diff_da})
     return ds_out
 
+
+def _apply_MAF_smoothing(z_attc, z_from_a, diffs, pcp_region=None,
+                        threshold=0.25, mov_avrgf_len=(1, 5),
+                        apply_rr_only=True, detect_fval=True,
+                        azi_name="azimuth", rng_name="range"):
+    """
+    Path-wise smoothing of Z estimates.
+    """
+    # 1. Mask zeros as NaN
+    diffs = diffs.where(diffs != 0)
+    # 2. Count valid diffs per ray
+    diffs_valid = diffs.notnull().sum(dim=rng_name)
+    # 3. Count valid originals (with or without ML_PCP_CLASS)
+    if pcp_region is not None and apply_rr_only:
+        flags = pcp_region.attrs.get("flags", {})
+        rain_flag = flags.get("rain", 1.0)
+        rain_mask = (pcp_region == rain_flag)
+        valid_orig = (z_attc.notnull() & rain_mask).sum(dim=rng_name)
+    else:
+        rain_mask = None
+        valid_orig = z_attc.notnull().sum(dim=rng_name)
+    # 4. Fraction of valid diffs
+    valid_fraction = diffs_valid / valid_orig.where(valid_orig != 0)
+    # 5. Median diff per ray (over range)
+    median_diff = diffs.median(dim=rng_name, skipna=True).fillna(0)
+    # 6. Smooth median along azimuth
+    win = mov_avrgf_len[1]
+    smoothed = (median_diff.rolling({azi_name: win}, center=True,
+                                    min_periods=1).mean())
+    # 7. Detect first finite non-zero diff per ray
+    if detect_fval:
+        nonzero_mask = (diffs != 0) & diffs.notnull()
+        first_nonzero = nonzero_mask.argmax(dim=rng_name)
+        rng_index = xr.DataArray(diffs[rng_name].data, dims=[rng_name],
+                                 coords={rng_name: diffs[rng_name]})
+        after_first = rng_index >= first_nonzero
+    else:
+        after_first = xr.ones_like(diffs, dtype=bool)
+    # 8. Combine masks (broadcast row_mask to 2D)
+    row_mask = (valid_fraction >= threshold)
+    row_mask_2d = row_mask.broadcast_like(diffs)
+    full_mask = row_mask_2d & after_first
+    # 9. Apply correction (broadcast median/smoothed to Z shape)
+    median_2d = median_diff.broadcast_like(z_attc)
+    smoothed_2d = smoothed.broadcast_like(z_attc)
+    corrected = xr.where(median_2d == 0, z_attc, z_attc - smoothed_2d)
+    z_maf = xr.where(full_mask, corrected, z_from_a)
+    # 10. Restrict to precipitation region
+    if apply_rr_only and pcp_region is not None:
+        z_maf = xr.where(rain_mask, z_maf, z_attc)
+    return z_maf
+
+
 def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
             temp=20., coeff_a=None, coeff_b=None, z_limits=(20., 50.),
             rhohv_min=0.95, copy_out_of_lims=True, apply_maf=False,
@@ -544,9 +597,11 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
             detect_fval=True, merge_into_ds=True, replace_vars=False,
             modify_output=None,):
     r"""
-    Compute the empirical :math:`A(Z)` or :math:`Z(A)` relationship for
-    horizontal or vertical polarisation, following the formulation of
-    Diederich et al. (2014).
+    Derive an empirical :math:`A(Z)` or :math:`Z(A)` relation.
+    
+    The relation is derived for horizontal or vertical polarisation following
+    the formulation of Diederich et al. (2014) [1]_ using configurable
+    coefficient settings and reflectivity limits.
 
     Parameters
     ----------
@@ -605,9 +660,9 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
             - MAF:  "MAF"
             - MAF_DIFF: "MAF_DIFF"
 
-        None / True → write all applicable outputs.
-        list → write only listed logical outputs.
-        dict → map logical outputs to explicit output names.
+        None / True -> write all applicable outputs.
+        list -> write only listed logical outputs.
+        dict -> map logical outputs to explicit output names.
 
     Returns
     -------
@@ -666,7 +721,7 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
     else:
         ds_out = xr.Dataset(coords=ds.coords, attrs=ds.attrs.copy())
     # 3. Compute A–Z relation
-    a_coeff, b_coeff = get_a_z_coeffs(pol=pol, rband=rband, temp=temp,
+    a_coeff, b_coeff = _get_a_z_coeffs(pol=pol, rband=rband, temp=temp,
                                       coeff_a_override=coeff_a,
                                       coeff_b_override=coeff_b)
     dstmp = _compute_a_z(ds, pol=pol, derive_from=derive_from, z_name=z_name,
@@ -731,7 +786,7 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
         z_attc = ds[z_name]
         z_from_a = out_arr
         diffs = z_attc - z_from_a
-        z_maf = apply_MAF_smoothing(z_attc=z_attc, z_from_a=z_from_a,
+        z_maf = _apply_MAF_smoothing(z_attc=z_attc, z_from_a=z_from_a,
                                     diffs=diffs, pcp_region=pcp_region,
                                     threshold=threshold, rng_name=rng,
                                     azi_name=azi, mov_avrgf_len=mov_avrgf_len,
@@ -786,9 +841,10 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
                                attrs=attrs)
         ds_out = safe_assign_variable(ds_out, maf_diff_name, da_diff)
     # 7. Dataset-level provenance
-    extra = {"step_description":
-             ("Corrects effects of partial beam blockage, radar miscalibration"
-              " and the impact of wet radom.")}
+    extra = {"step_description":(
+        "Corrected reflectivity for partial beam blockage, radar "
+        "miscalibration and wet-radome effects using an empirical Z(A) "
+        "relation.")}
     created = []
     # main output name
     created.append(main_out_name)
@@ -819,52 +875,4 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
     return ds_out
 
 
-def apply_MAF_smoothing(z_attc, z_from_a, diffs, pcp_region=None, threshold=0.25,
-                      mov_avrgf_len=(1, 5), apply_rr_only=True,
-                      detect_fval=True, azi_name="azimuth", rng_name="range"):
-    """
-    Path-wise smoothing of Z estimates.
-    """
-    # 1. Mask zeros as NaN
-    diffs = diffs.where(diffs != 0)
-    # 2. Count valid diffs per ray
-    diffs_valid = diffs.notnull().sum(dim=rng_name)
-    # 3. Count valid originals (with or without ML_PCP_CLASS)
-    if pcp_region is not None and apply_rr_only:
-        flags = pcp_region.attrs.get("flags", {})
-        rain_flag = flags.get("rain", 1.0)
-        rain_mask = (pcp_region == rain_flag)
-        valid_orig = (z_attc.notnull() & rain_mask).sum(dim=rng_name)
-    else:
-        rain_mask = None
-        valid_orig = z_attc.notnull().sum(dim=rng_name)
-    # 4. Fraction of valid diffs
-    valid_fraction = diffs_valid / valid_orig.where(valid_orig != 0)
-    # 5. Median diff per ray (over range)
-    median_diff = diffs.median(dim=rng_name, skipna=True).fillna(0)
-    # 6. Smooth median along azimuth
-    win = mov_avrgf_len[1]
-    smoothed = (median_diff.rolling({azi_name: win}, center=True,
-                                    min_periods=1).mean())
-    # 7. Detect first finite non-zero diff per ray
-    if detect_fval:
-        nonzero_mask = (diffs != 0) & diffs.notnull()
-        first_nonzero = nonzero_mask.argmax(dim=rng_name)
-        rng_index = xr.DataArray(diffs[rng_name].data, dims=[rng_name],
-                                 coords={rng_name: diffs[rng_name]})
-        after_first = rng_index >= first_nonzero
-    else:
-        after_first = xr.ones_like(diffs, dtype=bool)
-    # 8. Combine masks (broadcast row_mask to 2D)
-    row_mask = (valid_fraction >= threshold)
-    row_mask_2d = row_mask.broadcast_like(diffs)
-    full_mask = row_mask_2d & after_first
-    # 9. Apply correction (broadcast median/smoothed to Z shape)
-    median_2d = median_diff.broadcast_like(z_attc)
-    smoothed_2d = smoothed.broadcast_like(z_attc)
-    corrected = xr.where(median_2d == 0, z_attc, z_attc - smoothed_2d)
-    z_maf = xr.where(full_mask, corrected, z_from_a)
-    # 10. Restrict to precipitation region
-    if apply_rr_only and pcp_region is not None:
-        z_maf = xr.where(rain_mask, z_maf, z_attc)
-    return z_maf
+

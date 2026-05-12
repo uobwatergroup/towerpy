@@ -5,47 +5,45 @@ This file contains a dictionary listing different colour gradients.
 """
 
 towerpy_colours = {
-    'rad_ref': ['#967BB6', '#A690C4', '#B6A6D1', '#C6BBDF', '#D6D1EC',
-                # Lavender Gradient Color (R)
-                '#51D8FF', '#46C7FF', '#3DB5FF', '#239BFE', '#1672F9',
-                '#044EE3',  # Russian Blues Color Scheme
-                '#FFF480', '#FFDF00', '#F6D108', '#EDC211', '#E3B419',
-                '#DAA521',  # Golden Yellow Gradient Color Scheme
-                '#FF9533', '#FF7F34', '#FE6D35', '#FF5836', '#FF4137',
-                '#B31B1B',  # NAME: SoundCloud Colors
-                '#5E0400', '#F8E8EC'],
-    'rad_pvars': ['#D2ECFA', '#51D8FF', '#46C7FF', '#3DB5FF', '#239BFE',
-                  '#1672F9', '#044EE3',  # Russian Blues Color Scheme
-                  '#FFFF00', '#FFF480', '#FFE961', '#FFDF41', '#FFD422',
-                  '#FFC903',  # Vivid Yellow Gradient Color Scheme
-                  '#FFB829', '#F98A2C', '#ED5B45', '#B64262', '#633663',
-                  '#402852',  # Towerpy
-                  '#C6BFCB'],
-    'rad_rainrt': ['#D2ECFA', '#51D8FF', '#46C7FF', '#3DB5FF', '#239BFE',
-                   '#1672F9', '#044EE3',  # Russian Blues Color Scheme
-                   '#44AEB3', '#249EA0', '#008B8B', '#007979', '#006767',
-                   # Dark Cyan Monochromatic
-                   '#FFFF00', '#FFF480', '#FFE961', '#FFDF41', '#FFD422',
-                   '#FFC903',  # Vivid Yellow Gradient Color Scheme
-                   '#FFB829', '#F98A2C', '#ED5B45', '#B64262', '#633663',
-                   '#402852',  # Towerpy
-                   '#C6BFCB'],
-    'rad_pvars_g': ['#D2ECFA', '#51D8FF', '#46C7FF', '#3DB5FF', '#239BFE',
-                    '#1672F9', '#044EE3',  # Russian Blues Color Scheme
-                    '#1A724C', '#A9FC02',  # Spring Greens
-                    '#FFFF00', '#FFF480', '#FFE961', '#FFDF41', '#FFD422',
-                    '#FFC903',  # Vivid Yellow Gradient Color Scheme
-                    '#FFB829', '#F98A2C', '#ED5B45', '#B64262', '#633663',
-                    '#402852',  # Towerpy
-                    '#C6BFCB'],
-    'rad_2slope': ['#505050', '#666a6c', '#7b8489', '#919ea5', '#b1c5d0',
-                   '#bcd2de', '#d2ecfa', '#46C7FF', '#3DB5FF', '#239BFE',
-                   '#1672F9', '#044EE3',  # Russian Blues Color Scheme
-                   '#FFF480', '#FFE961', '#FFDF41', '#FFD422', '#FFC903',
-                   # Vivid Yellow Gradient Color Scheme
-                   '#FFB829', '#F98A2C', '#ED5B45', '#B64262', '#633663',
-                   '#402852',  # Towerpy
-                   '#C6BFCB'],
+    'rad_ref': ["#7665A5", "#9483BE", "#B2A5D4", "#D2C9E8",  # lavender block
+                "#7ACEEA", "#63BDE4", "#4EACDD", "#3999D3", "#2A82C4",
+                "#1C6BB0",  # blues
+                "#EED97A","#E7C355", "#DFAC3A", "#D49328", "#C87A1C",
+                # yellows->orange
+                "#D06A3A", "#C0543A", "#A6453F", "#8A3A45", "#542837",
+                # warm->plum
+                ],
+    'rad_pvars': ["#C7E7F6", "#A9D9F0", "#8BCBE8", "#6CB9DD", "#4DA4CF",
+                  "#2F8EC0",  # blues
+                  "#EED97A", "#E7C355", "#DFAC3A", "#D49328", "#C87A1C",
+                  # yellows->orange
+                  "#C45A3A", "#A24A57", "#7F3F6A", "#6D3A64", "#5C345F",
+                  "#422A4C",  # warm->plum
+                  "#28182F",  # deep plum
+                  # "#857C97",  # lavender‑grey
+                  "#746783",  # lavender‑grey_b
+                  "#9F97B2",  # final lavender‑grey tail
+                  ],
+    'rad_rainrt': ["#A9D9F0", "#8BCBE8", "#6CB9DD", "#4DA4CF", "#2F8EC0",
+                   # blues
+                   "#6FBDBE", "#4EAAA9", "#2E9594", "#1F7F7F", "#166A6A",
+                   # teals
+                   "#EED97A", "#E7C355", "#DFAC3A", "#D49328", "#C87A1C",
+                   # yellows->orange
+                   "#C45A3A", "#A24A57", "#7F3F6A", "#5C345F", "#422A4C",
+                   # warm->plum
+                   "#9F97B2"  # lavender tail
+                   ],
+    'rad_2slope': ["#3F4446", "#586369", "#74878E", "#93ADB6", "#9DBBC4",
+                    # greys
+                   "#A8C6D0", "#7ACEEA","#63BDE4", "#4EACDD", "#3999D3",
+                   "#2A82C4",  # blues
+                   "#EED97A", "#E7C355", "#DFAC3A", "#D49328", "#C87A1C",
+                   # yellows->orange
+                   "#C45A3A", "#A24A57", "#7F3F6A", "#5C345F", "#422A4C",
+                   # warm->plum
+                   "#9F97B2"  # lavender tail
+                   ],
     'rad_model': ['#ffffff', '#efefef', '#dfdfdf', '#cfcfcf', '#bfbfbf',
                   '#b0b0b0', '#a1a1a1', '#929292', '#838383', '#757575',
 

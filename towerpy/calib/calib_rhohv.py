@@ -220,9 +220,11 @@ def rhohv_noisecorrection(ds, inp_names=None, rhohv_theo=(0.9, 1.0),
                           eps=0.005, mask=True, replace_vars=False,
                           plot_method=False):
     r"""
-    Correct noise-bias in the radar correlation coefficient (rhoHV), by fitting
-    a theoretical :math:`\rho_{HV}`–SNR curve and optimising the radar noise
-    level, following Ryzhkov & Zrnić (2019).
+    Correct noise-induced bias in the copolar correlation coefficient
+    (:math:`\rho_{HV}`).
+
+    The correction follows Ryzhkov and Zrnić (2019) [1]_, using a theoretical
+    :math:`\rho_{HV}`-SNR relation to optimise the radar noise level.
     
     Parameters
     ----------
@@ -384,9 +386,9 @@ def rhohv_noisecorrection(ds, inp_names=None, rhohv_theo=(0.9, 1.0),
                                       new_attrs=merged)
         corrected_vars.append(out_var)
     # Provenance
-    extra = {"step_description":
-             ("Stabilises the correlation coefficient in regions of low "
-              "reflectivity by correcting its dependence on the SNR.")}
+    extra = {"step_description":(
+        "Corrected noise-induced bias in rhoHV by optimising the radar noise "
+        "level from the rhoHV-SNR relation.")}
     # extra = ("Stabilises the correlation coefficient in regions of low "
              # "reflectivity by correcting its dependence on the SNR.")
     params = {"noise_level_dB": float(opt_noise),

@@ -598,7 +598,10 @@ def _build_joint_mask(ds_sel, thresholds, inp_map, azimuth_dim, range_dim):
 def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
              method="mean", stats=False):
     """
-    Compute a Vertical Profile (VP) from a birdbath scan.
+    Build a vertical profile from a birdbath radar scan.
+
+    Polarimetric variables are optionally thresholded and then aggregated
+    azimuthally onto a height coordinate using the selected averaging method.
 
     Parameters
     ----------
@@ -618,7 +621,8 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         Minimum number of valid (non‑NaN, thresholded) azimuthal samples
         required for a gate to contribute to the VP.
     method : {"mean", "median"}, default "mean"
-        Aggregation method used for azimuthal averaging.
+        Aggregation method used to compute the vertical profile from the
+        azimuthal samples.
     stats : bool, default False
         If ``True``, compute additional statistics for each variable:
         standard deviation (``std_<var>``), minimum (``min_<var>``),
@@ -636,7 +640,6 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     -----
     * The range dimension is replaced by the height coordinate.
     * Thresholding and masking are applied before aggregation.
-    * _resolve_thresholds is used to apply thresholding.
     * Elevation (in degrees) and mid‑scan time are added as coordinates
       when available.
     """
@@ -648,7 +651,7 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     names = {**defaults, **(inp_names or {})}
     coord_keys = {"azi", "rng", "elv", 'beam_height'}
     var_names = {k: v for k, v in names.items() if k not in coord_keys}
-    # 2. Resolve canonical → dataset mapping
+    # 2. Resolve canonical -> dataset mapping
     inp_map = _resolve_inp_names(ds, var_names or "standard")
     # 3. Select variables
     ds_sel = ds[list(inp_map.values())]
@@ -737,8 +740,9 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     else:
         rname_out = {"site_name": "Radar"}
     # 13. Provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Built a vertical profile from a birdbath scan using azimuthal "
+        "aggregation.")}
     vp = record_provenance(
         vp, step="build_vp", inputs=list(inp_map.values()),
         outputs=list(vp.data_vars),
@@ -760,8 +764,11 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
 def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
               valid_gates=30, method="mean", stats=False, resolution=False):
     r"""
-    Compute a Quasi‑Vertical Profile (QVP) from a single‑elevation PPI, 
-    according to the methodology described in Ryzhkov et al. (2016)
+    Build a quasi-vertical profile from a single-elevation PPI scan.
+
+    Polarimetric variables are optionally thresholded and then aggregated
+    azimuthally onto a height coordinate following the QVP methodology of
+    Ryzhkov et al. (2016) [1]_.
 
     Parameters
     ----------
@@ -784,15 +791,16 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         Minimum number of valid (non‑NaN, thresholded) azimuthal samples
         required for a gate to contribute to the QVP.
     method : {"mean", "median"}, default "mean"
-        Aggregation method used for azimuthal averaging.
+        Aggregation method used to compute the quasi-vertical profile from the
+        azimuthal samples.
     stats : bool, default False
         If ``True``, compute additional statistics for each variable:
         standard deviation (``std_<var>``), minimum (``min_<var>``),
         maximum (``max_<var>``), and standard error of the mean
         (``sem_<var>``).
-    resolution : bool, optional
+    resolution : bool, default False
         If ``True``, compute the effective vertical resolution following [1]_.
-        The result is stored as the variable ``VRES``.
+        The result is stored as ``VRES``.
 
     Returns
     -------
@@ -830,14 +838,14 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     names = {**defaults, **(inp_names or {})}
     coord_keys = {"azi", "rng", "elv", 'beam_height'}
     var_names   = {k: v for k, v in names.items() if k not in coord_keys}
-    # 1. Resolve canonical → dataset variable mapping
+    # 1. Resolve canonical -> dataset variable mapping
     inp_map = _resolve_inp_names(ds, var_names or "standard")
     # 2. Select only the needed variables
     ds_sel = ds[list(inp_map.values())]
     rng_km = convert(ds[names["rng"]], "km")
     # azi_rad = convert(ds[names["azi"]], "rad")
     elv_rad = convert(ds[names["elv"]], "rad")[0]
-    # 3. Resolve thresholds (canonical → threshold)
+    # 3. Resolve thresholds (canonical -> threshold)
     thr = _resolve_thresholds(inp_map, thresholds)
     # 4. Build joint mask
     mask = _build_joint_mask(ds_sel, thr, inp_map, azimuth_dim=names["azi"],
@@ -969,8 +977,9 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     else:
         rname_out = {"site_name": "Radar"}
     # 12. Provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Built a quasi-vertical profile from a single-elevation PPI scan, "
+        "with optional thresholding before azimuthal aggregation.")}
     qvp = record_provenance(
         qvp, step="build_qvp", inputs=list(inp_map.values()),
         outputs=list(qvp.data_vars),
@@ -1003,14 +1012,18 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
 def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
                 power_param=2., stats=False):
     r"""
-    Compute Range‑Defined Quasi‑Vertical Profiles (RD‑QVP) from a set of
-    single‑elevation PPIs, following the methodology of Tobin & Kumjian (2017).
+    Build a range-defined quasi-vertical profile from multiple single-elevation
+    PPI scans.
+
+    Each PPI scan is first converted into a QVP and interpolated onto a common
+    height grid. The resulting QVPs are then combined using the range-dependent
+    weighting scheme of Tobin and Kumjian (2017) [2]_.
 
     Parameters
     ----------
     dss : list of xarray.Dataset
-        List of single‑elevation PPIs with polarimetric variables. Each
-        dataset must contain include azimuth, range, elevation and beam height
+        Single-elevation PPI scans containing polarimetric variables. Each
+        dataset must include azimuth, range, elevation, and beam-height
         coordinates.
     qvp_kwargs : dict, default None
         Optional keyword arguments forwarded directly to :func:`build_qvp`
@@ -1019,7 +1032,7 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
         Vertical resolution (km) of the common height grid used for
         interpolation and RD‑QVP combination.
     spec_range : float, default 50.0
-        Desired range :math:`d` (km) used in the RD‑QVP weighting
+        Reference range :math:`d`, in kilometres, used in the RD-QVP weighting
         formulation.
     power_param : float, default 2.0
         Exponent :math:`p` used in the weighting function for
@@ -1047,8 +1060,9 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
              1, & r_i(h) \\le d \\\\
              1 / |r_i(h) - (d - 1)|^p, & r_i(h) > d - 1
          \\end{cases}
-    * It is recommended to follow the routine described in [3]_ to
-      preprocess :math:`\Phi_{DP}` and compute :math:`K_{DP}`.
+    * It is recommended to preprocess :math:`\Phi_{DP}` and compute
+      :math:`K_{DP}` following Griffin et al. (2018) [3]_ before building
+      RD-QVPs.
 
     References
     ----------
@@ -1148,8 +1162,9 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     else:
         rname_out = {"site_name": "Radar"}
     # 12. Provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Built a range-defined quasi-vertical profile from multiple "
+        "single-elevation PPI scans.")}
     rdqvp = record_provenance(
         rdqvp, step="build_rdqvp", inputs=all_qvp_vars,
         outputs=list(rdqvp.data_vars),

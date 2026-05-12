@@ -287,31 +287,215 @@ def _parse_ukmo_filename(filename: str):
     return pulse, pol_mode, elevation
 
 
-def ppi_ukmoraw(file_name, site_name, get_polvar='all', exclude_vars=None,
-                tz='UTC'):
+def _ukmo_year_directory(root_directory, year, rsite, modep, elev):
     """
-    Read raw polarimetric variables from current UKMO PPI binary files.
+    Build the canonical CEDA UKMO Nimrod single-site directory path.
+
+    Example:
+        <root>/ukmo-nimrod/data/single-site/storage_by_year/2023/chenies/raw-dual-polar/lpel0/
+    """
+    return (Path(root_directory) / 'ukmo-nimrod' / 'data' / 'single-site'
+            / "storage_by_year" / f"{year:04d}" / rsite / "raw-dual-polar"
+            / f"{modep}el{elev}")
+
+
+def find_ukmo_rfile(root_directory, rsite, moder, modep, elev, target_time,
+                    tolerance=dt.timedelta(minutes=5), return_time_diff=False):
+    """
+    Find the closest radar file to `target_time`.
 
     Parameters
     ----------
-    get_polvar : str, optional
-        Define variables to read by the function. The default is 'all'.
-    exclude_vars : list, optional
-        Define variables to discard. The default is None.
-    tz : str
-        Key/name of the radar data timezone. The given tz value is then
-        retrieved from the ZoneInfo module. Default is 'UTC'
+    root_directory : Path-like
+        Directory containing radar files. The storage layout follows the CEDA
+        UKMO Nimrod single-site archive structure.
+    rsite : str
+        Radar site identifier (e.g., "jersey", "chenies"). 
+    moder : str
+        Dual-polarisation mode for the "aug" field ("zdr" or "ldr").
+    modep : str
+        Pulse mode ("sp" or "lp").
+    elev : int
+        Elevation angle (e.g., 4).
+    target_time : datetime.datetime
+        Desired timestamp to match.
+    tolerance : datetime.timedelta, optional
+        Maximum allowed absolute time difference. Default is ±5 minutes.
+    return_time_diff : bool, optional
+        If True, return both the file path and the signed time difference.
+        If False (default), return only the file path.
+
+    Returns
+    -------
+    Path or (Path, datetime.timedelta) or None
+        - If return_time_difference=False:
+              Path to the closest file, or None if no file is within tolerance.
+        - If return_time_difference=True:
+              (Path, signed_time_difference), or None if no file is within tolerance.
+
+        The signed time difference is:
+            file_time - target_time
+        Negative values indicate the file is earlier than the target time.
 
     Notes
     -----
-    1. This function uses the shared object 'lnxlibreadpolarradardata'
-    or the dynamic link library 'w64libreadpolarradardata' depending on the
-    operating system (OS).
+    * Files are expected to follow the naming pattern:
+        metoffice-c-band-rain-radar_{rsite}_YYYYMMDDHHMM_raw-dual-polar-aug{moder}-{modep}-el{elev}.dat
+    * The timestamp (YYYYMMDDHHMM) is extracted from the filename and compared
+        to `target_time`. The file with the smallest absolute time difference
+        is selected. If the closest file lies outside the specified
+        `tolerance`, the function returns None.
+    """
+
+    year_dir = _ukmo_year_directory(root_directory, target_time.year, rsite,
+                                   modep, elev)
+
+    if not year_dir.is_dir():
+        return None
+
+    pattern = re.compile(rf"metoffice-c-band-rain-radar_{rsite}_([0-9]{{12}})"
+                         rf"_raw-dual-polar-aug{moder}-{modep}-el{elev}\.dat")
+    candidates = []
+    for f in year_dir.glob("*.dat"):
+        m = pattern.match(f.name)
+        if not m:
+            continue
+        timestamp_str = m.group(1)
+        file_time = dt.datetime.strptime(timestamp_str, "%Y%m%d%H%M")
+        diff = file_time - target_time
+        abs_diff = abs(diff)
+        candidates.append((abs_diff, diff, f))
+    if not candidates:
+        return None
+    # Pick the smallest absolute difference
+    candidates.sort(key=lambda x: x[0])
+    abs_diff, signed_diff, best_file = candidates[0]
+    if abs_diff > tolerance:
+        return None
+    if return_time_diff:
+        return best_file, signed_diff
+    return best_file
+
+
+def list_ukmo_rfiles(root_directory, rsite, moder, modep, elev, start_time,
+                     stop_time, return_time_diff=False):
+    """
+    List radar files whose timestamps fall between `start_time` and `stop_time`
+
+    Parameters
+    ----------
+    root_directory : Path-like
+        Directory containing radar files. The storage layout follows the CEDA
+        UKMO Nimrod single-site archive structure.
+    rsite : str
+        Radar site identifier (e.g., "jersey", "chenies"). 
+    moder : str
+        Dual-polarisation mode for the "aug" field ("zdr" or "ldr").
+    modep : str
+        Pulse mode ("sp" or "lp").
+    elev : int
+        Elevation angle (e.g., 4).
+    start_time : datetime.datetime
+        Start of the inclusive time window.
+    stop_time : datetime.datetime
+        End of the inclusive time window.
+    return_time_diff : bool, optional
+        If True, return (Path, file_time - start_time) tuples.
+        If False (default), return only Paths.
+
+    Returns
+    -------
+    list of Path or list of (Path, datetime.timedelta)
+        All matching files sorted by timestamp. If no files fall within the
+        specified time window, an empty list is returned.
+
+    Notes
+    -----
+    * Files are expected to follow the naming pattern:
+        metoffice-c-band-rain-radar_{rsite}_YYYYMMDDHHMM_raw-dual-polar-aug{moder}-{modep}-el{elev}.dat
+    """
+
+    if start_time > stop_time:
+        raise ValueError("start_time must be <= stop_time")
+
+    pattern = re.compile(rf"metoffice-c-band-rain-radar_{rsite}_([0-9]{{12}})"
+                         rf"_raw-dual-polar-aug{moder}-{modep}-el{elev}\.dat")
+    results = []
+    # Loop over all years in the time window
+    for year in range(start_time.year, stop_time.year + 1):
+        year_dir = _ukmo_year_directory(root_directory, year, rsite, modep, elev)
+        if not year_dir.is_dir():
+            continue
+        for f in year_dir.glob("*.dat"):
+            m = pattern.match(f.name)
+            if not m:
+                continue
+            timestamp_str = m.group(1)
+            file_time = dt.datetime.strptime(timestamp_str, "%Y%m%d%H%M")
+            if start_time <= file_time <= stop_time:
+                diff = file_time - start_time
+                results.append((file_time, diff, f))
+    # Sort chronologically
+    results.sort(key=lambda x: x[0])
+    if return_time_diff:
+        return [(f, diff) for _, diff, f in results]
+    else:
+        return [f for _, _, f in results]
+
+
+def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
+                         exclude_vars=None, tz='UTC'):
+    """
+    Read UK Met Office PPI data from binary files.
+    
+    This reader targets the existing UK Met Office/CEDA binary data format for
+    single-site PPI radar files. Selected radar variables are read and returned
+    as an :class:`xarray.Dataset` together with polar coordinates and metadata.
+
+    Parameters
+    ----------
+    file_name : str or pathlib.Path
+        Path to the raw PPI binary file.
+    site_name : str
+        Radar site name used to populate site metadata.
+    get_polvar : str or sequence of str, default "all"
+        Polarimetric variables to read. If ``"all"``, all available variables
+        are read.
+    exclude_vars : sequence of str, optional
+        Variables to exclude from the output.
+    tz : str, default "UTC"
+        Time zone name used to localise radar timestamps. The value must be
+        recognised by :mod:`zoneinfo`.
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset containing the selected polarimetric variables, radar
+        coordinates, and associated metadata.
+
+    Notes
+    -----
+    * The supported binary files include single-site PPI radar products
+      distributed through the CEDA archive [1]_.
+    * For dual-polarisation products, the data may include augmented LDR and
+      ZDR scans from both long- and short-pulse acquisitions.
+    * The files are associated with C-band radars, with a wavelength of
+      approximately 5.3 cm, and are received by the NIMROD system at
+      5-minute intervals.
+    * This function uses the shared object ``lnxlibreadpolarradardata`` or the
+      dynamic-link library ``w64libreadpolarradardata``, depending on the
+      operating system.
+     
+    References
+    ----------
+    .. [1] Met Office (2003): Met Office Rain Radar Data from the NIMROD
+        System. NCAS British Atmospheric Data Centre.
+        http://catalogue.ceda.ac.uk/uuid/82adec1f896af6169112d09cc1174499
 
     Examples
     --------
     >>> fname = 'metoffice-c-band-rain-radar_chenies_201804090938_raw-dual-polar-augldr-lp-el0.dat'
-    >>> rdata = rdata.ukmo_rawpol(fname)
+    >>> ds = read_ukmo_ppi_binary(fname, site_name="chenies")
     """
     # Define Ctypes parameters
     array1d = npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS')

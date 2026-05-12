@@ -874,12 +874,10 @@ def hti_base(pol_profs, mlyrs=None, stats=None, var2plot=None, ptype='pseudo',
     plotvname = [i[:i.find('[')-1]
                  for i in profsvars.keys() if prflv == i][0]
 
-    # -------------------------------------------------------------------------
     fontsizelabels = 24
     fontsizetick = 20
     linec, lwid = 'k', 3
     ptitle = f"{profsdt[0]:%Y-%m-%d %H:%M:%S}"
-    # -------------------------------------------------------------------------
 
     global figprofsint, htiplt, hviax, profsdtn, intpvars, intheight, intscdt
     global intstats, ppvar, statsname, radio, mlyrt, mlyrb, tzi
@@ -1185,10 +1183,32 @@ def ml_detectionvis(hbeam, profzh_norm, profrhv_norm, profcombzh_rhv,
 # %% xarray implementation
 # =============================================================================
 
-class PPI_Exp:
-    """A class to create an interactive PPI plot."""
+class PPIExplorer:
+    """
+    Create an interactive Plan Position Indicator (PPI) explorer.
 
-    # def __init__(self):
+    The explorer displays radar sweep variables from an xarray dataset and
+    allows interactive browsing of available PPI fields in polar or rectangular
+    coordinates.
+
+    Parameters
+    ----------
+    xrds : xarray.Dataset
+        Radar sweep dataset containing the variable to plot and the required
+        coordinate fields. Must include azimuth/range for polar mode, or
+        rectangular for rect mode.
+    polarplot : bool, default False
+        If True, use a polar projection (radians) for azimuth. If False, plot
+        azimuth on the x‑axis in degrees.
+    coord_sys : {'polar', 'rect'}, default 'polar'
+        Coordinate system used for plotting.
+    
+    Notes
+    -----
+    * Variables intended for display should be two-dimensional PPI fields,
+      typically with dimensions ``(azimuth, range)``.
+    """
+
     def __init__(self, xrds, polarplot=False, coord_sys="polar"):
         self.xrds = xrds
         self.polarplot = polarplot
@@ -1248,9 +1268,9 @@ class PPI_Exp:
                     return self._orig_format_coord(x, y)
                 return f"x={x:1.4f}, y={y:1.4f}"
             z = da.values[q, r]
-            # For polarplot=True, preserve Matplotlib's θ, r string and append z
+            # For polarplot=True, preserve MPL θ, r string and append z
             if self.polarplot and hasattr(self, "_orig_format_coord"):
-                base = self._orig_format_coord(x, y)  # e.g. "θ=0.75π, r=50"
+                base = self._orig_format_coord(x, y)
                 return f"{base}, z={z:1.3f} [{q},{r}]"
             # For polar coord_sys but non-polar axis, give a simple text
             return (f"azi={self._az[q]:.2f}°, r={self._rng_km[r]:.2f} km, "
@@ -1259,21 +1279,22 @@ class PPI_Exp:
     
     def _nearest_gate(self, x, y):
         """
-        Map a point in display coordinates to the nearest (azimuth_bin, range_bin).
+        Map a point in display coordinates to the nearest
+        (azimuth_bin, range_bin).
     
         Parameters
         ----------
         x, y : float
-            Coordinates in the PPI axis coordinate system. In rectangular mode these
-            are Cartesian (x, y) values. In polar mode they represent either
-            (theta, r) for polarplot=True or (azimuth_deg, range_km) for
+            Coordinates in the PPI axis coordinate system. In rectangular mode
+            these are Cartesian (x, y) values. In polar mode they represent
+            either (theta, r) for polarplot=True or (azimuth_deg, range_km) for
             polarplot=False.
     
         Returns
         -------
         (q, r) : tuple of ints or (None, None)
-            The nearest azimuth and range bin indices. Returns (None, None) if the
-            lookup cannot be performed (e.g. missing lookup arrays).
+            The nearest azimuth and range bin indices. Returns (None, None)
+            if the lookup cannot be performed (e.g. missing lookup arrays).
         """
         # Rectangular mode
         if self.coord_sys == "rect":
@@ -1340,7 +1361,6 @@ class PPI_Exp:
             q, r = self._nearest_gate(event.xdata, event.ydata)
             if q is None:
                 return
-            # print(f"azimuth {self._az[q]:.2f}°, range {self._rng_km[r]:.2f} km")
             self.lastind = [q, r]
             self.update()
             return
@@ -1373,8 +1393,8 @@ class PPI_Exp:
         'n' : move to the previous azimuth bin
         'm' : move to the next azimuth bin
     
-        The selected azimuth index is updated in `self.lastind` and the display is
-        refreshed.
+        The selected azimuth index is updated in `self.lastind` and the
+        display is refreshed.
         """
         if self.lastind is None:
             return
@@ -1412,7 +1432,8 @@ class PPI_Exp:
 
     def update(self):
         """
-        Refresh all dependent panels after a new (azimuth_bin, range_bin) selection.
+        Refresh all dependent panels after a new (azimuth_bin, range_bin)
+        selection.
     
         This updates:
         - the PPI indicator (ray line, theta grid, or selection rectangle)
@@ -1481,11 +1502,14 @@ class PPI_Exp:
         axb.cla()
         # Plot beam centre / top / bottom for selected azimuth q
         axb.plot(rng_km, self.beam_center.isel(azimuth=q), ls=":")
-        axb.plot(rng_km, self.beam_top.isel(azimuth=q),    c="k")
-        axb.plot(rng_km, self.beam_bottom.isel(azimuth=q), c="k")
-        axb.set_xlabel(f"{self.xrds.range.attrs.get('standard_name', 'range')} [km]")
-        axb.set_ylabel(f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
-                       f' [{self.beam_center.attrs.get("units", "km")}]')
+        if self.beam_top is not None and self.beam_bottom is not None:
+            axb.plot(rng_km, self.beam_top.isel(azimuth=q),    c="k")
+            axb.plot(rng_km, self.beam_bottom.isel(azimuth=q), c="k")
+        axb.set_xlabel(
+            f"{self.xrds.range.attrs.get('standard_name', 'range')} [km]")
+        axb.set_ylabel(
+            f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
+            f' [{self.beam_center.attrs.get("units", "km")}]')
         axb.grid()
         # Highlight selected gate
         if 0 <= r < self.beam_center.sizes["range"]:
@@ -1494,16 +1518,25 @@ class PPI_Exp:
         # =============================================================================
         # Update radial profile panels
         # =============================================================================
+        azi_coord = self._polarcoord_names["azi"]
+        if azi_coord not in self.xrds:
+            print(f"Azimuth coordinate '{azi_coord}' not found — skipping"
+                  " radial profiles.")
+            return
+        azi_dim = self.xrds[azi_coord].dims[0]
+        rng_dim = self._polarcoord_names["rng"]
         for vname, ax in self._ax_radials.items():
             ax.cla()
             da = self.xrds[vname]  # (azimuth, range)
             # Skip variables that are not 2‑D polar fields
-            if da.ndim != 2 or set(da.dims) != {"azimuth", "range"}:
-                print(f"Variable {da.name} has no azimuth dimension — skipping profile extraction.")
+            if da.ndim != 2 or set(da.dims) != {azi_dim, rng_dim}:
+                print(f"Variable {da.name} has no azimuth dimension"
+                      " — skipping profile extraction.")
                 ax.set_title(f"{vname} [not 2‑D]")
                 continue
             # Extract radial profile at azimuth q
-            prof = da.isel(azimuth=q)
+            # prof = da.isel(azimuth=q)
+            prof = da.isel({azi_dim: q})
             ax.plot(rng_km, prof, marker=".", markersize=3)
             rpunits = _safe_units(self.xrds[vname])
             ax.set_title(f'{vname} [{rpunits}]')
@@ -1534,28 +1567,34 @@ class PPI_Exp:
     def ppi_base(self, var2plot=None, varnames=None, plot_colorbar=False,
                  polarcoord_names={"azi": "azimuth", "rng": "range"},
                  rectcoord_names={"x": "grid_rectx", "y": "grid_recty"},
-                 ppi_xlims=None, ppi_ylims=None,
-                 radial_xlims=None, radial_ylims=None, fig_size=None,
-                 fig_title=None, **ppi_kwargs):
+                 beamhcoord_names={"z": "beamc_height"}, ppi_xlims=None,
+                 ppi_ylims=None, radial_xlims=None, radial_ylims=None,
+                 fig_size=None, fig_title=None, **ppi_kwargs):
         """
         Constructs the interactive PPI display.
 
         Parameters
         ----------
         var2plot : str, optional
-            Name of the variable to display in the PPI panel. If None, a suitable
-            default is chosen (preferentially a reflectivity-like field).
+            Name of the variable to display in the PPI panel. If None, a
+            suitable default is chosen; preferentially a reflectivity-like
+            field.
         varnames : list of str, optional
-            Variables to display in the radial-profile panels. If None, all data
-            variables in the dataset are used.
+            Variables to display in the radial-profile panels. If None, all
+            data variables in the dataset are used.
         plot_colorbar : bool, optional
             Whether to add a colourbar to the PPI panel.
         polarcoord_names : dict, optional
-            Mapping specifying the azimuth and range coordinate names in polar mode.
-            Defaults to {"azi": "azimuth", "rng": "range"}.
+            Mapping specifying the azimuth and range coordinate names in polar
+            mode. Defaults to {"azi": "azimuth", "rng": "range"}.
         rectcoord_names : dict, optional
-            Mapping specifying the x and y coordinate names in rectangular mode.
-            Defaults to {"x": "grid_rectx", "y": "grid_recty"}.
+            Mapping specifying the x and y coordinate names in rectangular
+            mode. Defaults to {"x": "grid_rectx", "y": "grid_recty"}.
+        beamhcoord_names : dict, optional
+            Mapping for the beam height coordinates.
+            Defaults to {"z": "beamc_height", "z_bth": "beamt_height",
+            "z_bbh": "beamb_height"}, where the last two entries are optional
+            and only used if present in the dataset.
         ppi_xlims, ppi_ylims : tuple, optional
             Axis limits for the PPI panel.
         radial_xlims, radial_ylims : tuple, optional
@@ -1563,7 +1602,8 @@ class PPI_Exp:
         fig_size : tuple, optional
             Figure size in inches. Defaults to (16, 9).
         fig_title : str, optional
-            Optional title for the PPI panel. If None, a default title is generated.
+            Optional title for the PPI panel. If None, a default title is
+            generated.
         **ppi_kwargs :
             Additional keyword arguments forwarded to
             :func:`towerpy.datavis.rad_display.plot_ppi_xr`.
@@ -1597,9 +1637,12 @@ class PPI_Exp:
         if fig_size is None:
             fig_size = (16, 9)
         fig = plt.figure(figsize=fig_size)
-    
         if varnames is None:
             varnames = list(self.xrds.data_vars.keys())
+        else:
+            # remove duplicates while preserving order
+            seen = set()
+            varnames = [v for v in varnames if not (v in seen or seen.add(v))]
         nvars = len(varnames)
         # Resolve variable2plot
         var2plot = _resolve_var2plot(self.xrds, var2plot)
@@ -1611,8 +1654,8 @@ class PPI_Exp:
         # Main PPI axis occupies left block
         # =============================================================================
         if self.coord_sys == "rect" and self.polarplot:
-            warnings.warn("polarplot=True is incompatible with coord_sys='rect'. "
-                          "Falling back to polarplot=False.")
+            warnings.warn("polarplot=True is incompatible with coord_sys="
+                          "'rect'. Falling back to polarplot=False.")
             self.polarplot = False
         if self.polarplot:
             ax_ppi = fig.add_subplot(gs[0:-1, 0:2],
@@ -1631,15 +1674,19 @@ class PPI_Exp:
         # =============================================================================
         # Resolve coordinates
         # =============================================================================
-        coord_names = rectcoord_names if self.coord_sys == "rect" else polarcoord_names
+        coord_names = (rectcoord_names if self.coord_sys == "rect"
+                       else polarcoord_names)
         coord_namex, coord_namey = resolve_rect_coords(self.xrds, coord_names)
-        has_polar = {polarcoord_names["rng"], polarcoord_names["azi"]} <= set(self.xrds.coords)
+        has_polar = {polarcoord_names["rng"],
+                     polarcoord_names["azi"]} <= set(self.xrds.coords)
         has_rect = (coord_namex is not None and coord_namey is not None
                     and {coord_namex, coord_namey} <= set(self.xrds.coords))
         self._has_polar = has_polar
         self._has_rect = has_rect
         self._coord_namex = coord_namex
         self._coord_namey = coord_namey
+        self._rectcoord_names = rectcoord_names
+        self._polarcoord_names = polarcoord_names
         if has_rect and self.coord_sys == "rect":
             rect_x = self.xrds[coord_namex].values.ravel()
             rect_y = self.xrds[coord_namey].values.ravel()
@@ -1660,7 +1707,8 @@ class PPI_Exp:
             self._rng_km = rng_da.values
             self._var2plot = var2plot
         if not has_rect and not has_polar:
-            raise ValueError("Dataset does not contain required coordinate variables.")
+            raise ValueError("Dataset does not contain required coordinate"
+                             " variables.")
         # =============================================================================
         # Attach interactive coordinate formatter (xarray-aware version)
         # =============================================================================
@@ -1670,14 +1718,21 @@ class PPI_Exp:
         # =============================================================================
         # Beam-height axis (bottom left)
         # =============================================================================
-        self.beam_center = self.xrds["beamc_height"] # (azimuth, range)
-        self.beam_top = self.xrds["beamt_height"]
-        self.beam_bottom = self.xrds["beamb_height"]
+        # self.beam_center = self.xrds["beamc_height"] # (azimuth, range)
+        # Resolve beam centre coordinate
+        beamc_name = beamhcoord_names.get("z", "beamc_height")
+        self.beam_center = self.xrds.get(beamc_name, None)
+        # self.beam_top = self.xrds["beamt_height"]
+        # self.beam_bottom = self.xrds["beamb_height"]
+        self.beam_top = self.xrds.get("beamt_height", None)
+        self.beam_bottom = self.xrds.get("beamb_height", None)
         ax_beam = fig.add_subplot(gs[-1:, 0:2])
-        ax_beam.set_xlabel(f"{rng_da.attrs.get('standard_name', 'range')} [{rng_da.units}]")
-        ax_beam.set_ylabel(
-            f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
-            f' [{self.beam_center.attrs.get("units", "km")}]')
+        ax_beam.set_xlabel(
+            f"{rng_da.attrs.get('standard_name', 'range')} [{rng_da.units}]")
+        if self.beam_center is not None:
+            ax_beam.set_ylabel(
+                f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
+                f' [{self.beam_center.attrs.get("units", "km")}]')
         # =============================================================================
         # Radial-profile axes (right column)
         # =============================================================================
@@ -1710,7 +1765,8 @@ class PPI_Exp:
             ax.get_xaxis().set_visible(False)
         # Configure last radial axis
         last_ax = list(ax_radials.values())[-1]
-        last_ax.set_xlabel(f"{rng_da.attrs.get('standard_name', 'range')} [{rng_da.units}]")
+        last_ax.set_xlabel(
+            f"{rng_da.attrs.get('standard_name', 'range')} [{rng_da.units}]")
         if radial_xlims is not None:
             ax_beam.set_xlim(radial_xlims)
             for ax in ax_radials.values():
@@ -1738,9 +1794,11 @@ class PPI_Exp:
             pltprms = mappable._pltprms
             if 'rhohv' in var2plot.lower():
                 clb = plt.colorbar(mappable, ax=ax_ppi,
-                                   ticks=pltprms.norm_boundaries)
+                                   ticks=pltprms.norm_boundaries,
+                                   extend=pltprms.extend)
             else:
-                clb = plt.colorbar(mappable, ax=ax_ppi)
+                clb = plt.colorbar(mappable, ax=ax_ppi,
+                                   extend=pltprms.extend)
             clb.ax.tick_params(direction='out', labelsize=12, rotation=0)
             # clb.ax.set_title(f'[{vunits}]', fontsize=14)
             if pltprms.ticklabels is not None:
@@ -1753,15 +1811,66 @@ class PPI_Exp:
 
 
 #TODO: add keyboard navigation for time browsing (like browse_azimuth)
-class HTI_Exp:
-    """A class to create an interactive HTI plot."""
+class HTIExplorer:
+    """
+    Create an interactive height-time indicator (HTI) explorer.
 
-    # ------------------------------------------------------------------
+    The explorer displays a time-height field together with a vertical profile
+    panel for the selected time step. Enabling inspection of variables with
+    dimensions ``(time, height)`` and optionally overlay melting-layer
+    boundaries.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Time–height dataset, typically produced by :func:`merge_qvps_in_time`.
+        The dataset must contain a one-dimensional ``height`` coordinate, a
+        ``time`` coordinate, and one or more variables with dimensions
+        ``(time, height)``.
+    stats : {"std_dev", "sem", "min", "max", None}, default None
+        Statistic to visualise in the profile panel. If provided, the
+        corresponding statistic variable, e.g., ``"std_var"`` or
+        ``"min_var"`` must exist in ``ds``.
+    ptype : {"pseudo", "fcontour"}, default "pseudo"
+        Plot type for the HTI panel. ``"pseudo"`` uses ``pcolormesh``;
+        ``"fcontour"`` uses filled contours.
+    contour_var : str, optional
+        Name of a variable to overlay as contours on the HTI panel.
+    vars_bounds : dict, optional
+        Optional per‑variable bounds passed to :func:`plot_params`.
+    cb_ext : dict or None, default None
+        Optional per‑variable colourbar extension settings.
+    unorm : dict or None, default None
+        Optional per‑variable normalisation objects for colour mapping.
+    ucmap : dict or None, default None
+        Optional per‑variable colormap overrides.
+    custom_rules : dict or None, default None
+        Optional custom plotting rules passed to :func:`plot_params`.
+    plot_mlyr : bool, default False
+        If True, overlay melting‑layer boundaries on both panels.
+    mlyr_ds : xarray.Dataset or None, default None
+        Dataset containing melting‑layer geometry. If None, ``ds`` is used.
+    mlyr_top : str, default "MLYRTOP"
+        Name of the melting‑layer top variable in ``mlyr_ds``.
+    mlyr_bottom : str, default "MLYRBTM"
+        Name of the melting‑layer bottom variable in ``mlyr_ds``.
+    add_colorbar : bool, default False
+        Whether to add a colourbar to the plot.
+    add_grid : bool, default False
+        Whether to draw gridlines on the axes.
+    tz : str, default "UTC"
+        Time zone used for datetime formatting and interaction handling.
+    
+    Notes
+    -----
+    * The class stores plotting configuration during initialisation.
+    * Variables intended for HTI display should be two-dimensional with
+      dimensions ``(time, height)``.
+    """
     # Constructor: store dataset + configuration only
-    # ------------------------------------------------------------------
     def __init__(self, ds, stats=None, ptype="pseudo", contour_var=None,
-                 vars_bounds=None, cb_ext=None, unorm=None, custom_rules=None,
-                 ucmap=None, plot_mlyr=False, mlyr_ds=None,
+                 vars_bounds=None, cb_ext=None, unorm=None, ucmap=None,
+                 custom_rules=None, plot_mlyr=False, mlyr_ds=None,
                  mlyr_top="MLYRTOP", mlyr_bottom="MLYRBTM", add_colorbar=True,
                  add_grid=False, tz="UTC"):
         self.ds = ds
@@ -1795,71 +1904,34 @@ class HTI_Exp:
         self._cids = ()
         self.text = None
 
-    # ------------------------------------------------------------------
     # Main entry point
-    # ------------------------------------------------------------------
     def hti_base(self, *, var2plot=None, fig_size=None, fig_title=None,
-                 htixlim=None, htiylim=None, add_grid=False):
+                 htixlim=None, htiylim=None):
         """
-        Build an interactive Height–Time Indicator (HTI) figure from a time–height
-        radar profile dataset.
+        Build an interactive Height–Time Indicator (HTI) figure from a
+        time–height radar profile dataset.
 
         The figure consists of:
         - a time–height panel (left),
         - a height–value profile panel (right),
         - radio buttons for selecting the displayed variable,
-        - an interactive controller that updates the profile panel when the user
-          right‑clicks on the HTI panel or selects a new variable.
+        - an interactive controller that updates the profile panel when the
+          user right‑clicks on the HTI panel or selects a new variable.
 
         Parameters
         ----------
-        ds : xarray.Dataset
-            Time–height dataset, typically produced by :func:`merge_qvps_in_time`.
-            Must contain:
-            - a 1D ``height`` coordinate,
-            - a ``time`` coordinate,
-            - one or more variables with dimensions ``(time, height)``.
         var2plot : str or None, default None
-            Initial variable to display. If None, the first primary HTI variable
-            (as determined by ``_primary_hti_vars``) is used.
-        stats : {"std_dev", "sem", "min", "max", None}, default None
-            Statistic to visualise in the profile panel. If provided, the
-            corresponding statistic variable (e.g., ``"std_var"`` or ``"min_var"``)
-            must exist in ``ds``.
-        ptype : {"pseudo", "fcontour"}, default "pseudo"
-            Plot type for the HTI panel. ``"pseudo"`` uses ``pcolormesh``;
-            ``"fcontour"`` uses filled contours.
-        vars_bounds : dict or None, default None
-            Optional per‑variable bounds passed to :func:`plot_params`.
-        cb_ext : dict or None, default None
-            Optional per‑variable colourbar extension settings.
-        unorm : dict or None, default None
-            Optional per‑variable normalisation objects for colour mapping.
-        ucmap : dict or None, default None
-            Optional per‑variable colormap overrides.
-        custom_rules : dict or None, default None
-            Optional custom plotting rules passed to :func:`plot_params`.
+            Initial variable to display. If None, the first primary HTI
+            variable (as determined by ``_primary_hti_vars``) is used.
         fig_size : tuple of float or None, default None
             Figure size in inches. If None, defaults to ``(16, 9)``.
         fig_title : str or None, default None
             Custom figure title. If None, a title is constructed from dataset
-            metadata and the selected variable.
-        plot_mlyr : bool, default False
-            If True, overlay melting‑layer boundaries on both panels.
-        mlyr_ds : xarray.Dataset or None, default None
-            Dataset containing melting‑layer geometry. If None, ``ds`` is used.
-        mlyr_top : str, default "MLYRTOP"
-            Name of the melting‑layer top variable in ``mlyr_ds``.
-        mlyr_bottom : str, default "MLYRBTM"
-            Name of the melting‑layer bottom variable in ``mlyr_ds``.
-        plot_axislabels : bool, default True
-            Whether to draw axis labels on the HTI panel.
+            metadata and the selected variable.        
         htixlim : tuple of datetime-like or None, default None
             X‑axis limits for the HTI panel.
         htiylim : tuple of float or None, default None
             Y‑axis limits for the HTI panel.
-        tz : str, default "UTC"
-            Timezone used for datetime formatting and click handling.
 
         Returns
         -------
@@ -1869,16 +1941,18 @@ class HTI_Exp:
             - ``hti_ax`` : the HTI (time–height) axis,
             - ``profile_ax`` : the profile (value–height) axis,
             - ``radio`` : the variable‑selection radio buttons,
-            - ``controller`` : the interactive controller handling clicks and updates.
+            - ``controller`` : the interactive controller handling clicks and
+              updates.
 
         Notes
         -----
-        * Primary HTI variables are determined by :func:`_primary_hti_vars`, which
-          excludes statistical variables and vertical‑resolution diagnostics.
-        * Right‑clicking on the HTI panel updates the profile panel to the nearest
-          time slice.
-        * Variable‑specific plotting parameters (colormap, normalisation, bounds,
-          colourbar settings) are obtained from :func:`plot_params`.
+        * Primary HTI variables are determined by :func:`_primary_hti_vars`,
+          which excludes statistical variables and vertical‑resolution
+          diagnostics.
+        * Right‑clicking on the HTI panel updates the profile panel to the
+          nearest time slice.
+        * Variable‑specific plotting parameters (colormap, normalisation,
+          bounds, colourbar settings) are obtained from :func:`plot_params`.
         """
 
         if fig_size is None:
@@ -1956,7 +2030,8 @@ class HTI_Exp:
         plt.tight_layout()
         plt.show()
         # Connect events
-        cid1 = self._fig.canvas.mpl_connect("button_press_event", self._on_click)
+        cid1 = self._fig.canvas.mpl_connect("button_press_event",
+                                            self._on_click)
         cid2 = self._radio.on_clicked(self._on_var_change)
         self._cids = (cid1, cid2)
         
@@ -1966,10 +2041,9 @@ class HTI_Exp:
         
         # Draw initial profile
         self._update_profile()
-
-    # ------------------------------------------------------------------
+    # =============================================================================
     # Drawing helpers (panel creation)
-    # ------------------------------------------------------------------
+    # =============================================================================
     def _plot_hti_panel(self, var):
         """
         Draw the left HTI panel (time–height field) into self._ax_hti.
@@ -2007,22 +2081,27 @@ class HTI_Exp:
         # Melting layer overlays
         src = self.mlyr_ds if self.mlyr_ds is not None else self.ds
         if self.plot_mlyr and self.mlyr_top in src:
-            self._ax_hti.plot(src["time"], src[self.mlyr_top], lw=2, c="k", ls="--",
-                    path_effects=[pe.Stroke(linewidth=7, foreground='w'),
-                                  pe.Normal()], label=r"$MLyr_{(T)}$")
-            self._ax_hti.scatter(src["time"], src[self.mlyr_top], s=6, c="k", lw=0.5)
+            self._ax_hti.plot(
+                src["time"], src[self.mlyr_top], lw=2, c="k", ls="--",
+                path_effects=[pe.Stroke(linewidth=7, foreground='w'),
+                              pe.Normal()], label=r"$MLyr_{(T)}$")
+            self._ax_hti.scatter(src["time"], src[self.mlyr_top], s=6, c="k",
+                                 lw=0.5)
         if self.plot_mlyr and self.mlyr_bottom in src:
-            self._ax_hti.plot(src["time"], src[self.mlyr_bottom], lw=2, c="grey",
-                         ls="--",
-                         path_effects=[pe.Stroke(linewidth=7, foreground='w'),
-                                       pe.Normal()], label=r"$MLyr_{(B)}$")
-            self._ax_hti.scatter(src["time"], src[self.mlyr_bottom], s=6, c="grey",
-                            lw=0.5)
-        self._ax_hti.set_xlabel("Date and Time", fontsize=fontsizelabels, labelpad=15)
+            self._ax_hti.plot(
+                src["time"], src[self.mlyr_bottom], lw=2, c="grey", ls="--",
+                path_effects=[pe.Stroke(linewidth=7, foreground='w'),
+                              pe.Normal()], label=r"$MLyr_{(B)}$")
+            self._ax_hti.scatter(src["time"], src[self.mlyr_bottom], s=6,
+                                 c="grey", lw=0.5)
+        self._ax_hti.set_xlabel("Date and Time", fontsize=fontsizelabels,
+                                labelpad=15)
         #TODO: do not hardcode height units
-        self._ax_hti.set_ylabel("Height [km]", fontsize=fontsizelabels, labelpad=15)
+        self._ax_hti.set_ylabel("Height [km]", fontsize=fontsizelabels,
+                                labelpad=15)
         self._ax_hti.grid(self.add_grid)
-        self._ax_hti.tick_params(axis='both', direction='in', labelsize=fontsizetick, pad=10)
+        self._ax_hti.tick_params(axis='both', direction='in', pad=10,
+                                 labelsize=fontsizetick)
         # using "" removes xarray’s auto-title
         self._ax_hti.set_title(self.ax_title, fontsize=fontsizetitles)
         # locator = mdates.AutoDateLocator(minticks=3, maxticks=13)
@@ -2034,7 +2113,8 @@ class HTI_Exp:
         handles, labels = self._ax_hti.get_legend_handles_labels()
         if handles:
             by_label = dict(zip(labels, handles))
-            self._ax_hti.legend(by_label.values(), by_label.keys(), loc="upper left")
+            self._ax_hti.legend(by_label.values(), by_label.keys(),
+                                loc="upper left")
         return h, pltprms
 
     def _update_profile(self):
@@ -2080,7 +2160,7 @@ class HTI_Exp:
         self.current_var = str(label)
         self._update_profile()
 
-    #TODO: add keyboard navigation (simialr to browse_azimuth) bot for time.
+    #TODO: add keyboard navigation (simialr to browse_azimuth) but for time.
     def _on_close(self, event):
         """
         Disconnect callbacks when the figure is closed.

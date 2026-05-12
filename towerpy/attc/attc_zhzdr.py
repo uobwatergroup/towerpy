@@ -936,8 +936,12 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
                               coeff_b=[0.65, 0.85, 0.78], merge_into_ds=False,
                               replace_vars=False, modify_output=None):
     r"""
-    Perform attenuation correction of :math:`Z_H` using one of the algorithms
-    described in Rico‑Ramirez (2012).
+    Apply attenuation correction to horizontal reflectivity (:math:`Z_H`).
+
+    The correction follows one of the attenuation-correction methods described
+    by Rico-Ramirez (2012) [1]_, using configurable coefficient settings.
+    It is applied to radar gates classified as liquid precipitation below the
+    melting-layer bottom.
 
     Parameters
     ----------
@@ -1282,8 +1286,9 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
         ds_out = safe_assign_variable(ds_out, out_name, da)
         created_vars.append(out_name)
     # Dataset-level provenance
-    #TODO: add step_description
-    extra = {"step_description": ''}
+    extra = {"step_description": 
+             ("Corrected horizontal reflectivity (ZH) for attenuation in "
+              "liquid-precipitation gates below the melting-layer bottom.")}
     ds_out = record_provenance(
         ds_out, step="attenuation_correction_dbz",
         inputs=[names["ZH"], names["PHIDP"], names["RHOHV"]],
@@ -1591,8 +1596,12 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                                merge_into_ds=False, replace_vars=False,
                                modify_output=None,):
     r"""
-    Perform attenuation correction of :math:`Z_{DR}` using the algorithm
-    described in Bringi et al. (2001).
+    Apply attenuation correction to differential reflectivity (:math:`Z_{DR}`).
+
+    The correction follows the attenuation-correction method described by
+    Bringi et al. (2001) [1]_, using configurable coefficient settings. It is
+    applied to radar gates classified as liquid precipitation below the
+    melting-layer bottom.
     
     Parameters
     ----------
@@ -1672,7 +1681,7 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
     -----
     * This function operates in native polar radar coordinates.
     * This method assumes that :math:`Z_H` has already been corrected for
-      attenuation, e.g. using the methods described in [1]_.
+      attenuation, e.g. using the methods described in [2]_.
     * The attenuation is computed up to a user-defined melting level
       height.
     * ZH–ZDR relationship - Linear model:
@@ -1687,6 +1696,7 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
             - coeff_a: 0.048
             - coeff_b: 0.774
             - zdr_max: 1.4
+        according to [1]_ and [4]_
 
     * ZH–ZDR relationship - Exponential model:
         .. math::
@@ -1694,19 +1704,20 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
         where:
             - coeff_a: 0.00012
             - coeff_b: 2.5515
+        according to [3]_
 
     References
     ----------
-    .. [1] Rico-Ramirez, M. A. (2012). Adaptive attenuation correction
-        techniques for C-Band polarimetric weather radars. IEEE Transactions
-        on Geoscience and Remote Sensing, 50(12), 5061–5071.
-        https://doi.org/10.1109/tgrs.2012.2195228
-
-    .. [2] Bringi, V., Keenan, T., & Chandrasekar, V. (2001). Correcting C-band
+    .. [1] Bringi, V., Keenan, T., & Chandrasekar, V. (2001). Correcting C-band
         radar reflectivity and differential reflectivity data for rain
         attenuation: a self-consistent method with constraints. IEEE
         Transactions on Geoscience and Remote Sensing, 39(9), 1906–1915.
         https://doi.org/10.1109/36.951081
+
+    .. [2] Rico-Ramirez, M. A. (2012). Adaptive attenuation correction
+        techniques for C-Band polarimetric weather radars. IEEE Transactions
+        on Geoscience and Remote Sensing, 50(12), 5061–5071.
+        https://doi.org/10.1109/tgrs.2012.2195228
 
     .. [3] Gou, Y., Chen, H., & Zheng, J. (2019). An improved self-consistent
         approach to attenuation correction for C-band polarimetric radar
@@ -1871,8 +1882,9 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                           attrs=attrs)
         ds_out = safe_assign_variable(ds_out, out_name, da)
     # Dataset-level provenance
-    #TODO: add step_description
-    extra = {"step_description": ""}
+    extra = {"step_description": (
+        "Corrected differential reflectivity (ZDR) for attenuation in "
+        "liquid-precipitation gates below the melting-layer bottom.")}
     ds_out = record_provenance(
         ds_out, step="attenuation_correction_zdr",
         inputs=[names["ZH"], names["ZDR"], names["PHIDP"],

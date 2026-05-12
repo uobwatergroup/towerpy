@@ -824,7 +824,7 @@ ds.tp.qpe_based_on : detailed documentation for each estimator.
 
 # %%%% QPE help dict
 _QPE_DOCS = {
-    # --- Base single-predictor estimators ------------------------------------
+    # Base single-predictor estimators
     "a": {
         "title": "A-based Rainfall Estimator",
         "math": r".. math:: R = a A^b",
@@ -855,7 +855,7 @@ _QPE_DOCS = {
         "latex_name": r"$R(Z_H)$",
     },
 
-    # --- Dual-predictor estimators -------------------------------------------
+    # Dual-predictor estimators
     "kdp_zdr": {
         "title": "KDP–ZDR Dual-Predictor Rainfall Estimator",
         "math": r".. math:: R = a K_{DP}^b Z_{dr}^c",
@@ -882,7 +882,7 @@ _QPE_DOCS = {
         "latex_name": r"$R(Z_H, Z_{DR})$",
     },
 
-    # --- Hybrid estimators ----------------------------------------------------
+    # Hybrid estimators
     "z_a": {
         "title": "Hybrid Z–A Rainfall Estimator",
         "math": (
@@ -934,7 +934,7 @@ _QPE_DOCS = {
         "latex_name": r"$R(A_H) \& R(K_{DP})$",
     },
 
-    # --- Optimised estimators -------------------------------------------------
+    # Optimised estimators
     "z_opt": {
         "title": "Optimised Z-based Rainfall Estimator",
         "math": r".. math:: z = a R^b",
@@ -954,7 +954,7 @@ _QPE_DOCS = {
         "standard_name": "R(K_{DP})[opt]",
         "latex_name": r"$R(K_{DP})[opt]$",
     },
-
+    #TODO: Finish documentation
     # --- Hybrid optimised -----------------------------------------------------
     # "z_opt_a": {
     #     "title": "Hybrid Z_opt–A Rainfall Estimator",
@@ -1312,15 +1312,15 @@ def get_coeffs_a_kdp(rband: str, temp: float):
 # %%% QPE Dispatcher
 # =============================================================================
 
-def qpe_dispatcher(qpe_based_on, *, spcatt=None, kdp=None, dbz=None,
-                   zdr=None, ml_mask=None, rband='C', temp=20.0, pol='H',
-                   threshold_var=None, thld_var_value=40.0, 
-                   # single‑predictor overrides
-                   rz_a=None, rz_b=None, rspcatt_a=None, rspcatt_b=None,
-                   rkdp_a=None, rkdp_b=None,
-                   # dual‑predictor overrides
-                   rkdpzdr_a=None, rkdpzdr_b=None, rkdpzdr_c=None,
-                   rzzdr_a=None, rzzdr_b=None, rzzdr_c=None):
+def _qpe_dispatcher(qpe_based_on, *, spcatt=None, kdp=None, dbz=None,
+                    zdr=None, ml_mask=None, rband='C', temp=20.0, pol='H',
+                    threshold_var=None, thld_var_value=40.0, 
+                    # single‑predictor overrides
+                    rz_a=None, rz_b=None, rspcatt_a=None, rspcatt_b=None,
+                    rkdp_a=None, rkdp_b=None,
+                    # dual‑predictor overrides
+                    rkdpzdr_a=None, rkdpzdr_b=None, rkdpzdr_c=None,
+                    rzzdr_a=None, rzzdr_b=None, rzzdr_c=None):
     """Internal QPE dispatcher."""
     qpe_based_on = qpe_based_on.lower()
     # Single predictor
@@ -1432,7 +1432,10 @@ def compute_rqpe(ds, qpe_based_on, predictor_names=None, rband="C", temp=20.,
                  rkdpzdr_a=None, rkdpzdr_b=None, rkdpzdr_c=None,
                  rzzdr_a=None, rzzdr_b=None, rzzdr_c=None):
     r"""
-    Compute a radar‑based Quantitative Precipitation Estimation (QPE) product.
+    Compute radar-based quantitative precipitation estimates.
+
+    The selected QPE relation is applied to the required predictor variables,
+    with optional rain-region masking and threshold-based hybrid estimation.
 
     Parameters
     ----------
@@ -1449,16 +1452,15 @@ def compute_rqpe(ds, qpe_based_on, predictor_names=None, rband="C", temp=20.,
         ``["dbz", "spcatt", "kdp", "zdr"]``.
         Missing keys default to ``None`` and are ignored in the QPE.
     rband : ['X', 'C', 'S'], default 'C'
-        Radar frequency band used for temperature‑dependent coefficient lookup.
+        Radar frequency band used for coefficient selection.
     temp : float, default 20.0
         Temperature (°C) used for temperature‑dependent relations.
     pol : ['H', 'V'], default 'H'
-        Polarisation of the attenuation predictors. Coefficients for A‑based
-        estimators are selected accordingly.
+        Polarisation of the attenuation predictor. Coefficients for
+        attenuation-based estimators are selected accordingly.
     qpe_amlb : bool, default False
-        If ``False``, a mask outside the rain region is applied using either
-        `ml_mask` or `ml_mask_name`. If ``True``, the estimator is evaluated
-        over the entire PPI without masking.
+        If False, restrict QPE to the rain region using either ``ml_mask`` or
+        ``ml_mask_name``. If True, evaluate the estimator over the full PPI.
     ml_mask : xarray.DataArray of bool, optional
         Boolean mask defining the rain region (``True`` = rain). If provided,
         this mask is used directly and overrides `ml_mask_name`.
@@ -1588,16 +1590,16 @@ def compute_rqpe(ds, qpe_based_on, predictor_names=None, rband="C", temp=20.,
         threshold_var = ds[threshold_var_name]
         threshold_var_used = threshold_var_name
     # Compute QPE
-    r = qpe_dispatcher(qpe_based_on, pol=pol, dbz=predictors.get('dbz'),
-                       spcatt=predictors.get('spcatt'),
-                       kdp=predictors.get('kdp'), zdr=predictors.get('zdr'),
-                       ml_mask=ml_mask_eff, threshold_var=threshold_var,
-                       thld_var_value=thld_var_value, rband=rband, temp=temp,
-                       rspcatt_a=rspcatt_a, rspcatt_b=rspcatt_b,
-                       rkdp_a=rkdp_a, rkdp_b=rkdp_b, rz_a=rz_a, rz_b=rz_b,
-                       rkdpzdr_a=rkdpzdr_a, rkdpzdr_b=rkdpzdr_b,
-                       rkdpzdr_c=rkdpzdr_c, rzzdr_a=rzzdr_a,
-                       rzzdr_b=rzzdr_b, rzzdr_c=rzzdr_c)
+    r = _qpe_dispatcher(qpe_based_on, pol=pol, dbz=predictors.get('dbz'),
+                        spcatt=predictors.get('spcatt'),
+                        kdp=predictors.get('kdp'), zdr=predictors.get('zdr'),
+                        ml_mask=ml_mask_eff, threshold_var=threshold_var,
+                        thld_var_value=thld_var_value, rband=rband, temp=temp,
+                        rspcatt_a=rspcatt_a, rspcatt_b=rspcatt_b,
+                        rkdp_a=rkdp_a, rkdp_b=rkdp_b, rz_a=rz_a, rz_b=rz_b,
+                        rkdpzdr_a=rkdpzdr_a, rkdpzdr_b=rkdpzdr_b,
+                        rkdpzdr_c=rkdpzdr_c, rzzdr_a=rzzdr_a,
+                        rzzdr_b=rzzdr_b, rzzdr_c=rzzdr_c)
     # Determine output variable name
     if out_name is None:
         out_name = f"R_{qpe_based_on.upper()}"
@@ -1713,8 +1715,9 @@ def compute_rqpe(ds, qpe_based_on, predictor_names=None, rband="C", temp=20.,
             # restore attrs explicitly
             out_ds[coord].attrs = ds[coord].attrs.copy()
     # Record provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Computed radar-based QPE using the selected estimator, with optional "
+        "rain-region masking and hybrid thresholding.")}
     inputs = []
     for name in [pred_names.get('dbz'), pred_names.get('spcatt'),
                  pred_names.get('kdp'), pred_names.get('zdr'),
@@ -1736,16 +1739,20 @@ def compute_rqpe(ds, qpe_based_on, predictor_names=None, rband="C", temp=20.,
 
 def add_qpe_prod(base_ds, ds_rvars, **kwargs):
     """
-    Add a QPE product to an existing QPE dataset.
+    Append a QPE product to an existing QPE dataset.
+
+    The new product is computed from the predictor variables in ``ds_rvars``
+    using :func:`compute_rqpe` and appended to ``base_ds``.
 
     Parameters
     ----------
     base_ds : xarray.Dataset
-        Existing QPE dataset to append to.
+        Existing QPE dataset to which the new product is appended.
     ds_rvars : xarray.Dataset
-        Dataset containing the predictor variables (Z, KDP, etc.).
+        Dataset containing the predictor variables required by the selected
+        QPE relation.
     **kwargs :
-        Passed directly to compute_rqpe.
+        Additional keyword arguments passed to :func:`compute_rqpe`.
 
     Returns
     -------

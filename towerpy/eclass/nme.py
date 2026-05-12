@@ -356,7 +356,12 @@ def _conv1_vert(mask):
 def lsinterference_filter(ds, inp_names=None, rhv_min=0.3, classid=None,
                           mask=None, replace_vars=False):
     """
-    Detect and filter linear signatures (LS) related to interference in PPIs.
+    Detect linear-signature interference and speckle-like echoes in PPI scans.
+
+    Linear signatures and speckle-like non-meteorological echoes are identified
+    from noise-filtered polarimetric variables using configurable
+    copolar-correlation thresholds. Optional masking can then be applied to
+    selected radar variables.
 
     Parameters
     ----------
@@ -518,8 +523,9 @@ def lsinterference_filter(ds, inp_names=None, rhv_min=0.3, classid=None,
                                        new_attrs=merged)
         corrected_vars.append(out_var)
     # Redcord provenance
-    #TODO: add step_description
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Detected linear-signature interference and speckle-like echoes in "
+        "PPI scans, with optional masking of selected radar variables.")}
     params = {"rhv_min": rhv_min, "class_ids": echoesID, "mask": mask,
               "replace_vars": replace_vars, "corrected_vars": corrected_vars}
     ds_out2 = record_provenance(
@@ -582,9 +588,12 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
                     binary_class=255, path_nds=None, classid=None,
                     mask=None, replace_vars=False):
     r"""
-    Classify clutter, noise, and precipitation echoes using the
-    clutter-classification method described in Rico-Ramirez & Cluckie (2008).
-    Optionally apply CL-based masking to selected variables.
+    Classify precipitation, noise, and clutter echoes in PPI scans.
+
+    The classification follows Rico-Ramirez and Cluckie (2008), using
+    configurable polarimetric-variable selection and optional clutter-map
+    information. Clutter-based masking can optionally be applied to selected
+    radar variables.
 
     Parameters
     ----------
@@ -610,14 +619,14 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     binary_class : int, default 255
         Bitmask specifying which polarimetric variables are used in the
         classifier. Each bit corresponds to a variable:
-            - 128 → :math:`\rho_{HV}`
-            - 64  → CMAP
-            - 32  → LDR
-            - 16  → Doppler velocity
-            - 8   → texture of :math:`\rho_{HV}`
-            - 4   → texture of :math:`\Phi_{DP}`
-            - 2   → texture of :math:`Z_{DR}`
-            - 1   → texture of :math:`Z_{H}`
+            - 128 -> :math:`\rho_{HV}`
+            - 64  -> CMAP
+            - 32  -> LDR
+            - 16  -> Doppler velocity
+            - 8   -> texture of :math:`\rho_{HV}`
+            - 4   -> texture of :math:`\Phi_{DP}`
+            - 2   -> texture of :math:`Z_{DR}`
+            - 1   -> texture of :math:`Z_{H}`
         Required variables must exist in the dataset when their bit is set.
     path_nds : str or pathlib.Path, default None
         Path to the directory containing the normalised distribution (NDS)
@@ -699,7 +708,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     # Set path of the NDS
     if path_nds is None:
         pathnds = str.encode(str(Path(__file__).parent.absolute())
-                             + '/mfs_cband/')
+                             + '/nds_cband/')
     else:
         pathnds = str.encode(path_nds.as_posix().rstrip("/") + "/")
     # Prepare inputs for ctypes
@@ -863,8 +872,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         # Use the mapped dataset name, not the canonical key
         mapped_name = names.get(canonical_name, canonical_name)
         if mapped_name in ds:
-            inputs.append(mapped_name)
-    #TODO: add step_description
+            inputs.append(mapped_name)    
     params = {"min_snr": min_snr,
               "radar_constant_value_dB": rc,
               "range_var": names["rng"],
@@ -875,7 +883,9 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
               "replace_vars": replace_vars,
               "corrected_vars": corrected_vars,
               "library": libclc,}
-    extra = {'step_description': ('')}
+    extra = {'step_description': (
+        "Classified precipitation, noise, and clutter echoes, with optional "
+        "clutter-based masking of selected radar variables.")}
     ds_out2 = record_provenance(
         ds_out2, step="clutter_classif", inputs=inputs,
         outputs=outputs + corrected_vars, parameters=params, extra_attrs=extra,
