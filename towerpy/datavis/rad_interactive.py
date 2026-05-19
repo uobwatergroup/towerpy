@@ -1779,14 +1779,16 @@ class PPIExplorer:
         # =============================================================================
         # Extract metadata safely
         meta = _safe_metadata(self.xrds)
-        # elev_str = meta["elev_str"]
+        elev_str = meta["elev_str"]
         dt_str = meta["dt_str"]
         rname = meta["rname"]
         swp_mode = meta["swp_mode"]
         vunits = _safe_units(self.xrds[var2plot])
-        ptitle = fig_title or (f"{swp_mode} -- {var2plot} [{vunits}]")
+        ptitle = fig_title or (f"{var2plot} [{vunits}]")
         ax_ppi.set_title(ptitle, fontsize=14)
-        fig.suptitle(f"{rname.title()} -- {dt_str}", fontsize=16)
+        fig.suptitle(f"{rname.title()} -- {dt_str}\n"
+                     +f'{swp_mode} [{elev_str}]',
+                     fontsize=16)
         # =============================================================================
         # Add colourbar
         # =============================================================================

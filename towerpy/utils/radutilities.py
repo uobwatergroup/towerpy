@@ -1189,12 +1189,8 @@ def _safe_metadata(ds, elev_dim="elevation"):
     Return dict with safe radar metadata
     (elevation, time, radar name, sweep mode).
     """
-
     out = {}
-
-    
     # Elevation handling
-    
     if elev_dim in ds.coords:
         elev = ds[elev_dim].values
         # Convert to 1‑D array safely
@@ -1220,10 +1216,7 @@ def _safe_metadata(ds, elev_dim="elevation"):
             # out["elev_str"] = rf"{elev:.1f}$^\circ$"
         else:
             out["elev_str"] = ""
-
-    
     # Time handling
-    
     py_dt = None
     # 1. Try coordinate
     if "time" in ds.coords:
@@ -1239,21 +1232,15 @@ def _safe_metadata(ds, elev_dim="elevation"):
         py_dt = _extract_timestamp_from_attrs(ds.attrs)
     # 3. Format or fallback
     out["dt_str"] = py_dt.strftime("%Y-%m-%d %H:%M:%S") if py_dt else ""
-    
-    # Radar name
-    
     # Radar name
     where = ds.attrs.get("where")
-
     if isinstance(where, dict):
         out["rname"] = where.get("site_name", "Radar")
     elif "site_name" in ds.attrs:
         out["rname"] = ds.attrs["site_name"]
     else:
         out["rname"] = "Radar"
-    
     # Sweep mode
-    
     swp = None
     if "sweep_mode" in ds:
         val = ds["sweep_mode"].data
@@ -1268,9 +1255,7 @@ def _safe_metadata(ds, elev_dim="elevation"):
                 swp = str(item)
         else:
             swp = str(val)
-    
     out["swp_mode"] = swp or ""
-
     return out
 
 

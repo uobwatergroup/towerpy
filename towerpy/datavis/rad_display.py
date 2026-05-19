@@ -2961,7 +2961,7 @@ def _add_colorbar(fig, ax, mappable, pltprms, fsizes, vunits, rotangle=0,
     if np.allclose(bounds, bounds[0]):
         print("Colorbar skipped: collapsed boundaries")
         return None
-    
+
     # =============================================================================
     # POLAR or CARTOPY COLORBAR
     # =============================================================================
@@ -3236,7 +3236,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
                  "deg": [0, 180, 19],
                  "deg/km": [-2, 6, 17],
                  "unitless": [0.4, 0.9, 1.0],
-                 "dB/km": [0, 0.12, 13],
+                 "dB/km": [0, 0.19, 20],
                  "m/s": [-5, 5, 11],
                  "dV/dh": [-1.8, 0.6, 13],
                  "mm/h": [0, 64, 14],
@@ -3276,7 +3276,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
     lpv_short = {"PIA": [0, 20, 21], "alpha": [0, 0.2, 21],
                  "beta": [0, 0.1, 21]
                  }
-    
+
     # Continuous variables
     if "flags" not in units.lower():
         bounds = _lookup_params_override(vars_bounds, varname, units)
@@ -3545,8 +3545,13 @@ def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
             path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
             label=r"$MLyr_{(B)}$")[0]
         legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        line_top._towerpy_layer = "melting_layer"
+        line_top._towerpy_varname = mlyr_top.name
+        line_bot._towerpy_layer = "melting_layer"
+        line_bot._towerpy_varname = mlyr_bottom.name
         ax.add_artist(legend)
-        return
+        # return
+        return [line_top, line_bot]
     # =============================================================================
     # POLAR MODE
     # =============================================================================
@@ -3569,8 +3574,12 @@ def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
             path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
             label=r"$MLyr_{(B)}$")[0]
         legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        line_top._towerpy_layer = "melting_layer"
+        line_top._towerpy_varname = mlyr_top.name
+        line_bot._towerpy_layer = "melting_layer"
+        line_bot._towerpy_varname = mlyr_bottom.name
         ax.add_artist(legend)
-        return
+        return [line_top, line_bot]
     # =============================================================================
     # RECTANGULAR MODE
     # =============================================================================
@@ -3593,8 +3602,12 @@ def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
             path_effects=[pe.Stroke(linewidth=4, foreground="w"), pe.Normal()],
             label=r"$MLyr_{(B)}$")[0]
         legend = ax.legend(handles=[line_top, line_bot], loc="upper left")
+        line_top._towerpy_layer = "melting_layer"
+        line_top._towerpy_varname = mlyr_top.name
+        line_bot._towerpy_layer = "melting_layer"
+        line_bot._towerpy_varname = mlyr_bottom.name
         ax.add_artist(legend)
-        return
+        return [line_top, line_bot]
 
 
 def _plot_max_range(ax, ds, *, coord_names=None, proj_x=None, proj_y=None,
@@ -3993,6 +4006,22 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     # Resolve variable
     var2plot = _resolve_var2plot(xrds, var2plot)
     mappable = None
+    # Artist containers for return_artists
+    cbar = None
+    title_artist = None
+    contour_set = []
+    ml_artists = []
+    ring_artists = []
+    points_artist = None
+    pixel_mdp_artist = None
+    maxrange_artist = None
+    # Ensure coordinate grids exist
+    az_grid = None
+    r_grid_km = None
+    proj_x = None
+    proj_y = None
+    rect_x = None
+    rect_y = None
     # =============================================================================
     # Creates plotting parameters 
     # =============================================================================
@@ -4155,51 +4184,53 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     # =============================================================================
     vunits = _safe_units(xrds[var2plot])
     if add_colorbar:
-        _add_colorbar(fig, ax1, mappable, pltprms, fsizes, vunits,
-                      coord_sys=coord_sys,
-                      cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
-                      shrink=(0.65 if (coord_sys == "polar" and polarplot)
-                              else 1),)
+        cbar = _add_colorbar(
+            fig, ax1, mappable, pltprms, fsizes, vunits, coord_sys=coord_sys,
+            cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
+            shrink=(0.65 if (coord_sys == "polar" and polarplot) else 1),)
     # =============================================================================
-    # Plot Artist objects     
+    # Plot Artist objects
     # =============================================================================
     mappable._pltprms = pltprms
     # Optional melting layer overlay
     if plot_mlyr:
-        _addML2plot(ax1, coord_sys, xrds, mlyr_bnames=mlyr_bnames,
-                    coord_names=coord_names, polarplot=polarplot,
-                    cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
-                    data_crs=default_cartopy_cfg["data_crs"],
-                    projcoord_names=projcoord_names)
+        ml_artists = _addML2plot(
+            ax1, coord_sys, xrds, mlyr_bnames=mlyr_bnames,
+            coord_names=coord_names, polarplot=polarplot,
+            cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
+            data_crs=default_cartopy_cfg["data_crs"],
+            projcoord_names=projcoord_names)
     if range_rings is not None:
-        _plot_range_rings(ax1, xrds, range_rings, coord_sys=coord_sys,
-                          polarplot=polarplot, coord_names=coord_names)
+        ring_artists = _plot_range_rings(
+            ax1, xrds, range_rings, coord_sys=coord_sys, polarplot=polarplot,
+            coord_names=coord_names)
     if plot_contourl:
         ctrprms = plot_params(plot_contourl, xrds, vars_bounds=vars_bounds,
                               unorm=unorm, cb_ext=cb_ext,
                               custom_rules=custom_rules,
                               ucmap=ucmap)
-    
         ckw = {"levels": ctrprms.norm_boundaries, "norm": ctrprms.norm, 
                "cmap": ctrprms.cmap}
         if contour_kw:
             ckw.update(contour_kw)
-        _plot_contours(ax1, xrds, plot_contourl, coord_sys=coord_sys,
-                       polarplot=polarplot, coord_names=coord_names,
-                       contour_kw=ckw, fs_label=fsizes["fsz_cbt"], 
-                       xrdsvar_sorted=xrdsvar_sorted, az_grid=az_grid,
-                       r_grid_km=r_grid_km)
+        contour_set = _plot_contours(
+            ax1, xrds, plot_contourl, coord_sys=coord_sys, polarplot=polarplot,
+            coord_names=coord_names, contour_kw=ckw, r_grid_km=r_grid_km,
+            az_grid=az_grid, fs_label=fsizes["fsz_cbt"],
+            xrdsvar_sorted=xrdsvar_sorted)
     if points2plot is not None:
-        _plot_points(ax1, points2plot, coord_names=coord_names,
-                     ptsvar=ptsvar2plot if len(points2plot) >= 3 else None,
-                     norm=pltprms.norm, cmap=pltprms.cmap, size=szpnts)
+        points_artist = _plot_points(
+            ax1, points2plot, coord_names=coord_names,
+            ptsvar=ptsvar2plot if len(points2plot) >= 3 else None,
+            norm=pltprms.norm, cmap=pltprms.cmap, size=szpnts)
     if pixel_midp:
-        _plot_pixel_midpoints(ax1, xrds, coord_names=coord_names,
-                              proj_x=proj_x, proj_y=proj_y,
-                              data_crs=default_cartopy_cfg["data_crs"])
+        pixel_mdp_artist =_plot_pixel_midpoints(
+            ax1, xrds, coord_names=coord_names, proj_x=proj_x, proj_y=proj_y,
+            data_crs=default_cartopy_cfg["data_crs"])
     if rd_maxrange:
-        _plot_max_range(ax1, xrds, coord_names=coord_names, proj_x=proj_x,
-                        proj_y=proj_y, data_crs=default_cartopy_cfg["data_crs"])
+        maxrange_artist = _plot_max_range(
+            ax1, xrds, coord_names=coord_names, proj_x=proj_x, proj_y=proj_y,
+            data_crs=default_cartopy_cfg["data_crs"])
     # =============================================================================
     # Set plot params
     # =============================================================================
@@ -4208,37 +4239,43 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     if coord_sys == "rect" and has_rect:
         if plot_axislabels:
             if default_cartopy_cfg["enable_cartopy"]:
-                # da_x = xrds[coord_namex]
-                # da_y = xrds[coord_namey]
-                # x_std = da_x.attrs.get("standard_name", coord_namex)
-                # y_std = da_y.attrs.get("standard_name", coord_namey)
-                # x_unit = da_x.attrs.get("units", "")
-                # y_unit = da_y.attrs.get("units", "")
-                # x_label = f"{x_std} [{x_unit}]" if x_unit else x_std
-                # y_label = f"{y_std} [{y_unit}]" if y_unit else y_std
-                x_label = "longitude [degrees_east]"
-                y_label = "latitude [degrees_north]"
-                # Draw lon/lat ticks
-                # Determine extent for tick generation
-                if xlims is not None and ylims is not None:
-                    xmin, xmax = xlims
-                    ymin, ymax = ylims
+                # If projection is PlateCarree use lon/lat ticks
+                if isinstance(proj, ccrs.PlateCarree):
+                    x_label = "longitude [degrees_east]"
+                    y_label = "latitude [degrees_north]"
+                    # Determine extent for tick generation
+                    if xlims is not None and ylims is not None:
+                        xmin, xmax = xlims
+                        ymin, ymax = ylims
+                    else:
+                        # Get actual map extent in PlateCarree coordinates
+                        xmin, xmax, ymin, ymax = ax1.get_extent(
+                            crs=ccrs.PlateCarree())
+                    dx = default_cartopy_cfg["tick_spacing"]["dx"]
+                    dy = default_cartopy_cfg["tick_spacing"]["dy"]
+                    xticks = np.arange(np.floor(xmin), np.ceil(xmax) + dx, dx)
+                    yticks = np.arange(np.floor(ymin), np.ceil(ymax) + dy, dy)
+                    ax1.set_xticks(xticks, crs=ccrs.PlateCarree())
+                    ax1.set_yticks(yticks, crs=ccrs.PlateCarree())
+                    ax1.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
+                    ax1.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+                # Otherwise use projected coordinates directly
                 else:
-                    # Get actual map extent in PlateCarree coordinates
-                    xmin, xmax, ymin, ymax = ax1.get_extent(
-                        crs=ccrs.PlateCarree())
-                dx = default_cartopy_cfg["tick_spacing"]["dx"]
-                dy = default_cartopy_cfg["tick_spacing"]["dy"]
-                # xticks = np.arange(np.floor(xlims[0]),
-                #                    np.ceil(xlims[1]) + dx, dx)
-                # yticks = np.arange(np.floor(ylims[0]),
-                #                    np.ceil(ylims[1]) + dy, dy)
-                xticks = np.arange(np.floor(xmin), np.ceil(xmax) + dx, dx)
-                yticks = np.arange(np.floor(ymin), np.ceil(ymax) + dy, dy)
-                ax1.set_xticks(xticks, crs=ccrs.PlateCarree())
-                ax1.set_yticks(yticks, crs=ccrs.PlateCarree())
-                ax1.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
-                ax1.yaxis.set_major_formatter(LATITUDE_FORMATTER)
+                    # Use the projected coordinate names
+                    da_x = xrds[projcoord_names['x']]
+                    da_y = xrds[projcoord_names['y']]
+                    x_unit = da_x.attrs.get("units", "m")
+                    y_unit = da_y.attrs.get("units", "m")
+                    x_label = f"{projcoord_names['x']} [{x_unit}]"
+                    y_label = f"{projcoord_names['y']} [{y_unit}]"
+                    # Use raw projected coordinates for ticks
+                    ax1.set_xticks(np.linspace(float(da_x.min()),
+                                               float(da_x.max()), 6))
+                    ax1.set_yticks(np.linspace(float(da_y.min()),
+                                               float(da_y.max()), 6))
+                    # No lon/lat formatter
+                    ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
+                    ax1.yaxis.set_major_formatter(mticker.ScalarFormatter())
             elif has_polar:
                 # Only use range labels when NOT in Cartopy mode
                 r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
@@ -4249,7 +4286,6 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             else:
                 x_label = coord_namex
                 y_label = coord_namey
-                
             ax1.set_xlabel(x_label, fontsize=fsizes['fsz_axlb'])
             ax1.set_ylabel(y_label, fontsize=fsizes['fsz_axlb'])
         ax1.tick_params(axis='both', labelsize=fsizes['fsz_axtk'])
@@ -4286,9 +4322,11 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             auto_title = (f"{ptitle}\n {swp_mode} [{elev_str}]"
                           f"\nPPI {var2plot} [{vunits}]")
             if coord_sys == "rect" and not default_cartopy_cfg["enable_cartopy"]:
-                fig.suptitle(auto_title, fontsize=fsizes["fsz_pt"])
+                title_artist = fig.suptitle(auto_title,
+                                            fontsize=fsizes["fsz_pt"])
             else:
-                ax1.set_title(auto_title, fontsize=fsizes["fsz_pt"])
+                title_artist = ax1.set_title(auto_title,
+                                             fontsize=fsizes["fsz_pt"])
     if xlims:
         ax1.set_xlim(xlims)
     if ylims:
@@ -4299,9 +4337,8 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
         return PPIArtist(fig=fig, ax=ax1, mappable=mappable, colorbar=cbar,
                          title=title_artist, contours=contour_set,
                          melting_layer=ml_artists, range_rings=ring_artists,
-                         points=points_artist,
-                         pixel_midpoints=pixel_midpoints_artist,
-                         max_range=maxrange_artist,
+                         points=points_artist, max_range=maxrange_artist,
+                         pixel_midpoints=pixel_mdp_artist,
                          coords={"rect_x": rect_x, "rect_y": rect_y,
                                  "proj_x": proj_x, "proj_y": proj_y,
                                  "az_grid": az_grid, "r_grid_km": r_grid_km},
@@ -4309,7 +4346,6 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                          coord_sys=coord_sys, coord_names=coord_names)
     else:
         return mappable, ax1
-
 
 
 def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
