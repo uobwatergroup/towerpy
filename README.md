@@ -32,6 +32,26 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
 > The latest stable release is `1.1.0`.  
 > The 2.0 alpha is available only on GitHub and is not on PyPI or conda.**
 
+## Installing the towerpy 2.0 rewrite (xarray‑based)
+
+The xarray rewrite lives in the **[`xarray-port`](ca://s?q=Explain_xarray_port_branch_role)** branch and is **not yet available on PyPI or conda**.  
+If you want to test or contribute to the 2.0 development version, install it directly from GitHub.
+
+### **Install the latest development version**::
+
+    pip install git+https://github.com/uobwatergroup/towerpy.git@xarray-port
+
+
+### **Editable install for contributors**::
+
+    git clone https://github.com/uobwatergroup/towerpy.git
+    cd towerpy
+    git checkout xarray-port
+    pip install -e .
+
+
+
+
 # :books: Documentation
 [![Documentation Status](https://readthedocs.org/projects/towerpy/badge/?version=latest)](https://towerpy.readthedocs.io/en/latest/?badge=latest)
 
