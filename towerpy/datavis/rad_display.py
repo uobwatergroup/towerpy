@@ -4280,7 +4280,8 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                 # Only use range labels when NOT in Cartopy mode
                 r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
                 r_unit_src = getcoordunits(xrds, polarcoord_names['rng'], "m")
-                r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+                # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
+                r_unit = r_unit_src if r_unit_src else ''
                 x_label = f"{r_std} [{r_unit}]"
                 y_label = f"{r_std} [{r_unit}]"
             else:
@@ -4393,10 +4394,7 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
     axes : ndarray of matplotlib.axes.Axes
         Axes containing the individual PPI plots.
     """
-    # =============================================================================
-    # Title metadata 
-    # =============================================================================
-    # Extract metadata safely
+    # Extract title metadata safely
     meta = _safe_metadata(xrds)
     elev_str = meta["elev_str"]
     dt_str = meta["dt_str"]
@@ -4476,7 +4474,7 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
         vunits = _safe_units(xrds[vname])
         ax1.set_title(f'{vname} [{vunits}]', fontsize=12)
         if add_colorbar:
-            #TODO: this creates wrong spacing in theplots
+            #TODO: this may create wrong spacing betweenplots
             pltprms = pcm._pltprms
             clb = ax1.figure.colorbar(pcm, ax=ax1, extend=pltprms.extend)
             if pltprms.ticklabels is not None:
@@ -4487,7 +4485,8 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
     if coord_sys == "rect":
         r_std = xrds["range"].attrs.get("standard_name", "Range")
         r_unit_src = getcoordunits(xrds, "range", "m")
-        r_unit = "km" if r_unit_src.startswith("m") else r_unit_src
+        # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
+        r_unit = r_unit_src if r_unit_src else ''
         x_label = f"{r_std} [{r_unit}]"
         y_label = f"{r_std} [{r_unit}]"
     elif coord_sys == "polar" and not polarplot:
