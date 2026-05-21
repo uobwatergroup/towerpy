@@ -12,7 +12,9 @@ from ..datavis import rad_display
 from ..datavis import rad_interactive
 from ..io import modeltp as mdtp
 from ..utils.radutilities import (safe_assign_variable, find_nearest_index,
-                                  record_provenance, add_correction_step)
+                                  record_provenance, add_correction_step,
+                                  _resolve_beam_height_names)
+from ..utils.unit_conversion import convert
 
 
 class MeltingLayer:
@@ -593,7 +595,6 @@ class MeltingLayer:
 # %% xarray implementation
 # =============================================================================
 
-
 def _to_da(value, ds, name, units="km", azimuth_dim="azimuth"):
     """
     Convert scalar or array-like ML parameter into a DataArray.
@@ -701,7 +702,8 @@ def _normalise_ml_input(x, ds, azimuth_dim="azimuth"):
 def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
                          mlyr_thickness=None, source="user-defined",
                          method=None, overwrite=False, delimit_mlyrinppi=False,
-                         classid=None, beam_cone="centre"):
+                         classid=None, beam_cone="centre",
+                         beamhcoord_names=None):
     """
     Attach melting-layer metadata to a radar sweep dataset.
 
@@ -734,7 +736,11 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
         classification.
     beam_cone : {'centre', 'top', 'bottom', 'all'}, optional
         Beam-height descriptor(s) to use when performing classification.
-        Passed directly to `mlyr_ppidelimitation`.
+        Passed directly to :func:`mlyr_ppidelimitation`.
+    beamhcoord_names : dict, optional
+        Mapping specifying the beam-height coordinate names in the dataset.
+        Defaults to ``{"z": "beamc_height", "z_bth": "beamt_height",
+        "z_bbh": "beamb_height"}``. 
 
     Returns
     -------
@@ -781,6 +787,10 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     mlyr_top_da = _to_da(mlyr_top_arr, ds, "mlyr_top", units=units)
     mlyr_bottom_da = _to_da(mlyr_bottom_arr, ds, "mlyr_bottom", units=units)
     mlyr_thickness_da = _to_da(mlyr_th_arr, ds, "mlyr_thickness", units=units)
+    # Normalise ML DataArrays to canonical internal unit (km)
+    mlyr_top_da = convert(mlyr_top_da, "km")
+    mlyr_bottom_da = convert(mlyr_bottom_da, "km")
+    mlyr_thickness_da = convert(mlyr_thickness_da, "km")
     # Attach variables
     ds2 = ds.copy()
     ds2 = safe_assign_variable(ds2, "MLYRTOP", mlyr_top_da)
@@ -792,6 +802,7 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
                                        mlyr_bottom=mlyr_bottom_da,
                                        mlyr_thickness=mlyr_thickness_da,
                                        beam_cone=beam_cone,
+                                       beamhcoord_names=beamhcoord_names,
                                        classid=classid)
         # Attach each classification field
         ds2 = ds2.assign(classif)
@@ -835,8 +846,9 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
 
 
 def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
-                         beam_cone="centre", classid=None,
-                         azimuth_dim="azimuth", range_dim="range"):
+                         beam_cone="centre", beamhcoord_names=None,
+                         classid=None, azimuth_dim="azimuth",
+                         range_dim="range"):
     """
     Classify PPI radar bins into rain, melting-layer, and solid-precipitation
     regions.
@@ -862,6 +874,10 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
         * ``"top"`` : use ``beamt_height``.
         * ``"bottom"`` : use ``beamb_height``.
         * ``"all"`` : use all three beam-height fields.
+    beamhcoord_names : dict, optional
+        Mapping specifying the beam-height coordinate names in the dataset.
+        Defaults to ``{"z": "beamc_height", "z_bth": "beamt_height",
+        "z_bbh": "beamb_height"}``. Only variables present in ``ds`` are used.
     classid : dict, optional
         Optional mapping overriding the default region identifiers:
             {'rain': 1.0, 'mlyr': 2.0, 'solid_pcp': 3.0}
@@ -883,25 +899,49 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
     if classid is not None:
         regionID.update(classid)
     # Beam-height selector
-    cone_map = {"centre": ["beamc_height"],
-                "top": ["beamt_height"],
-                "bottom": ["beamb_height"],
-                "all": ["beamc_height", "beamt_height", "beamb_height"]}
+    cone_map = _resolve_beam_height_names(ds, beamhcoord_names)
     beams_to_use = cone_map[beam_cone]
+    # Ensure beam-height DataArrays are in km (resolver may return different units)
+    converted_beams = []
+    for bh in beams_to_use:
+        if bh is None:
+            continue
+        # If resolver returned a DataArray without units, try to infer or assume metres
+        if "units" not in bh.attrs or not bh.attrs.get("units"):
+            # prefer assuming metres (common for wradlib 'z'), but keep explicit
+            bh = bh.copy()
+            bh.attrs = bh.attrs.copy()
+            bh.attrs.setdefault("units", "m")
+        # convert (will raise if incompatible)
+        converted_beams.append(convert(bh, "km"))
+    beams_to_use = converted_beams
+
     # Normalise melting-layer inputs
     mlyr_top_da = _ensure_azimuth_da(mlyr_top, ds, "mlyr_top")
     mlyr_bottom_da = _ensure_azimuth_da(mlyr_bottom, ds, "mlyr_bottom")
     mlyr_thickness_da = _ensure_azimuth_da(mlyr_thickness, ds, "mlyr_thickness")
+    # Ensure ML inputs have a units attribute before conversion.
+    # If caller didn't provide units, assume they are already in km.
+    for _da in (mlyr_top_da, mlyr_bottom_da, mlyr_thickness_da):
+        if _da is None:
+            continue
+        if "units" not in _da.attrs or not _da.attrs.get("units"):
+            _da.attrs["units"] = "km"
     # Replace NaN bottom heights with top - thickness
     mlyr_bottom_da = xr.where(xr.ufuncs.isnan(mlyr_bottom_da),
                               mlyr_top_da - mlyr_thickness_da,
                               mlyr_bottom_da)
+    # Ensure ML inputs are in km for comparison with beam heights
+    mlyr_top_da = convert(mlyr_top_da, "km")
+    mlyr_bottom_da = convert(mlyr_bottom_da, "km")
+    mlyr_thickness_da = convert(mlyr_thickness_da, "km")
     # Precompute range indices for broadcasting
     range_idx = xr.DataArray(np.arange(ds.sizes[range_dim]), dims=(range_dim,))
     out = {}
     # Vectorised classification for each beam-height field
-    for beam_name in beams_to_use:
-        bh = ds[beam_name]  # (azimuth, range)
+    for bh in beams_to_use:
+        beam_name = bh.name
+        # bh = ds[beam_name]  # (azimuth, range)
         # Nearest-range indices for ML top and bottom
         mlyr_top_idx = abs(bh - mlyr_top_da).argmin(dim=range_dim)
         mlyr_bottom_idx = abs(bh - mlyr_bottom_da).argmin(dim=range_dim)

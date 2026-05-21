@@ -18,9 +18,9 @@ import xarray as xr
 from ..utils import radutilities as rut
 from ..base import TowerpyError
 from ..utils import unit_conversion as tpuc
-from ..utils.radutilities import resolve_rect_coords, find_nearest
-from ..utils.radutilities import _safe_metadata, getcoordunits
-from ..utils.radutilities import _as_dataset, _deep_update
+from ..utils.radutilities import (resolve_rect_coords, find_nearest,
+                                  _safe_metadata, getcoordunits, _as_dataset,
+                                  _deep_update, _resolve_beam_height_names)
 from ..utils.unit_conversion import _safe_units, convert, _normalise_units
 
 
@@ -3005,13 +3005,11 @@ def _add_colorbar(fig, ax, mappable, pltprms, fsizes, vunits, rotangle=0,
     ax_divider = make_axes_locatable(ax)
     cax = ax_divider.append_axes(pos, size=size, pad=pad, axes_class=plt.Axes)
     sm = mpl.cm.ScalarMappable(cmap=pltprms.cmap, norm=pltprms.norm)
-    # cb = fig.colorbar(sm, cax=cax, orientation="horizontal",
-    #                   extend=pltprms.extend, **cbar_kwargs)
     cb = fig.colorbar(sm, cax=cax, extend=pltprms.extend,
                       orientation=("vertical" if pos in ("right", "left")
                                    else "horizontal"), **cbar_kwargs)
     cb.ax.tick_params(direction="out", labelsize=fsizes["fsz_cb"],
-                    rotation=rotangle)
+                      rotation=rotangle)
     cax.xaxis.set_ticks_position("top")
     # Categorical case
     if pltprms.ticklabels is not None:
@@ -3374,11 +3372,11 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
     force_all_ticks = False
     bnd = np.asarray(bnd)
     #TODO: here i must consider check if norm
-    if not unorm:
-        if "rhohv" in short.lower():
-            force_all_ticks = True
-        if "rain" in short.lower() or "rate" in short.lower():
-            force_all_ticks = False
+    # if not unorm:
+    #     if "rhohv" in short.lower():
+    #         force_all_ticks = False
+    #     if "rain" in short.lower() or "rate" in short.lower():
+    #         force_all_ticks = False
     return PlotParams(range_spec=bounds, norm_boundaries=bnd, cmap=cmap,
                       extend=ext, norm=normp, ticklabels=ticklabels,
                       force_all_ticks=force_all_ticks)
@@ -3490,7 +3488,7 @@ def _resolve_mlyr(ds, mlyr_bnames):
 
 def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
                 polarplot=True, cartopy_enabled=False, data_crs=None,
-                projcoord_names=None):
+                projcoord_names=None, beamhcoord_names=None):
     """
     Overlay melting-layer boundaries (top and bottom) on a PPI axis.
     """
@@ -3500,9 +3498,16 @@ def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
         return
 
     # Beam height field
-    if "beamc_height" not in ds:
+    # if "beamc_height" not in ds:
+    #     return
+    # bh = ds["beamc_height"]
+    # Beam height field (centre), resolved + converted to km
+    cone_map = _resolve_beam_height_names(ds, beamhcoord_names)
+    centre_beams = cone_map.get("centre", [])
+    if not centre_beams:
         return
-    bh = ds["beamc_height"]
+    bh = centre_beams[0]   # DataArray already in km
+
 
     # Vectorised nearest-range lookup
     mlyr_top_idx = abs(bh - mlyr_top).argmin(dim="range")
@@ -3876,6 +3881,7 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
              polarcoord_names={"azi": "azimuth", "rng": "range"},
              rectcoord_names={"x": "grid_rectx", "y": "grid_recty"},
              projcoord_names={"x": "grid_osgbx", "y": "grid_osgby"},
+             beamhcoord_names={"z": "beamc_height"},
              cartopy_cfg=None, xlims=None, ylims=None, vars_bounds=None,
              unorm=None, ucmap=None, custom_rules=None, font_sizes='regular',
              add_colorbar=False, cb_ext=None, cbticks=None, add_title=True,
@@ -4199,7 +4205,8 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             coord_names=coord_names, polarplot=polarplot,
             cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
             data_crs=default_cartopy_cfg["data_crs"],
-            projcoord_names=projcoord_names)
+            projcoord_names=projcoord_names,
+            beamhcoord_names=beamhcoord_names)
     if range_rings is not None:
         ring_artists = _plot_range_rings(
             ax1, xrds, range_rings, coord_sys=coord_sys, polarplot=polarplot,
@@ -4276,17 +4283,23 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                     # No lon/lat formatter
                     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
                     ax1.yaxis.set_major_formatter(mticker.ScalarFormatter())
-            elif has_polar:
-                # Only use range labels when NOT in Cartopy mode
-                r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
-                r_unit_src = getcoordunits(xrds, polarcoord_names['rng'], "m")
-                # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
-                r_unit = r_unit_src if r_unit_src else ''
-                x_label = f"{r_std} [{r_unit}]"
-                y_label = f"{r_std} [{r_unit}]"
+            # elif has_polar:
+            #     # Only use range labels when NOT in Cartopy mode
+            #     r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
+            #     r_unit_src = getcoordunits(xrds, polarcoord_names['rng'], "m")
+            #     # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
+            #     r_unit = r_unit_src if r_unit_src else ''
+            #     x_label = f"{r_std} [{r_unit}]"
+            #     y_label = f"{r_std} [{r_unit}]"
             else:
-                x_label = coord_namex
-                y_label = coord_namey
+                da_x = xrds[coord_namex]
+                da_y = xrds[coord_namey]
+                x_std = da_x.attrs.get("standard_name", coord_namex)
+                y_std = da_y.attrs.get("standard_name", coord_namey)
+                x_unit = da_x.attrs.get("units", "")
+                y_unit = da_y.attrs.get("units", "")
+                x_label = f"{x_std} [{x_unit}]" if x_unit else x_std
+                y_label = f"{y_std} [{y_unit}]" if y_unit else y_std
             ax1.set_xlabel(x_label, fontsize=fsizes['fsz_axlb'])
             ax1.set_ylabel(y_label, fontsize=fsizes['fsz_axlb'])
         ax1.tick_params(axis='both', labelsize=fsizes['fsz_axtk'])
@@ -4482,13 +4495,24 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
                 clb.set_ticklabels(pltprms.ticklabels)
                 clb.ax.tick_params(direction="in")
     # Label only first column and last row 
+    # if coord_sys == "rect":
+    #     r_std = xrds["range"].attrs.get("standard_name", "Range")
+    #     r_unit_src = getcoordunits(xrds, "range", "m")
+    #     # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
+    #     r_unit = r_unit_src if r_unit_src else ''
+    #     x_label = f"{r_std} [{r_unit}]"
+    #     y_label = f"{r_std} [{r_unit}]"
     if coord_sys == "rect":
-        r_std = xrds["range"].attrs.get("standard_name", "Range")
-        r_unit_src = getcoordunits(xrds, "range", "m")
-        # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
-        r_unit = r_unit_src if r_unit_src else ''
-        x_label = f"{r_std} [{r_unit}]"
-        y_label = f"{r_std} [{r_unit}]"
+        x_name = rectcoord_names["x"]
+        y_name = rectcoord_names["y"]
+        da_x = xrds[x_name]
+        da_y = xrds[y_name]
+        x_std = da_x.attrs.get("standard_name", x_name)
+        y_std = da_y.attrs.get("standard_name", y_name)
+        x_unit = da_x.attrs.get("units", "")
+        y_unit = da_y.attrs.get("units", "")
+        x_label = f"{x_std} [{x_unit}]" if x_unit else x_std
+        y_label = f"{y_std} [{y_unit}]" if y_unit else y_std
     elif coord_sys == "polar" and not polarplot:
         # a_std = xrds["azimuth"].attrs.get("standard_name", "Azimuth")
         # a_unit = "rad" if polarplot else getcoordunits(xrds, "azimuth", "deg")
@@ -4669,8 +4693,8 @@ def plot_cone_coverage_xr(xrds, var2plot=None, vars_bounds=None, unorm=None,
         mappable = mpl.cm.ScalarMappable(cmap=pltprms.cmap, norm=pltprms.norm)
         mappable.set_array([])   # required for colorbar
         cb = _add_colorbar(fig, ax, mappable, pltprms, fsizes,
-                           vunits=_safe_units(da), coord_sys="rect",
-                           cartopy_enabled=False, pos="right", pad='4%')
+                           vunits=_safe_units(da), coord_sys="rect", size='3%',
+                           cartopy_enabled=False, pos="right", pad='3%')
         if cb is not None:
             cb.ax.tick_params(direction="in", axis="both",
                            labelsize=fsizes["fsz_cb"])

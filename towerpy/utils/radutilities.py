@@ -4,13 +4,11 @@ import copy
 import datetime as dt
 import fnmatch
 import json
-from pathlib import Path
-import re
 import cartopy.io.shapereader as shpreader
 from scipy import interpolate
 import numpy as np
 import xarray as xr
-from ..utils.unit_conversion import np64_to_dtm
+from ..utils.unit_conversion import np64_to_dtm, convert
 
 
 def find_nearest(iarray, val2search, mode="any"):
@@ -1467,6 +1465,44 @@ def apply_offset_ppi(ds, var2correct, offset, *, output_mode="preserve",
         return ds_out[assigned_name]
 
     return ds_out
+
+
+def _resolve_beam_height_names(ds, beamhcoord_names=None):
+    """
+    Resolve and normalise beam-height coordinate names in a dataset.
+
+    Returns a dict mapping beam-cone selectors ('centre', 'top', 'bottom', 'all')
+    to lists of DataArrays in kilometres.
+    """
+    default_map = {"z": "beamc_height", "z_bth": "beamt_height",
+                   "z_bbh": "beamb_height"}
+    if beamhcoord_names is None:
+        beamhcoord_names = default_map
+    else:
+        beamhcoord_names = {**default_map, **beamhcoord_names}
+    names = {"centre":  beamhcoord_names.get("z"),
+             "top":     beamhcoord_names.get("z_bth"),
+             "bottom":  beamhcoord_names.get("z_bbh")
+             }
+
+    def get_da(name):
+        if name not in ds:
+            return None
+        da = ds[name]
+        try:
+            return convert(da, "km")   # <-- convert metres to km
+        except Exception:
+            return da  # fallback if units missing or incompatible
+    centre  = get_da(names["centre"])
+    top     = get_da(names["top"])
+    bottom  = get_da(names["bottom"])
+    return {
+        "centre":  [centre]  if centre  is not None else [],
+        "top":     [top]     if top     is not None else [],
+        "bottom":  [bottom]  if bottom  is not None else [],
+        "all":     [x for x in (centre, top, bottom) if x is not None]
+        }
+
 
 # =============================================================================
 # %%% Provenance

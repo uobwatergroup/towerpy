@@ -1495,26 +1495,35 @@ class PPIExplorer:
         # =============================================================================
         # Range coordinate (km)
         rng_km = self._rng_km    
-        # =============================================================================
         # Clear beam-height axis
-        # =============================================================================
         axb = self._ax_beam
         axb.cla()
         # Plot beam centre / top / bottom for selected azimuth q
-        axb.plot(rng_km, self.beam_center.isel(azimuth=q), ls=":")
-        if self.beam_top is not None and self.beam_bottom is not None:
-            axb.plot(rng_km, self.beam_top.isel(azimuth=q),    c="k")
-            axb.plot(rng_km, self.beam_bottom.isel(azimuth=q), c="k")
+        # If beam_center is missing, leave the panel empty
+        if self.beam_center is not None:
+            # Plot centre
+            axb.plot(rng_km, self.beam_center.isel(azimuth=q), ls=":")
+            # Plot top/bottom if available
+            if self.beam_top is not None and self.beam_bottom is not None:
+                axb.plot(rng_km, self.beam_top.isel(azimuth=q), c="k")
+                axb.plot(rng_km, self.beam_bottom.isel(azimuth=q), c="k")
+            # Labels
+            axb.set_ylabel(
+                f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
+                f' [{self.beam_center.attrs.get("units", "km")}]')
+            # Highlight selected gate
+            if 0 <= r < self.beam_center.sizes["range"]:
+                axb.axhline(self.beam_center.values[q, r], alpha=0.5,
+                            c="tab:red")
+                axb.axvline(rng_km[r], alpha=0.5, c="tab:red")
+        else:
+            # Beam-height missing, empty panel
+            axb.set_ylabel("beam height")
+            axb.text(0.5, 0.5, "no beam-height data", ha="center", va="center",
+                     transform=axb.transAxes, alpha=0.6)
         axb.set_xlabel(
             f"{self.xrds.range.attrs.get('standard_name', 'range')} [km]")
-        axb.set_ylabel(
-            f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
-            f' [{self.beam_center.attrs.get("units", "km")}]')
         axb.grid()
-        # Highlight selected gate
-        if 0 <= r < self.beam_center.sizes["range"]:
-            axb.axhline(self.beam_center.values[q, r], alpha=0.5, c="tab:red")
-            axb.axvline(rng_km[r], alpha=0.5, c="tab:red")
         # =============================================================================
         # Update radial profile panels
         # =============================================================================
@@ -1548,6 +1557,7 @@ class PPIExplorer:
                 ax.axhline(0, alpha=0.2, c="gray")
             if vname.lower().startswith("rho"):
                 ax.axhline(1.0, alpha=0.2, c="thistle")
+            ax.grid()
         # Label last radial axis
         list(self._ax_radials.values())[-1].set_xlabel(
             f"{self.xrds.range.attrs.get('standard_name', 'range')} [km]")
@@ -1669,6 +1679,7 @@ class PPIExplorer:
                                     fig_size=None, fig_title='', 
                                     polarcoord_names=polarcoord_names,
                                     rectcoord_names=rectcoord_names,
+                                    beamhcoord_names=beamhcoord_names,
                                     polarplot=self.polarplot, 
                                     add_colorbar=False, **ppi_kwargs)
         # =============================================================================
@@ -1733,6 +1744,9 @@ class PPIExplorer:
             ax_beam.set_ylabel(
                 f'{self.beam_center.attrs.get("short_name", "beam_height").lower()}'
                 f' [{self.beam_center.attrs.get("units", "km")}]')
+        else:
+            warnings.warn(f"Beam-height coordinate '{beamc_name}' not found; "
+                          "beam-height panel will be empty.")
         # =============================================================================
         # Radial-profile axes (right column)
         # =============================================================================

@@ -14,16 +14,10 @@ from ..base import TowerpyError
 from ..datavis import rad_display
 from ..io import modeltp as mdtp
 from ..ml.mlyr import MeltingLayer, attach_melting_layer
-from ..utils.radutilities import (
-    add_correction_step,
-    fillnan1d,
-    find_nearest,
-    interp_nan,
-    maf_radial,
-    record_provenance,
-    rolling_window,
-    safe_assign_variable,
-)
+from ..utils.radutilities import (add_correction_step, fillnan1d, find_nearest,
+                                  interp_nan, maf_radial, record_provenance,
+                                  rolling_window, safe_assign_variable,
+                                  _resolve_beam_height_names)
 from ..utils.unit_conversion import convert
 
 
@@ -1103,6 +1097,7 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
     # =============================================================================
     # Convert the ML height into a 2‑D grid
     ds = dsattvars.copy(deep=False)
+    #TODO: maybe better if exists beforehand?
     ds = attach_melting_layer(ds, mlyr_top=mlyr_top, mlyr_bottom=mlyr_btm,
                               mlyr_thickness=mlyr_thk, units="km",
                               source="user-defined", method="zh_attc",
@@ -1589,7 +1584,9 @@ def _attc_zdr_1d(zh, zdr, rhohv, phidp, pia, ah, alpha, ml_bottom_gate, cclass,
 
 def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                                attc_method="BRI", mlyr_top=5., mlyr_thk=0.75,
-                               mlyr_btm=None, coeff_beta=[0.008, 0.1, 0.04],
+                               mlyr_btm=None,
+                               beamhcoord_names={"z":"beamc_height"},
+                               coeff_beta=[0.008, 0.1, 0.04],
                                beta_alpha_ratio=0.265, rhv_thld=0.985,
                                mov_avrgf_len=9, minbins=10, p2avrf=5,
                                zh_zdr_model="linear", rparams=None,
@@ -1627,6 +1624,9 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
         Heights of the melting layer boundaries, in km. Only gates below the
         melting layer bottom (i.e. the rain region below the melting layer)
         are included in the computation.
+    beamhcoord_names : dict, optional
+        Mapping specifying the beam-height coordinate names in the dataset.
+        Defaults to ``{"z": "beamc_height"}.
     coeff_beta : list or tuple, default [0.008, 0.1, 0.04]
         [Min, max, fixed value] of coeff β. These bounds are used to find the
         optimum value of β. Default values are derived for C‑band.
@@ -1756,7 +1756,9 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
     ml_bottom_km = ds.MLYRTOP - ds.MLYRTHK
     ml_bottom_m = convert(ml_bottom_km, "m")
     mlb_grid = ml_bottom_m.broadcast_like(ds[names["ZH"]])
-    beam_height = ds.beamc_height  # dims: (azimuth, range)
+    cone_map = _resolve_beam_height_names(ds, beamhcoord_names)
+    centre_beams = cone_map.get("centre", [])
+    beam_height = centre_beams[0] if centre_beams else None
     # Correct per-ray ML bottom gate index
     ml_bottom_gate = np.abs(beam_height - mlb_grid).argmin(dim=names["rng"])
     # 4. Build ZH–ZDR model params dict
