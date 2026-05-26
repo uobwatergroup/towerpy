@@ -243,16 +243,21 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
 # %% xarray implementation
 # =============================================================================
 
-def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
+def ppi_rectgeoref(sweep, radar_altitude=None, bh_geom=True, beamwidth=None):
     r"""
     Add georeferenced Cartesian coordinates and beam‑height fields for a
     Plan Position Indicator (PPI) radar sweep.
-    
+
     Parameters
     ----------
     sweep : xarray.Dataset
         Input dataset containing at least ``azimuth``, ``elevation`` and
         ``range`` coordinates defined on a ``(azimuth, range)`` grid.
+    radar_altitude : float, optional
+        Altitude of the radar above mean sea level (km). If provided, the
+        beam‑centre, beam‑top, and beam‑bottom heights are offset by this
+        value, yielding heights AMSL. If omitted, heights are returned
+        relative to the radar (0 km at the radar location).
     bh_geom : bool, optional
         If ``True`` (default), compute full beam‑height geometry including
         beam‑top and beam‑bottom heights. If ``False``, only the beam‑centre
@@ -261,7 +266,7 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
         Antenna beamwidth, in degrees. If not provided, the function attempts
         to retrieve it from ``sweep`` using known metadata conventions.
         Required only if ``bh_geom=True``.
-    
+
     Returns
     -------
     sweep : xarray.Dataset
@@ -308,7 +313,7 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
             "grid_recty": (("azimuth", "range"), geogrid["grid_recty"]),
             "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
             })
-    # Add metadata
+    # Add metadata for Cartesian coordinates
     sweep["grid_rectx"].attrs.update({
         "units": "km",
         "long_name": "radar-centric Cartesian x-coordinate",
@@ -329,6 +334,7 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
         "coordinate_system": "radar_cartesian",
         "reference_point": "radar_location",
         "axis": "Y"})
+    # Base metadata for beam heights (radar-relative)
     sweep["beamc_height"].attrs.update({
         "units": "km",
         "long_name": "beam centre height",
@@ -339,6 +345,7 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
         "axis": "Z",
         "coordinate_system": "radar_vertical",
         "reference_point": "radar_location",
+        "height_reference": "radar",
         })
     if bh_geom:
         sweep["beamb_height"].attrs.update({
@@ -352,6 +359,7 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
             "axis": "Z",
             "coordinate_system": "radar_vertical",
             "reference_point": "radar_location",
+            "height_reference": "radar",
         })
         sweep["beamt_height"].attrs.update({
             "units": "km",
@@ -364,6 +372,20 @@ def ppi_rectgeoref(sweep, bh_geom=True, beamwidth=None):
             "axis": "Z",
             "coordinate_system": "radar_vertical",
             "reference_point": "radar_location",
+            "height_reference": "radar",
         })
-
+    # Apply altitude offset
+    if radar_altitude is not None:
+        sweep["beamc_height"] = sweep["beamc_height"] + radar_altitude
+        if bh_geom:
+            sweep["beamb_height"] = sweep["beamb_height"] + radar_altitude
+            sweep["beamt_height"] = sweep["beamt_height"] + radar_altitude
+        # Update metadata for AMSL reference
+        for name in ["beamc_height", "beamb_height", "beamt_height"]:
+            if name in sweep:
+                sweep[name].attrs["reference_point"] = "mean_sea_level"
+                sweep[name].attrs["height_reference"] = "amsl"
+                sweep[name].attrs["description"] += (
+                    " Height is referenced to mean sea level"
+                    " (radar altitude added).")
     return sweep

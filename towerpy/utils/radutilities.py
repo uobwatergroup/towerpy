@@ -965,11 +965,13 @@ def resolve_rect_coords(ds, coord_names=None, zcoord=False):
     (xname, yname) or (xname, yname, zname)
     """
     # 1. User override
+    default_z = "beamc_height"
     if coord_names:
         xname = coord_names.get("x")
         yname = coord_names.get("y")
         if zcoord:
-            zname = coord_names.get("z", "beamc_height")
+            # zname = coord_names.get("z", "beamc_height")
+            zname = coord_names.get("z", default_z)
             if xname in ds.coords and yname in ds.coords and zname in ds.coords:
                 return xname, yname, zname
         else:
@@ -986,7 +988,8 @@ def resolve_rect_coords(ds, coord_names=None, zcoord=False):
             break
     # 3. Resolve z
     if zcoord:
-        zname = coord_names.get("z", "beamc_height")
+        # zname = coord_names.get("z", "beamc_height")
+        zname = coord_names.get("z", default_z) if coord_names else default_z
         if zname in ds.coords:
             return xname, yname, zname
         raise ValueError(
@@ -1043,6 +1046,50 @@ def _extract_timestamp_from_attrs(attrs):
         best.astype("datetime64[s]").astype(int)
     )
     return py_dt
+
+
+def detect_radar_altitude(sweep, altitude=None):
+    """
+    Attempt to auto-detect radar altitude (km) from sweep metadata.
+    Returns None if no altitude information is found.
+    """
+    # 0. user-provided
+    if altitude is not None:
+        return float(altitude)
+    # 1. CF-convention coordinate
+    if "altitude" in sweep.coords:
+        alt = sweep.coords["altitude"]
+        try:
+            return float(convert(alt, "km"))
+        except Exception:
+            pass
+    # 2. Common attribute names
+    attr_candidates = ["altitude", "radar_altitude", "site_altitude", "alt",
+                       "instrument_altitude", "station_altitude", "height"]
+    for key in attr_candidates:
+        if key in sweep.attrs:
+            try:
+                return float(convert(sweep.attrs[key], "km"))
+            except Exception:
+                pass
+    # 3. ODIM-style nested attributes
+    where = sweep.attrs.get("where", {})
+    if isinstance(where, dict):
+        for key in attr_candidates:
+            if key in where:
+                try:
+                    return float(convert(where[key], "km"))
+                except Exception:
+                    pass
+    # 4. Scalar data variables
+    for key in attr_candidates:
+        if key in sweep.data_vars and sweep[key].size == 1:
+            try:
+                return float(convert(sweep[key], "km"))
+            except Exception:
+                pass
+    # Nothing found
+    return None
 
 
 def resolve_attr(ds, key, default=None, return_all=False):

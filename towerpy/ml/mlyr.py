@@ -700,10 +700,10 @@ def _normalise_ml_input(x, ds, azimuth_dim="azimuth"):
 
 
 def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
-                         mlyr_thickness=None, source="user-defined",
-                         method=None, overwrite=False, delimit_mlyrinppi=False,
-                         classid=None, beam_cone="centre",
-                         beamhcoord_names=None):
+                         mlyr_thickness=None, beamhcoord_names=None,
+                         classid=None, source="user-defined", method=None,
+                         overwrite=False, delimit_mlyrinppi=False,
+                         beam_cone="centre"):
     """
     Attach melting-layer metadata to a radar sweep dataset.
 
@@ -779,18 +779,22 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     if mlyr_th_arr is None:
         mlyr_th_arr = mlyr_top_arr - mlyr_bottom_arr
     # Validate consistency
-    if not np.allclose(mlyr_bottom_arr, mlyr_top_arr - mlyr_th_arr, equal_nan=True):
-        raise ValueError("Inconsistent ML: mlyr_bottom != mlyr_top - mlyr_thickness")
-    if not np.allclose(mlyr_th_arr, mlyr_top_arr - mlyr_bottom_arr, equal_nan=True):
-        raise ValueError("Inconsistent ML: mlyr_thickness != mlyr_top - mlyr_bottom")
+    if not np.allclose(mlyr_bottom_arr, mlyr_top_arr - mlyr_th_arr,
+                       equal_nan=True):
+        raise ValueError("Inconsistent ML: mlyr_bottom != mlyr_top"
+                         " - mlyr_thickness")
+    if not np.allclose(mlyr_th_arr, mlyr_top_arr - mlyr_bottom_arr,
+                       equal_nan=True):
+        raise ValueError("Inconsistent ML: mlyr_thickness != mlyr_top - "
+                         "mlyr_bottom")
     # Convert to DataArrays
     mlyr_top_da = _to_da(mlyr_top_arr, ds, "mlyr_top", units=units)
     mlyr_bottom_da = _to_da(mlyr_bottom_arr, ds, "mlyr_bottom", units=units)
     mlyr_thickness_da = _to_da(mlyr_th_arr, ds, "mlyr_thickness", units=units)
     # Normalise ML DataArrays to canonical internal unit (km)
-    mlyr_top_da = convert(mlyr_top_da, "km")
-    mlyr_bottom_da = convert(mlyr_bottom_da, "km")
-    mlyr_thickness_da = convert(mlyr_thickness_da, "km")
+    # mlyr_top_da = convert(mlyr_top_da, "km")
+    # mlyr_bottom_da = convert(mlyr_bottom_da, "km")
+    # mlyr_thickness_da = convert(mlyr_thickness_da, "km")
     # Attach variables
     ds2 = ds.copy()
     ds2 = safe_assign_variable(ds2, "MLYRTOP", mlyr_top_da)
@@ -798,12 +802,16 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     ds2 = safe_assign_variable(ds2, "MLYRTHK", mlyr_thickness_da)
     # Optional: melting-layer delimitation in PPI
     if delimit_mlyrinppi:
+        regionID = {"rain": 1.0, "mlyr": 2.0, "solid_pcp": 3.0}
+        if classid is not None:
+            regionID.update(classid)
         classif = mlyr_ppidelimitation(ds2, mlyr_top=mlyr_top_da,
                                        mlyr_bottom=mlyr_bottom_da,
                                        mlyr_thickness=mlyr_thickness_da,
                                        beam_cone=beam_cone,
                                        beamhcoord_names=beamhcoord_names,
-                                       classid=classid)
+                                       classid=regionID)
+        classid = regionID
         # Attach each classification field
         ds2 = ds2.assign(classif)
     # Dataset-level provenance

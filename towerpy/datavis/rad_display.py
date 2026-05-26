@@ -3507,8 +3507,13 @@ def _addML2plot(ax, coord_sys, ds, mlyr_bnames=None, coord_names=None,
     if not centre_beams:
         return
     bh = centre_beams[0]   # DataArray already in km
-
-
+    # Normalise ML to km to match beam height
+    try:
+        mlyr_top = convert(mlyr_top, "km")
+        mlyr_bottom = convert(mlyr_bottom, "km")
+    except Exception:
+        # If conversion fails, fall back to raw values (but this is risky)
+        pass
     # Vectorised nearest-range lookup
     mlyr_top_idx = abs(bh - mlyr_top).argmin(dim="range")
     mlyr_bottom_idx = abs(bh - mlyr_bottom).argmin(dim="range")
@@ -3904,6 +3909,10 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
         Radar sweep dataset containing the variable to plot and the required
         coordinate fields. Must include azimuth/range for polar mode, or
         rectangular/projected coordinates for rect/cartopy modes.
+        Azimuth must be a 1‑D coordinate expressed in degrees unless
+        ``polarplot=True`` (radians). Range must be 1‑D and convertible
+        to metres or kilometres. Rectangular or projected coordinates
+        may be 1‑D or 2‑D but must broadcast with the data variable.
     var2plot : str or None, optional
         Name of the variable to display. If None, the function attempts to
         infer a suitable default from the dataset.
@@ -3919,6 +3928,10 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
         Names of rectangular coordinates for non‑Cartopy rect mode.
     projcoord_names : dict, default {'x': 'grid_osgbx', 'y': 'grid_osgby'}
         Names of projected coordinates for Cartopy mode.
+    beamhcoord_names : dict, default {'z': 'beamc_height'}
+        Name of the beam‑height coordinate used for melting‑layer overlays and
+        range‑to‑height lookup. Coordinates must be convertible to metres or
+        kilometres.
     cartopy_cfg : dict or None
         Configuration dictionary controlling Cartopy-based plotting. Keys
         provided here override the defaults returned by
@@ -3967,19 +3980,30 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     plot_axislabels : bool, default True
         Whether to label the axes.
     pixel_midp : bool, default False
-        If True, overlay pixel midpoints.
+        If True, overlays the geometric midpoints of grid cells using
+        the coordinate system implied by ``coord_sys``. Requires
+        rectangular or projected coordinates.
     range_rings : list or None
-        Multiple range rings to draw (in km).
+        Multiple range rings to draw. Values are interpreted in kilometres.
+        Range rings are drawn in both polar and rectangular modes; in Cartopy
+        mode they are projected using ``data_crs``.
     rd_maxrange : bool, default False
         If True, draw a circle marking the radar's maximum range.
     points2plot : array-like or None
-        Optional set of points to overlay on the PPI.
+        Optional set of points to overlay on the PPI. Expected shape is
+        ``(N, 2)`` for uncoloured points (x/y or lon/lat, depending on
+        ``coord_sys`` and Cartopy), or ``(N, 3)`` when a third column is
+        used as a scalar for colour‑mapping.
     ptsvar2plot : str or None
-        Variable used to colour the points in `points2plot`.
+        Name of the variable used to colour the points in ``points2plot``.
+        If ``points2plot`` has fewer than three columns, this argument is
+        ignored and points are plotted without scalar colouring.
     plot_mlyr : bool, default False
         If True, overlay melting-layer boundaries (top and bottom). This
         requires melting-layer metadata in the dataset or user-specified
-        boundary-variable names.
+        boundary-variable names. Melting‑layer variables must be 1‑D or 2‑D
+        fields aligned with the sweep geometry. Beam‑height coordinates must
+        be present and convertible to metres for the nearest‑range lookup.
     mlyr_bnames : dict or None
         Optional mapping specifying which dataset variables contain the melting
         layer boundaries, e.g.:
@@ -3997,7 +4021,15 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     mappable : matplotlib.cm.ScalarMappable
         The object associated with the colour‑mapped field.
     ax1 : matplotlib Axes
-        The axes on which the PPI is drawn.
+        The axes on which the PPI is drawn.    
+    When ``return_artists=True``, the function returns a
+    :class:`PPIArtist` container instead of ``(mappable, ax1)``.
+    This object exposes stable attributes for all created artists,
+    including: ``fig``, ``ax``, ``mappable``, ``colorbar``,
+    ``contours``, ``melting_layer``, ``range_rings``, ``points``,
+    ``pixel_midpoints``, ``max_range``, and the coordinate grids
+    used for plotting. Attribute names and structure are stable.
+
 
     Notes
     -----
