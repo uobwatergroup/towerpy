@@ -5,7 +5,7 @@ import xarray as xr
 import numpy as np
 from ..io import modeltp as mdtp
 from ..datavis import rad_display
-from ..utils.radutilities import get_attrval, safe_assign_variable
+from ..utils.radutilities import get_attrval, safe_replace_variable
 from ..utils.radutilities import record_provenance, apply_correction_chain
 from ..utils.unit_conversion import convert
 
@@ -312,7 +312,7 @@ def snr_classif(ds, inp_names=None, min_snr=0, rcst_dB=None, classid=None,
     ds_out2 = ds.copy()
     # Attach SNR outputs
     for key in ds_out:
-        ds_out2 = safe_assign_variable(ds_out2, key, ds_out[key])
+        ds_out2 = safe_replace_variable(ds_out2, key, ds_out[key])
     corrected_vars = []
     for var in vars_to_correct:
         # Determine output name
@@ -336,7 +336,7 @@ def snr_classif(ds, inp_names=None, min_snr=0, rcst_dB=None, classid=None,
         old_attrs = ds_out2[out_var].attrs.copy()
         new_attrs = sweep_vars_attrs_f.get(out_var, {})
         merged = {**old_attrs, **new_attrs}
-        ds_out2 = safe_assign_variable(ds_out2, out_var, ds_out2[out_var],
+        ds_out2 = safe_replace_variable(ds_out2, out_var, ds_out2[out_var],
                                        new_attrs=merged)
         corrected_vars.append(out_var)
     outputs.extend(corrected_vars)

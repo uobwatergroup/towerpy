@@ -12,7 +12,7 @@ import numpy.ctypeslib as npct
 from ..io import modeltp as mdtp
 from ..datavis import rad_display
 # from ..base import TowerpyError
-from ..utils.radutilities import get_attrval, safe_assign_variable
+from ..utils.radutilities import get_attrval, safe_replace_variable
 from ..utils.radutilities import record_provenance, apply_correction_chain
 from ..utils.unit_conversion import convert
 
@@ -494,7 +494,7 @@ def lsinterference_filter(ds, inp_names=None, rhv_min=0.3, classid=None,
         raise KeyError(f"Variables not found in dataset: {missing}")
     ds_out2 = ds.copy()
     # Attach classification output
-    ds_out2 = safe_assign_variable(ds_out2, "CL_CLASS", ds_out["CL_CLASS"])
+    ds_out2 = safe_replace_variable(ds_out2, "CL_CLASS", ds_out["CL_CLASS"])
     corrected_vars = []
     # Mask: keep precipitation, mask noise + clutter
     mask_lsf = (cl_da != echoesID["pcpn"]).astype(bool)
@@ -519,7 +519,7 @@ def lsinterference_filter(ds, inp_names=None, rhv_min=0.3, classid=None,
         old_attrs = ds_out2[out_var].attrs.copy()
         new_attrs = sweep_vars_attrs_f.get(out_var, {})
         merged = {**old_attrs, **new_attrs}
-        ds_out2 = safe_assign_variable(ds_out2, out_var, ds_out2[out_var],
+        ds_out2 = safe_replace_variable(ds_out2, out_var, ds_out2[out_var],
                                        new_attrs=merged)
         corrected_vars.append(out_var)
     # Redcord provenance
@@ -795,7 +795,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     coords = {names["azi"]: ds[names["azi"]], names["rng"]: ds[names["rng"]]}  
     # Attach classification
     ds_out = ds.copy()
-    ds_out = safe_assign_variable(
+    ds_out = safe_replace_variable(
         ds_out, "CL_CLASS",
         xr.DataArray(clc, dims=dims, coords=coords,
                      attrs=sweep_vars_attrs_f.get("CL_CLASS", {})))
@@ -804,7 +804,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     # Attach clutter map only if it's a real variable, not dummy
     if not CM.attrs.get("dummy", False):
         # Build DataArray with attrs explicitly
-        ds_out = safe_assign_variable(
+        ds_out = safe_replace_variable(
             ds_out, "CMAP",
             xr.DataArray(CM.values, dims=CM.dims, coords=CM.coords,
                          attrs=sweep_vars_attrs_f.get("CMAP", {})))
@@ -829,9 +829,9 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         raise KeyError(f"Variables not found in dataset: {missing}")
     ds_out2 = ds.copy()
     # Attach classification output
-    ds_out2 = safe_assign_variable(ds_out2, "CL_CLASS", ds_out["CL_CLASS"])
+    ds_out2 = safe_replace_variable(ds_out2, "CL_CLASS", ds_out["CL_CLASS"])
     if "CMAP" in ds_out:
-        ds_out2 = safe_assign_variable(ds_out2, "CMAP", ds_out["CMAP"])
+        ds_out2 = safe_replace_variable(ds_out2, "CMAP", ds_out["CMAP"])
     corrected_vars = []
     # Mask: keep precipitation, mask noise + clutter
     mask_cl = (clc != echoesID["pcpn"]).astype(bool)
@@ -856,7 +856,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         old_attrs = ds_out2[out_var].attrs.copy()
         new_attrs = sweep_vars_attrs_f.get(out_var, {})
         merged = {**old_attrs, **new_attrs}
-        ds_out2 = safe_assign_variable(ds_out2, out_var, ds_out2[out_var],
+        ds_out2 = safe_replace_variable(ds_out2, out_var, ds_out2[out_var],
                                        new_attrs=merged)
         corrected_vars.append(out_var)
     # Provenance

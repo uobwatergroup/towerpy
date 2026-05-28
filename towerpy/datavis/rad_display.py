@@ -4764,6 +4764,7 @@ def plot_cone_coverage_xr(xrds, var2plot=None, vars_bounds=None, unorm=None,
                      f"{meta['swp_mode']} [{meta['elev_str']}]\n"
                      f"Cone coverage: {var_label}{unit_str}")
         ax.set_title(title, fontsize=fsizes["fsz_pt"])
+    ax.set_aspect('equal')
     plt.tight_layout()
     # Return artists
     if return_artists:

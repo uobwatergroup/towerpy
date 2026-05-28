@@ -13,7 +13,7 @@ from ..ml.mlyr import (_normalise_ml_input, attach_melting_layer,
 from ..utils.radutilities import (add_correction_step, despike_isolated,
                                   fill_both, find_nearest, find_nearest_index,
                                   record_provenance, rolling_std_xr,
-                                  rolling_window, safe_assign_variable,
+                                  rolling_window, safe_replace_variable,
                                   std_mask_isolated, std_mask_threshold)
 
 
@@ -1113,7 +1113,7 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
             outputs=[out_var],
             mode="overwrite" if replace_vars else "preserve",
             module_provenance="towerpy.calib.calib_phidp.phidp_qc_processing")
-        ds_out = safe_assign_variable(ds_out, out_var, phidp_maf,
+        ds_out = safe_replace_variable(ds_out, out_var, phidp_maf,
                                       new_attrs=merged_attrs)
         # If explicit rename requested, rename internal variable -> out_var
         if isinstance(mask, dict) and var != out_var:

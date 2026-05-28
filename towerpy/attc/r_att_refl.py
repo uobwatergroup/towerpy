@@ -8,7 +8,7 @@ import xarray as xr
 from ..datavis import rad_display as rdd
 from ..utils import unit_conversion as tpuc
 from ..utils.radutilities import (apply_correction_chain, record_provenance,
-                                  safe_assign_variable, _maybe_json_encode)
+                                  safe_replace_variable, _maybe_json_encode)
 from ..utils.unit_conversion import x2xdb, xdb2x
 
 
@@ -779,7 +779,7 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
         da_diff = xr.DataArray(diff_arr, dims=(azi, rng),
                                coords={azi: ds[azi], rng: ds[rng]},
                                attrs=attrs)
-        ds_out = safe_assign_variable(ds_out, diff_out_name, da_diff)
+        ds_out = safe_replace_variable(ds_out, diff_out_name, da_diff)
     # 6. Optional az smoothing
     if apply_maf and derive_from == "spcfatt":
         pcp_region = ds.get(pcp_name, None)
@@ -819,7 +819,7 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
             "detect_fval": bool(detect_fval)}
         attrs["correction_params"] = _maybe_json_encode(corr_params)
         z_maf = z_maf.assign_attrs(attrs)
-        ds_out = safe_assign_variable(ds_out, maf_name, z_maf)
+        ds_out = safe_replace_variable(ds_out, maf_name, z_maf)
         # MAF DIFF (never overwrites)
         parent_z = ds[z_name]
         ratio = xdb2x(parent_z) / xdb2x(z_maf)
@@ -839,7 +839,7 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
         da_diff = xr.DataArray(diff_final, dims=(azi, rng),
                                coords={azi: ds[azi], rng: ds[rng]},
                                attrs=attrs)
-        ds_out = safe_assign_variable(ds_out, maf_diff_name, da_diff)
+        ds_out = safe_replace_variable(ds_out, maf_diff_name, da_diff)
     # 7. Dataset-level provenance
     extra = {"step_description":(
         "Corrected reflectivity for partial beam blockage, radar "

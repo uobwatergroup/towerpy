@@ -14,7 +14,7 @@ from ..eclass.snr import signal2noiseratio
 from ..utils.radutilities import (
     apply_correction_chain,
     record_provenance,
-    safe_assign_variable,
+    safe_replace_variable,
     xr_hist2d,
 )
 from ..utils.unit_conversion import convert
@@ -382,7 +382,7 @@ def rhohv_noisecorrection(ds, inp_names=None, rhohv_theo=(0.9, 1.0),
         old_attrs = ds_out[out_var].attrs.copy()
         new_attrs = sweep_vars_attrs_f.get(out_var, {})
         merged = {**old_attrs, **new_attrs}
-        ds_out = safe_assign_variable(ds_out, out_var, ds_out[out_var],
+        ds_out = safe_replace_variable(ds_out, out_var, ds_out[out_var],
                                       new_attrs=merged)
         corrected_vars.append(out_var)
     # Provenance

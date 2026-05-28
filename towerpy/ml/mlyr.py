@@ -11,7 +11,7 @@ from ..utils import radutilities as rut
 from ..datavis import rad_display
 from ..datavis import rad_interactive
 from ..io import modeltp as mdtp
-from ..utils.radutilities import (safe_assign_variable, find_nearest_index,
+from ..utils.radutilities import (safe_replace_variable, find_nearest_index,
                                   record_provenance, add_correction_step,
                                   _resolve_beam_height_names)
 from ..utils.unit_conversion import convert
@@ -797,9 +797,9 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     # mlyr_thickness_da = convert(mlyr_thickness_da, "km")
     # Attach variables
     ds2 = ds.copy()
-    ds2 = safe_assign_variable(ds2, "MLYRTOP", mlyr_top_da)
-    ds2 = safe_assign_variable(ds2, "MLYRBTM", mlyr_bottom_da)
-    ds2 = safe_assign_variable(ds2, "MLYRTHK", mlyr_thickness_da)
+    ds2 = safe_replace_variable(ds2, "MLYRTOP", mlyr_top_da)
+    ds2 = safe_replace_variable(ds2, "MLYRBTM", mlyr_bottom_da)
+    ds2 = safe_replace_variable(ds2, "MLYRTHK", mlyr_thickness_da)
     # Optional: melting-layer delimitation in PPI
     if delimit_mlyrinppi:
         regionID = {"rain": 1.0, "mlyr": 2.0, "solid_pcp": 3.0}

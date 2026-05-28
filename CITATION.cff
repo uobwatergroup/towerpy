@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Sanchez-Rivas"
+  given-names: "Daniel"
+  orcid: "https://orcid.org/0000-0001-9356-6641"
+- family-names: "Rico-Ramirez"
+  given-names: "Miguel"
+  orcid: "https://orcid.org/0000-0002-8885-4582"
+title: "Towerpy"
+version: 2.0.0
+doi: 10.1016/j.envsoft.2023.105746
+date-released: 2023-03-08
+url: "https://doi.org/10.1016/j.envsoft.2023.105746"
+repository-code: "https://github.com/uobwatergroup/towerpy"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Sanchez-Rivas"
+    given-names: "Daniel"
+    orcid: "https://orcid.org/0000-0001-9356-6641"
+  - family-names: "Rico-Ramirez"
+    given-names: "Miguel"
+    orcid: "https://orcid.org/0000-0002-8885-4582"
+  doi: "10.1016/j.envsoft.2023.105746"
+  journal: "Environmental Modelling & Software"
+  month: 5
+  start: 1 # First page number
+  end: 20 # Last page number
+  title: "Towerpy: An open-source toolbox for processing polarimetric weather radar data"
+  issue: 105746
+  volume: 167
+  year: 2023

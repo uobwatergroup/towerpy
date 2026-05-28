@@ -16,7 +16,7 @@ from ..io import modeltp as mdtp
 from ..ml.mlyr import MeltingLayer
 from ..utils.radutilities import (add_correction_step, fillnan1d, find_nearest,
                                   interp_nan, maf_radial, record_provenance,
-                                  rolling_window, safe_assign_variable,
+                                  rolling_window, safe_replace_variable,
                                   _resolve_beam_height_names)
 from ..utils.unit_conversion import convert
 
@@ -1438,7 +1438,7 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
                           coords={names["azi"]: ds[names["azi"]],
                                   names["rng"]: ds[names["rng"]]},
                           attrs=attrs,)
-        ds_out = safe_assign_variable(ds_out, out_name, da)
+        ds_out = safe_replace_variable(ds_out, out_name, da)
         created_vars.append(out_name)
     # Dataset-level provenance
     extra = {"step_description": 
@@ -2068,7 +2068,7 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                           coords={names["azi"]: ds[names["azi"]],
                                   names["rng"]: ds[names["rng"]]},
                           attrs=attrs)
-        ds_out = safe_assign_variable(ds_out, out_name, da)
+        ds_out = safe_replace_variable(ds_out, out_name, da)
     # Dataset-level provenance
     extra = {"step_description": (
         "Corrected differential reflectivity (ZDR) for attenuation in "

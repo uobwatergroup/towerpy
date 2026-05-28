@@ -1313,7 +1313,7 @@ def _deep_update(base, updates):
     return base
 
 
-def safe_assign_variable(ds, name, da, *, new_attrs=None):
+def safe_replace_variable(ds, name, da, *, new_attrs=None):
     """
     Safely overwrite a variable in a Dataset while preserving all coordinate
     attributes and encodings.
@@ -1334,7 +1334,9 @@ def safe_assign_variable(ds, name, da, *, new_attrs=None):
     xarray.Dataset
         Dataset with variable replaced and coordinate attrs preserved.
     """
-
+    # if name not in ds:
+    #     raise KeyError(f"safe_replace_variable: '{name}' does not exist "
+    #                    "in dataset")
     # Snapshot coordinate attrs + encodings
     coord_attrs = {c: ds[c].attrs.copy() for c in ds.coords}
     coord_enc = {c: ds[c].encoding.copy() for c in ds.coords}
@@ -1473,15 +1475,15 @@ def apply_offset_ppi(ds, var2correct, offset, *, output_mode="preserve",
     ds_out = ds.copy()
 
     if output_mode == "overwrite":
-        ds_out = safe_assign_variable(ds_out, var2correct, corrected)
+        ds_out = safe_replace_variable(ds_out, var2correct, corrected)
         assigned_name = var2correct
 
     elif output_mode == "preserve":
-        ds_out = safe_assign_variable(ds_out, output_name, corrected)
+        ds_out = safe_replace_variable(ds_out, output_name, corrected)
         assigned_name = output_name
 
     elif output_mode == "rename":
-        ds_out = safe_assign_variable(ds_out, output_name, corrected)
+        ds_out = safe_replace_variable(ds_out, output_name, corrected)
         assigned_name = output_name
         if output_name != var2correct:
             ds_out = ds_out.drop_vars(var2correct)
@@ -1491,7 +1493,7 @@ def apply_offset_ppi(ds, var2correct, offset, *, output_mode="preserve",
     canonical = sweep_vars_attrs_f.get(assigned_name, {})
     merged = dict(old_attrs)
     merged.update(canonical)
-    ds_out = safe_assign_variable(ds_out, assigned_name, ds_out[assigned_name],
+    ds_out = safe_replace_variable(ds_out, assigned_name, ds_out[assigned_name],
                                   new_attrs=merged)
 
     # Dataset-level provenance
@@ -1803,7 +1805,7 @@ def apply_correction_chain(ds, varname, step, params, mask=None, suffix="_corr",
     corrected.attrs = {**ds[varname].attrs, **meta_update}
     # encoded = {k: _maybe_json_encode(v) for k, v in meta_update.items()}
     # corrected.attrs = {**ds[varname].attrs, **encoded}
-    ds = safe_assign_variable(ds, corrected_name, corrected)
+    ds = safe_replace_variable(ds, corrected_name, corrected)
     return ds
 
 
