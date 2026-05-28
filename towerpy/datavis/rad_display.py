@@ -4581,7 +4581,7 @@ def plot_cone_coverage_xr(xrds, var2plot=None, vars_bounds=None, unorm=None,
                           stride=(1, 8), shading_kw=None, return_artists=False,
                           rectcoord_names={"x": "grid_rectx",
                                            "y": "grid_recty",
-                                           'z': "beamc_height"},):
+                                           'z': "beamc_height"}):
     """
     Plot a 3‑D radar cone‑coverage volume from an xarray sweep dataset.
 
@@ -4676,7 +4676,7 @@ def plot_cone_coverage_xr(xrds, var2plot=None, vars_bounds=None, unorm=None,
         cb_ext=cb_ext, custom_rules=custom_rules)
     # Resolve rectangular coordinates (x, y, z)
     coord_namex, coord_namey, coord_namez = resolve_rect_coords(
-        xrds, rectcoord_names, zcoord=True)
+        xrds, coord_names=rectcoord_names, zcoord=True)
     # Extract coordinates
     X = xrds[coord_namex]
     Y = xrds[coord_namey]
@@ -4764,7 +4764,6 @@ def plot_cone_coverage_xr(xrds, var2plot=None, vars_bounds=None, unorm=None,
                      f"{meta['swp_mode']} [{meta['elev_str']}]\n"
                      f"Cone coverage: {var_label}{unit_str}")
         ax.set_title(title, fontsize=fsizes["fsz_pt"])
-    ax.set_aspect('equal')
     plt.tight_layout()
     # Return artists
     if return_artists:
