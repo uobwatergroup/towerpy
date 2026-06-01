@@ -2,6 +2,8 @@
 
 import copy
 import json
+import warnings
+
 import numpy as np
 from scipy.interpolate import interp1d
 import xarray as xr
@@ -632,8 +634,8 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
     copy_out_of_lims : bool, default True
         If ``True``, copy parent values for gates outside ``z_limits``.
     apply_maf : bool, default False
-        If ``True``, apply azimuth‑wise moving‑average smoothing to the
-        :math:`Z` field derived from :math:`A`.
+        Apply azimuth‑wise moving‑average smoothing to the :math:`Z` field
+        derived from :math:`A` (i.e. only when ``derive_from="spcfatt"``). 
     mov_avrgf_len : tuple, default (1, 5)
         Moving‑average window length ``(n_range, n_azimuth)``. The window
         must be of the form ``(1, m)``
@@ -641,10 +643,14 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
         Minimum fraction of valid differences required per ray when applying
         moving‑average smoothing.
     apply_rr_only : bool, default True
-        If ``True``, restrict smoothing to the precipitation region.
+        If True, restrict the MAF smoothing to the precipitation region
+        defined by the dataset’s ML_PCP_CLASS field. See Notes for details on
+        how the rain region is interpreted.
     detect_fval : bool, default True
-        If ``True``, begin correction after the first finite non‑zero
-        difference.
+        If True, begin applying the MAF correction only after the first
+        finite, non‑zero difference between the parent Z and the Z derived
+        from A along each ray. If False, smoothing is applied along the
+        entire ray wherever valid.
     merge_into_ds : bool, default True
         If True, merge corrected outputs into a full copy of the input dataset.
         If False, return a dataset containing only the corrected outputs.
@@ -680,14 +686,25 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
 
     Notes
     -----
-    * This function operates in native polar radar coordinates.
+    * This function operates in native polar radar coordinates. Classification
+      fields, in particular ML_PCP_CLASS, must be provided in this native
+      radar geometry, i.e. relative to the radar beam height rather than as
+      absolute AMSL/AGL heights.
+    * When ``apply_maf=True`` and ``apply_rr_only=True``, the azimuth-wise
+      smoothing uses the dataset’s ML_PCP_CLASS field (if present) to
+      restrict corrections to the rain region. The classification is
+      interpreted via its ``attrs["flags"]`` mapping (e.g.
+      ``flags["rain"]``), and a rain mask is constructed as
+      ``pcp_region == flags["rain"]``.
+    * If ML_PCP_CLASS is absent or does not provide a usable "rain" flag,
+      the MAF smoothing step falls back to using all valid reflectivity
+      gates, and ``apply_rr_only`` has no effect.
     * The empirical model follows [1]_ and uses the power‑law form:
         .. math::  A_{H/V} = aZ_{h/v}^b
         where
             - :math:`Z_{h/v} = 10^{0.1*Z_{H/V}}`
             - :math:`Z_{H/V}` in dBZ
             - :math:`A_{H/V}` in dB/km.
-
 
     References
     ----------
@@ -783,6 +800,20 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
     # 6. Optional az smoothing
     if apply_maf and derive_from == "spcfatt":
         pcp_region = ds.get(pcp_name, None)
+        # Warn if precipitation-region classification is missing or malformed
+        if apply_rr_only:
+            if pcp_region is None:
+                warnings.warn(
+                    "apply_maf=True and apply_rr_only=True, but ML_PCP_CLASS"
+                    " is missing from the dataset. Smoothing will be applied"
+                    " to all valid reflectivity gates.", UserWarning)
+            else:
+                flags = pcp_region.attrs.get("flags", {})
+                if "rain" not in flags:
+                    warnings.warn(
+                        "ML_PCP_CLASS is present but does not define a 'rain'"
+                        " flag in attrs['flags']. Smoothing will not be "
+                        "restricted to the rain region.", UserWarning)
         z_attc = ds[z_name]
         z_from_a = out_arr
         diffs = z_attc - z_from_a
@@ -873,6 +904,3 @@ def rel_a_z(ds, pol="H", derive_from="spcfatt", inp_names=None, rband="C",
                     "modify_output": modify_output},
         extra_attrs=extra, module_provenance="towerpy.attc.r_att_refl.rel_a_z")
     return ds_out
-
-
-

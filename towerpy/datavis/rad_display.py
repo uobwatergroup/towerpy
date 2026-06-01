@@ -3150,8 +3150,8 @@ def _resolve_var2plot(ds, var2plot):
     return list(ds.data_vars)[0]
 
 
-def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
-                ucmap=None, custom_rules=None):
+def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
+                cb_ext=None, force_all_ticks=False, custom_rules=None):
     """
     Generate plotting parameters for a given radar variable.
 
@@ -3171,13 +3171,17 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
         Normalisation overrides for colour‑mapping. Keys may be variable
         names or unit strings; values must be `matplotlib.colors.Normalize`
         or `BoundaryNorm` instances.
-    cb_ext : dict or None, optional
-        Colourbar extension overrides keyed by variable name or unit string.
-        Values must be one of {'neither', 'min', 'max', 'both'}.
     ucmap : dict, optional
         Colormap overrides for colour‑mapping. Keys may be variable names
         or unit strings; values are Matplotlib colormap names or objects.
         Example: {"dBZ": "viridis", "PHIDP": "twilight"}.
+    cb_ext : dict or None, optional
+        Colourbar extension overrides keyed by variable name or unit string.
+        Values must be one of {'neither', 'min', 'max', 'both'}.
+    force_all_ticks : bool, default False
+        If True, instruct downstream plotting functions to force all
+        normalisation boundaries to appear as ticks on the colourbar.
+        This bypasses automatic tick reduction in `_add_colorbar`.
     custom_rules : dict, optional
         Metadata-driven rules keyed by 'units', 'standard_name', or
         'short_name'. Values can be lists (bounds), arrays (boundaries), or
@@ -3294,11 +3298,6 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
         if units == "mm/h" and not (vars_bounds and (
                 varname in vars_bounds or _normalise_units("mm/h")
                 in vars_bounds)):
-            n = 13
-            arr = np.geomspace(1, 64, num=n)  # exact 1 -> 64 range
-            arr = np.concatenate(([0.1, 0.5], arr))  # drizzle resolution
-            # arr = np.array((0.1, 1, 2, 4, 8, 12, 16, 20, 24, 30, 36, 48, 56,
-            #                 64))
             arr = np.array([0.1, 0.5, 1., 1.5, 2., 3., 4., 6., 8., 12, 16.,
                             24, 32., 48, 64., 128])
             custom_bnd = arr
@@ -3306,11 +3305,13 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
         elif units == "mm" and not (vars_bounds and (
                 varname in vars_bounds or units in vars_bounds)):
             #TODO: decide final arr
-            arr = np.array([0.1, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64,
-                            96, 128, 256])
-            arr = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 75,
-                            100, 125, 150, 200))
+            # arr = np.array([0.1, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48,
+            #                 64, 96, 128, 256])
+            arr = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+                            75, 100, 125, 150, 200))
             # arr = np.array((0.1, 1, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200))
+            arr = np.array([0.1, 1, 5, 10, 20, 30, 40, 50, 62.5, 75, 87.5,
+                            100, 125, 150, 175, 200])
             bounds = [arr.min(), arr.max(), len(arr)]
             custom_bnd = arr
         else:
@@ -3369,14 +3370,8 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, cb_ext=None,
         ext_override = _lookup_params_override(cb_ext, varname, units)
         if ext_override is not None:
             ext = ext_override
-    force_all_ticks = False
+    force_all_ticks = force_all_ticks
     bnd = np.asarray(bnd)
-    #TODO: here i must consider check if norm
-    # if not unorm:
-    #     if "rhohv" in short.lower():
-    #         force_all_ticks = False
-    #     if "rain" in short.lower() or "rate" in short.lower():
-    #         force_all_ticks = False
     return PlotParams(range_spec=bounds, norm_boundaries=bnd, cmap=cmap,
                       extend=ext, norm=normp, ticklabels=ticklabels,
                       force_all_ticks=force_all_ticks)
@@ -3889,8 +3884,8 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
              beamhcoord_names={"z": "beamc_height"},
              cartopy_cfg=None, xlims=None, ylims=None, vars_bounds=None,
              unorm=None, ucmap=None, custom_rules=None, font_sizes='regular',
-             add_colorbar=False, cb_ext=None, cbticks=None, add_title=True,
-             fig_title=None, fig_size=None, fig=None, ax1=None,
+             add_colorbar=False, cb_ext=None, cbticks=None, cb_all_ticks=False,
+             add_title=True, fig_title=None, fig_size=None, fig=None, ax1=None,
              plot_grid=False, plot_axislabels=True, pixel_midp=False,
              range_rings=None, rd_maxrange=False, points2plot=None,
              ptsvar2plot=None, plot_mlyr=False, mlyr_bnames=None,
@@ -3964,6 +3959,10 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
         Whether to add a colourbar to the plot.
     cbticks : list or None
         Custom tick locations for the colourbar.
+    cb_all_ticks : bool, default False
+        If True, force all normalisation boundaries to appear as ticks on the
+        colourbar. This is forwarded to :func:`plot_params` as
+        ``force_all_ticks=True`` and overrides automatic tick reduction.
     add_title : bool, default True
         If True, applies a metadata‑based title to the axes. This title
         includes radar name, timestamp, sweep mode, elevation angle, and
@@ -4070,7 +4069,10 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     # szpnts = 25
     szpnts = None
     pltprms = plot_params(var2plot, xrds, vars_bounds=vars_bounds, ucmap=ucmap,
-                          unorm=unorm, cb_ext=cb_ext, custom_rules=custom_rules)
+                          unorm=unorm, cb_ext=cb_ext,
+                          force_all_ticks=cb_all_ticks,
+                          custom_rules=custom_rules,
+                          )
     # =============================================================================
     # Cartopy features
     # =============================================================================

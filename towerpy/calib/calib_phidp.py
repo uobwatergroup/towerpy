@@ -8,8 +8,7 @@ import xarray as xr
 
 from ..datavis import rad_display
 from ..io import modeltp as mdtp
-from ..ml.mlyr import (_normalise_ml_input, attach_melting_layer,
-                       mlyr_ppidelimitation)
+from ..ml.mlyr import (_resolve_melting_layer, mlyr_ppidelimitation)
 from ..utils.radutilities import (add_correction_step, despike_isolated,
                                   fill_both, find_nearest, find_nearest_index,
                                   record_provenance, rolling_std_xr,
@@ -627,7 +626,7 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
 
 
 def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
-                     minthr_pdp0=-np.inf, rhohv_min=0.9, dbz_min=5., dbz_max=60.,
+                     minthr_pdp0=-np.inf, rhohv_min=0.9, dbz_min=5, dbz_max=60,
                      range_dim="range", azimuth_dim="azimuth"):
     r"""
     Filter spurious values in :math:`\Phi_{DP}`.
@@ -708,7 +707,7 @@ def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
 def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
                               dbz_min=5., dbz_max=60., mov_avrgf_len=(1, 3),
                               thr_spdp=10, max_off=180, preset=None,
-                              preset_tol=5):
+                              preset_tol=5, hist_kwargs=None):
     r"""
     Estimate the initial differential phase offset (:math:`\Phi_{DP}(0)`) 
     from PPI scans.
@@ -727,11 +726,13 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         Mapping for variable/attribute names in the dataset. Defaults:
         ``{'azi': 'azimuth', 'rng': 'range', 'ZH': 'DBZH',
         'RHOHV': 'RHOHV', 'PHIDP': 'PHIDP'}``.
-    mode : {"median", "multiple"}, default "median"
+    mode : {"median", "multiple", "mode"}, default "median"
         Output mode:
-
-        - ``"median"`` - return a single scalar offset (median of all rays).
-        - ``"multiple"`` - return ray-wise offsets.
+    
+        - "median"   – return a single scalar offset (median of all rays).
+        - "multiple" – return ray-wise offsets.
+        - "mode"     – return a single scalar offset from an histogram of
+          ray-wise offsets.
     rhohv_min : float, default 0.9
         Minimum :math:`\rho_{HV}` threshold for retaining meteorological gates.
     dbz_min : float, default 5.
@@ -752,6 +753,9 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     preset_tol : float, default 5
         Maximum allowed difference (deg) between the preset and computed
         offsets before enforcing the preset value.
+    hist_kwargs : dict or None, optional
+        Additional keyword arguments passed to `numpy.histogram` when
+        `mode="mode"`. Defaults to ``{"bins": 72}`` if not provided.
 
     Returns
     -------
@@ -801,17 +805,34 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     if preset is not None:
         phidp0 = xr.where(np.abs(phidp0 - preset) > preset_tol, preset, phidp0)
     # 4. Output
+    out_name = "PHIDP_OFFSET"
+    hist_cfg = {"bins": 72} if hist_kwargs is None else hist_kwargs
     if mode == "median":
         out = phidp0.median(dim=azimuth_dim, skipna=True)
         out = xr.where(np.abs(out) > max_off, 0, out)
         if preset is not None:
             out = xr.where(np.abs(out - preset) > preset_tol, preset, out)
-        out_name = "PHIDP_OFFSET"
     elif mode == "multiple":
         out = phidp0
-        out_name = "PHIDP_OFFSET"
+    elif mode == "mode":
+        # Extract 1D numpy array of valid offsets
+        vals = phidp0.values
+        vals = vals[np.isfinite(vals)]
+        vals = vals[vals != 0]
+        if len(vals) == 0:
+            out = xr.DataArray(np.nan)
+        else:
+            hist, edges = np.histogram(vals, **hist_cfg)
+            mode_bin = np.argmax(hist)
+            mode_val = (edges[mode_bin] + edges[mode_bin + 1]) / 2
+            out = xr.DataArray(float(mode_val))
+            # Clip > max_off
+            out = xr.where(np.abs(out) > max_off, 0, out)
+            # Apply preset override
+            if preset is not None:
+                out = xr.where(np.abs(out - preset) > preset_tol, preset, out)
     else:
-        raise ValueError("mode must be 'median' or 'multiple'")
+        raise ValueError("mode must be 'median', 'multiple', or 'mode'")
     # 5. Build minimal output dataset
     coords = {name: coord for name, coord in ds.coords.items()
               if coord.dims == ()}
@@ -826,7 +847,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     params = {"mov_avrgf_len": mov_avrgf_len, "thr_spdp": thr_spdp,
               "rhohv_min": rhohv_min, "dbz_min": dbz_min, "dbz_max": dbz_max,
               "max_off": max_off, "preset": preset, "preset_tol": preset_tol,
-              "mode": mode}
+              "mode": mode, 'hist_cfg': hist_cfg}
     ds_out = record_provenance(
         ds_out, step="offsetdetection_ppi",
         inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]],
@@ -835,11 +856,44 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     return ds_out
 
 
+def _interp_1d_phidp(ray):
+    # ray is a 1D numpy array
+    if np.isnan(ray).all():
+        return ray
+    x = np.arange(ray.size, dtype=float)
+    mask = ~np.isnan(ray)
+    # If fewer than 2 valid points, nothing to interpolate
+    if mask.sum() < 2:
+        return ray
+    ray_out = ray.copy()
+    ray_out[~mask] = np.interp(x[~mask], x[mask], ray[mask])
+    return ray_out
+
+
+def _enforce_monotonic(ray, ml_mask):
+    ray = ray.copy()
+    ml_mask = ml_mask.astype(bool)
+    if not ml_mask.any():
+        return ray
+    idx = np.where(ml_mask)[0]
+    start, end = idx[0], idx[-1]
+    # extract ML segment and enforce monotonicity inside ML region
+    ml_seg = ray[start:end+1]
+    # fill NaNs inside ML segment using first valid value
+    valid = ~np.isnan(ml_seg)
+    if valid.sum() >= 1:
+        ml_seg[~valid] = ml_seg[valid][0]
+    # enforce non-decreasing monotonicity
+    ml_seg = np.maximum.accumulate(ml_seg)
+    ray[start:end+1] = ml_seg
+    return ray
+
+
 def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
-                        minthr_pdp0=-5, rhohv_min=0.90, dbz_min=5, dbz_max=50,
-                        phidp0_correction=False, mlyr_intp=False, mlyr_top=5.,
-                        mlyr_thk=0.75, mlyr_btm=None, mask=True,
-                        replace_vars=False):
+                        minthr_pdp0=-5, rhohv_min=0.90, dbz_min=5, dbz_max=60,
+                        phidp0_correction=False, mlyr_intp=False,
+                        mlyr_top=None, mlyr_thk=None, mlyr_btm=None, mask=True,
+                        mlyr_monotonic=False, replace_vars=False):
     r"""
     Apply quality-control processing to differential phase (:math:`\Phi_{DP}`).
 
@@ -1000,21 +1054,17 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     phidp_f = xr.where(valid_ray, phidp_f - phidp0, phidp_f)
     # Melting-layer filtering and interpolation
     if mlyr_intp:
-        # 1. Normalise ML inputs (scalar or per-azimuth arrays)
-        ml_top = _normalise_ml_input(mlyr_top, ds, azimuth_dim=azimuth_dim)
-        ml_bottom = _normalise_ml_input(mlyr_btm, ds, azimuth_dim=azimuth_dim)
-        ml_thick = _normalise_ml_input(mlyr_thk, ds, azimuth_dim=azimuth_dim)
-        # 2. Attach ML metadata to the dataset (MLYRTOP, MLYRBTM, MLYRTHK)
-        ds_ml = attach_melting_layer(ds, mlyr_top=ml_top, mlyr_bottom=ml_bottom,
-                                     mlyr_thickness=ml_thick, overwrite=True,
-                                     source="phidp_qc_processing",
-                                     method="user-specified")
+        ds_ml = ds.copy(deep=False)
+        # 1. Resolve ML geometry (canonical)
+        top_da, bottom_da, thk, src = _resolve_melting_layer(
+            ds, top=mlyr_top, bottom=mlyr_btm, thickness=mlyr_thk,
+            azi_dim=azimuth_dim, names={"MLYRTOP": "MLYRTOP", "MLYRBTM":
+                                        "MLYRBTM", "MLYRTHK": "MLYRTHK"})
         # 3. Compute ML classification (rain=1, ML=2, solid=3)
         ml_class = mlyr_ppidelimitation(
-            ds_ml, beam_cone="centre", mlyr_top=ml_top, mlyr_bottom=ml_bottom,
-            mlyr_thickness=ml_thick, azimuth_dim=azimuth_dim, range_dim=range_dim)
+            ds_ml, beam_cone="centre", mlyr_top=top_da, mlyr_bottom=bottom_da,
+            mlyr_thickness=thk, azimuth_dim=azimuth_dim, range_dim=range_dim)
         # 4. mlyr_ppidelimitation
-        # ml_region = ml_class  # (azimuth, range) DataArray named "PCP_REGION"
         if "ML_PCP_CLASS" in ml_class:
             ml_region = ml_class["ML_PCP_CLASS"]
         else:
@@ -1023,23 +1073,18 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         # 5. Mask PHIDP inside ML (region == 2)
         phidp_fml = phidp_f.where(ml_region != 2)
         # 6. Interpolate NaNs along range, ray by ray
-        def _interp_1d_phidp(ray):
-            # ray is a 1D numpy array
-            if np.isnan(ray).all():
-                return ray
-            x = np.arange(ray.size, dtype=float)
-            mask = ~np.isnan(ray)
-            # If fewer than 2 valid points, nothing to interpolate
-            if mask.sum() < 2:
-                return ray
-            ray_out = ray.copy()
-            ray_out[~mask] = np.interp(x[~mask], x[mask], ray[mask])
-            return ray_out
         phidp_fmli = xr.apply_ufunc(_interp_1d_phidp, phidp_fml,
                                     input_core_dims=[[range_dim]],
                                     output_core_dims=[[range_dim]],
                                     vectorize=True, dask="parallelized",
                                     output_dtypes=[phidp_f.dtype])
+        if mlyr_monotonic:
+            phidp_fmli = xr.apply_ufunc(_enforce_monotonic, phidp_fmli,
+                                        (ml_region == 2),
+                                        input_core_dims=[[range_dim], [range_dim]],
+                                        output_core_dims=[[range_dim]],
+                                        vectorize=True, dask="parallelized",
+                                        output_dtypes=[phidp_f.dtype])
         # 7. Replace ML region with interpolated values
         phidp_f = xr.where(ml_region == 2, phidp_fmli, phidp_f)
     # First moving-average stage

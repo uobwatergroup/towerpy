@@ -40,6 +40,30 @@ sweep_vars_attrs_clc = {
                  'flags': 'echoesID'},
     }
 
+sweep_vars_attrs_mlyr = {
+    "MLYRTOP": {
+        "standard_name": "mlyr_top",
+        "long_name": "melting-layer top height",
+        "short_name": "MLYRTOP",
+        "units": "km",
+        "description": "Height of the upper boundary of the melting layer",
+        },
+    "MLYRBTM": {
+        "standard_name": "mlyr_bottom",
+        "long_name": "melting-layer bottom height",
+        "short_name": "MLYRBTM",
+        "units": "km",
+        "description": "Height of the lower boundary of the melting layer",
+        },
+    "MLYRTHK": {
+        "standard_name": "mlyr_thickness",
+        "long_name": "melting-layer thickness",
+        "short_name": "MLYRTHK",
+        "units": "km",
+        "description": "Vertical thickness of the melting layer"
+        }
+    }
+
 sweep_vars_attrs_mlpcp = {
     "ML_PCP_CLASS": {'standard_name': 'mlpcp_delimitation',
                      'long_name': 'precipitation region delimitation based'
@@ -124,6 +148,7 @@ sweep_vars_attrs_f = (sweep_vars_attrs_xrd     |
                       sweep_vars_attrs_ukmo    |
                       sweep_vars_attrs_snr     |
                       sweep_vars_attrs_clc     |
+                      sweep_vars_attrs_mlyr    |
                       sweep_vars_attrs_mlpcp   |
                       sweep_vars_attrs_attc    |
                       sweep_vars_attrs_qpe     |

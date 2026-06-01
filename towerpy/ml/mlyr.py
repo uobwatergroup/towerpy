@@ -594,109 +594,104 @@ class MeltingLayer:
 # =============================================================================
 # %% xarray implementation
 # =============================================================================
-
-def _to_da(value, ds, name, units="km", azimuth_dim="azimuth"):
-    """
-    Convert scalar or array-like ML parameter into a DataArray.
-    """
-    # Determine dims
-    if np.isscalar(value):
-        da = xr.DataArray(float(value))
-    else:
-        value = np.asarray(value)
-        if value.shape != (ds.sizes[azimuth_dim],):
-            raise ValueError(
-                f"{name} must be scalar or have shape (azimuth,), "
-                f"got {value.shape}")
-        # da = xr.DataArray(value, dims=(azimuth_dim,), dtype=float)
-        da = xr.DataArray(value.astype(float), dims=(azimuth_dim,))
-    # Metadata dictionary
-    meta = {"units": units,
-            "long_name": {
-                "mlyr_top": "melting-layer top height",
-                "mlyr_bottom": "melting-layer bottom height",
-                "mlyr_thickness": "melting-layer thickness"}.get(name, name),
-            "standard_name": {"mlyr_top": "mlyr_top",
-                              "mlyr_bottom": "mlyr_bottom",
-                              "mlyr_thickness": "mlyr_thickness"}.get(name, name),
-            "short_name": {"mlyr_top": "MLYRTOP",
-                           "mlyr_bottom": "MLYRBTM",
-                           "mlyr_thickness": "MLYRTHK",}.get(name, name),
-        "description": {
-            "mlyr_top": "Height of the upper boundary of the melting layer",
-            "mlyr_bottom": "Height of the lower boundary of the melting layer",
-            "mlyr_thickness": "Vertical thickness of the melting layer"}.get(name, "")
-        }
-    da.attrs = meta
+def _wrap_ml_input(value, units):
+    """Wrap scalar/array into a DataArray with a units attribute."""
+    if value is None:
+        return None
+    da = xr.DataArray(value)
+    da.attrs["units"] = units
     return da
 
 
-def _ensure_azimuth_da(val, ds, name, azimuth_dim="azimuth"):
+def _resolve_melting_layer(ds, top=None, bottom=None, thickness=None, *,
+                           azi_dim="azimuth", assume_units="km", names=None):
     """
-    Normalise melting-layer inputs into a 1D DataArray over azimuth.
+    Melting-layer resolver for towerpy's functions.
 
-    Accepts:
-        - scalar
-        - NumPy array
-        - DataArray (scalar or 1D)
-    Returns:
-        xr.DataArray with dims ('azimuth',)
+    Accepts any two of (top, bottom, thickness), normalises units,
+    broadcasts scalars to 1-D over azimuth, infers the missing quantity,
+    validates consistency, and returns:
+
+        top_da_km      : 1-D DataArray (km)
+        bottom_da_km   : 1-D DataArray (km)
+        thickness_km   : float (km)
+        source         : {"explicit", "dataset"}
     """
-    # Case 1 — already a DataArray
-    if isinstance(val, xr.DataArray):
-        if val.ndim == 0:
-            # Broadcast scalar DA to azimuth
-            out = xr.full_like(ds.azimuth, float(val), dtype=float).rename(name)
-            out.attrs.update(val.attrs)
-            return out
-        if val.ndim == 1:
-            # Must be azimuth-aligned
-            if val.dims != (azimuth_dim,):
-                raise ValueError(
-                    f"{name} DataArray must have dims ('azimuth',), got {val.dims}"
-                )
-            return val.rename(name)
-
-        raise ValueError(
-            f"{name} DataArray must be scalar or 1D over azimuth, got dims {val.dims}"
-        )
-
-    # Case 2 — scalar
-    if np.isscalar(val) or isinstance(val, (np.generic,)):
-        return xr.DataArray(
-            np.full(ds.sizes[azimuth_dim], float(val)),
-            dims=(azimuth_dim,),
-            name=name,
-        )
-
-
-    # Case 3 — NumPy array
-    arr = np.asarray(val)
-    if arr.ndim == 1 and arr.size == ds.sizes[azimuth_dim]:
-        return xr.DataArray(arr, dims=(azimuth_dim,), name=name)
-
-    raise ValueError(
-        f"{name} must be scalar, a 1D array of length azimuth, "
-        f"or a DataArray over azimuth"
-    )
-
-
-def _normalise_ml_input(x, ds, azimuth_dim="azimuth"):
-    if x is None:
-        return None
-
-    arr = np.asarray(x)
-
-    # Scalar or 0‑D array -> convert to float
-    if arr.shape == ():
-        return float(arr)
-
-    # 1‑D per‑azimuth array
-    if arr.shape == (ds.sizes[azimuth_dim],):
-        return arr.astype(float)
-
-    raise ValueError(f"ML parameter must be scalar or shape (azimuth,),"
-                     f" got shape {arr.shape}")
+    nrays = ds.sizes[azi_dim]
+    # Helper: convert scalar/array/DA to 1-D in km
+    def _to_1d_km(x, name):
+        if x is None:
+            return None
+        # DataArray with units
+        if isinstance(x, xr.DataArray):
+            units = x.attrs.get("units", None)
+            if units is None:
+                raise ValueError(f"{name} DataArray must have a 'units' "
+                                 "attribute.")
+            arr = convert(x, "km").values
+        else:
+            # scalar or numpy array -> assume km
+            arr = np.asarray(x, dtype=float)
+        # scalar -> broadcast
+        if arr.ndim == 0:
+            da = xr.DataArray(np.full(nrays, float(arr)), dims=(azi_dim,))
+            da.attrs["units"] = "km"
+            return da
+        # 1-D -> validate
+        if arr.ndim == 1 and arr.size == nrays:
+            da = xr.DataArray(arr, dims=(azi_dim,))
+            da.attrs["units"] = "km"
+            return da
+        raise ValueError(f"{name} must be scalar or 1-D of length {nrays}.")
+    # Helper: thickness must be scalar
+    def _to_scalar_km(x, name):
+        if x is None:
+            return None
+        if isinstance(x, xr.DataArray):
+            if x.ndim != 0:
+                raise ValueError(f"{name} DataArray must be scalar.")
+            return float(convert(x, "km").values)
+        if np.ndim(x) != 0:
+            raise ValueError(f"{name} must be scalar.")
+        return float(x)
+    # 1. Explicit inputs
+    if any(v is not None for v in (top, bottom, thickness)):
+        provided = {"top": top is not None, "bottom": bottom is not None,
+                    "thickness": thickness is not None}
+        if sum(provided.values()) < 2:
+            raise ValueError("Provide at least two of: top, bottom,"
+                             " thickness.")
+        top_da = _to_1d_km(top, "mlyr_top") if top is not None else None
+        bottom_da = (_to_1d_km(bottom, "mlyr_bottom")
+                     if bottom is not None else None)
+        thk = (_to_scalar_km(thickness, "mlyr_thickness")
+               if thickness is not None else None)
+        # Infer missing
+        if top_da is None:
+            top_da = bottom_da + thk
+        if bottom_da is None:
+            bottom_da = top_da - thk
+        if thk is None:
+            diff = (top_da - bottom_da).values
+            if not np.allclose(diff, diff[0], equal_nan=False):
+                raise ValueError("Inconsistent ML thickness across rays.")
+            thk = float(diff[0])
+        return top_da, bottom_da, thk, "explicit"
+    # 2. Dataset metadata (MLYRTOP / MLYRBTM / MLYRTHK)
+    if names is None:
+        raise ValueError("names mapping required when resolving from dataset.")
+    top_key = names["MLYRTOP"]
+    btm_key = names["MLYRBTM"]
+    thk_key = names["MLYRTHK"]
+    if top_key in ds and thk_key in ds:
+        top_da = _to_1d_km(ds[top_key], "MLYRTOP")
+        thk = _to_scalar_km(ds[thk_key], "MLYRTHK")
+        if btm_key in ds:
+            bottom_da = _to_1d_km(ds[btm_key], "MLYRBTM")
+        else:
+            bottom_da = top_da - thk
+        return top_da, bottom_da, thk, "dataset"
+    raise ValueError("Missing ML metadata in dataset.")
 
 
 def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
@@ -715,8 +710,10 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     ----------
     ds : xarray.Dataset
         Input radar sweep dataset.
-    units : str, default: "km"
-        Units assigned to the melting-layer metadata variables.
+    units : {"km", "m"}, default: "km"
+        Units of the user-provided melting-layer inputs. These inputs are
+        internally converted to the kilometres before resolving the
+        melting-layer geometry.
     mlyr_top, mlyr_bottom, mlyr_thickness : float, array-like, or DataArray
         Melting-layer top height, bottom height, and thickness. Scalars,
         NumPy arrays, and 1D DataArrays over ``azimuth`` are accepted. Any two
@@ -745,8 +742,9 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     Returns
     -------
     xarray.Dataset
-        Dataset with attached melting-layer metadata and, if requested,
-        precipitation-region classification fields.
+        Dataset with attached melting-layer metadata (units in kilometres)
+        and, if requested, precipitation-region classification fields.
+
 
     Notes
     -----
@@ -754,8 +752,9 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
       The third is computed automatically and all three are validated for
       consistency.
     """
+    sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
     # Avoid overwriting
-    existing = {"mlyr_top", "mlyr_bottom", "mlyr_thickness"} & set(ds.data_vars)
+    existing = {"MLYRTOP", "MLYRBTM", "MLYRTHK"} & set(ds.data_vars)
     if existing and not overwrite:
         raise ValueError(f"Dataset already contains ML metadata: {existing}. "
                          "Use overwrite=True to replace.")
@@ -767,47 +766,41 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     if n_provided < 2:
         raise ValueError(
             "Provide at least two of: mlyr_top, mlyr_bottom, mlyr_thickness.")
-    # Convert to arrays
-    mlyr_top_arr = _normalise_ml_input(mlyr_top, ds)
-    mlyr_bottom_arr = _normalise_ml_input(mlyr_bottom, ds)
-    mlyr_th_arr = _normalise_ml_input(mlyr_thickness, ds)
-    # Compute missing parameter
-    if mlyr_top_arr is None:
-        mlyr_top_arr = mlyr_bottom_arr + mlyr_th_arr
-    if mlyr_bottom_arr is None:
-        mlyr_bottom_arr = mlyr_top_arr - mlyr_th_arr
-    if mlyr_th_arr is None:
-        mlyr_th_arr = mlyr_top_arr - mlyr_bottom_arr
-    # Validate consistency
-    if not np.allclose(mlyr_bottom_arr, mlyr_top_arr - mlyr_th_arr,
-                       equal_nan=True):
-        raise ValueError("Inconsistent ML: mlyr_bottom != mlyr_top"
-                         " - mlyr_thickness")
-    if not np.allclose(mlyr_th_arr, mlyr_top_arr - mlyr_bottom_arr,
-                       equal_nan=True):
-        raise ValueError("Inconsistent ML: mlyr_thickness != mlyr_top - "
-                         "mlyr_bottom")
-    # Convert to DataArrays
-    mlyr_top_da = _to_da(mlyr_top_arr, ds, "mlyr_top", units=units)
-    mlyr_bottom_da = _to_da(mlyr_bottom_arr, ds, "mlyr_bottom", units=units)
-    mlyr_thickness_da = _to_da(mlyr_th_arr, ds, "mlyr_thickness", units=units)
-    # Normalise ML DataArrays to canonical internal unit (km)
-    # mlyr_top_da = convert(mlyr_top_da, "km")
-    # mlyr_bottom_da = convert(mlyr_bottom_da, "km")
-    # mlyr_thickness_da = convert(mlyr_thickness_da, "km")
+    # Use helper to resolve the heights of the meltinglayer
+    ml_names = {"MLYRTOP": "MLYRTOP", "MLYRBTM": "MLYRBTM",
+                "MLYRTHK": "MLYRTHK"}
+    # Normalise user units using convert()    
+    top_in  = _wrap_ml_input(mlyr_top, units)
+    btm_in  = _wrap_ml_input(mlyr_bottom, units)
+    thk_in  = _wrap_ml_input(mlyr_thickness, units)
+    if top_in  is not None: top_in  = convert(top_in, "km")
+    if btm_in  is not None: btm_in  = convert(btm_in, "km")
+    if thk_in  is not None: thk_in  = convert(thk_in, "km")
+    top_val = None if top_in is None else top_in.values
+    btm_val = None if btm_in is None else btm_in.values
+    thk_val = None if thk_in is None else thk_in.values
+
+    top_da, bottom_da, thk, src = _resolve_melting_layer(
+        ds, top=top_val, bottom=btm_val, thickness=thk_val,
+        azi_dim="azimuth", names=ml_names)
+    top_da = top_da.assign_attrs(sweep_vars_attrs_f["MLYRTOP"])
+    bottom_da = bottom_da.assign_attrs(sweep_vars_attrs_f["MLYRBTM"])
+    # Thickness must be a scalar DataArray with metadata
+    thk_da = xr.DataArray(thk)
+    thk_da = thk_da.assign_attrs(sweep_vars_attrs_f["MLYRTHK"])
     # Attach variables
     ds2 = ds.copy()
-    ds2 = safe_replace_variable(ds2, "MLYRTOP", mlyr_top_da)
-    ds2 = safe_replace_variable(ds2, "MLYRBTM", mlyr_bottom_da)
-    ds2 = safe_replace_variable(ds2, "MLYRTHK", mlyr_thickness_da)
+    ds2 = safe_replace_variable(ds2, ml_names.get('MLYRTOP'), top_da)
+    ds2 = safe_replace_variable(ds2, ml_names.get('MLYRBTM'), bottom_da)
+    ds2 = safe_replace_variable(ds2, ml_names.get('MLYRTHK'), thk_da)
     # Optional: melting-layer delimitation in PPI
     if delimit_mlyrinppi:
         regionID = {"rain": 1.0, "mlyr": 2.0, "solid_pcp": 3.0}
         if classid is not None:
             regionID.update(classid)
-        classif = mlyr_ppidelimitation(ds2, mlyr_top=mlyr_top_da,
-                                       mlyr_bottom=mlyr_bottom_da,
-                                       mlyr_thickness=mlyr_thickness_da,
+        classif = mlyr_ppidelimitation(ds2, mlyr_top=top_da,
+                                       mlyr_bottom=bottom_da,
+                                       mlyr_thickness=thk_da,
                                        beam_cone=beam_cone,
                                        beamhcoord_names=beamhcoord_names,
                                        classid=regionID)
@@ -815,7 +808,7 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
         # Attach each classification field
         ds2 = ds2.assign(classif)
     # Dataset-level provenance
-    outputs = ["MLYRTOP", "MLYRBTM", "MLYRTHK"]
+    outputs = list(ml_names.values())
     # Figure out which ML inputs were explicitly provided
     ml_inputs = []
     if mlyr_top is not None:
@@ -834,7 +827,8 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
     #     classid = list(classif.flags())
     if method is None:
         method = 'towerpy.ml.mlyr.detect_mlyr_from_profiles'
-    params = {"units": units, "source": source, "method": method,
+    params = {"input_units": units, "source": source, "method": method,
+              "output_units": "km",
               "beam_cone": beam_cone, "classid": classid,
               "overwrite": bool(overwrite),
               "delimit_mlyrinppi": bool(delimit_mlyrinppi)}
@@ -923,33 +917,16 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
         # convert (will raise if incompatible)
         converted_beams.append(convert(bh, "km"))
     beams_to_use = converted_beams
-
-    # Normalise melting-layer inputs
-    mlyr_top_da = _ensure_azimuth_da(mlyr_top, ds, "mlyr_top")
-    mlyr_bottom_da = _ensure_azimuth_da(mlyr_bottom, ds, "mlyr_bottom")
-    mlyr_thickness_da = _ensure_azimuth_da(mlyr_thickness, ds, "mlyr_thickness")
-    # Ensure ML inputs have a units attribute before conversion.
-    # If caller didn't provide units, assume they are already in km.
-    for _da in (mlyr_top_da, mlyr_bottom_da, mlyr_thickness_da):
-        if _da is None:
-            continue
-        if "units" not in _da.attrs or not _da.attrs.get("units"):
-            _da.attrs["units"] = "km"
-    # Replace NaN bottom heights with top - thickness
-    mlyr_bottom_da = xr.where(xr.ufuncs.isnan(mlyr_bottom_da),
-                              mlyr_top_da - mlyr_thickness_da,
-                              mlyr_bottom_da)
     # Ensure ML inputs are in km for comparison with beam heights
-    mlyr_top_da = convert(mlyr_top_da, "km")
-    mlyr_bottom_da = convert(mlyr_bottom_da, "km")
-    mlyr_thickness_da = convert(mlyr_thickness_da, "km")
+    mlyr_top_da = convert(mlyr_top, "km")
+    mlyr_bottom_da = convert(mlyr_bottom, "km")
+    # mlyr_thickness_da = convert(mlyr_thickness, "km")
     # Precompute range indices for broadcasting
     range_idx = xr.DataArray(np.arange(ds.sizes[range_dim]), dims=(range_dim,))
     out = {}
     # Vectorised classification for each beam-height field
     for bh in beams_to_use:
         beam_name = bh.name
-        # bh = ds[beam_name]  # (azimuth, range)
         # Nearest-range indices for ML top and bottom
         mlyr_top_idx = abs(bh - mlyr_top_da).argmin(dim=range_dim)
         mlyr_bottom_idx = abs(bh - mlyr_bottom_da).argmin(dim=range_dim)

@@ -13,7 +13,7 @@ from scipy import optimize
 from ..base import TowerpyError
 from ..datavis import rad_display
 from ..io import modeltp as mdtp
-from ..ml.mlyr import MeltingLayer
+from ..ml.mlyr import MeltingLayer, _resolve_melting_layer
 from ..utils.radutilities import (add_correction_step, fillnan1d, find_nearest,
                                   interp_nan, maf_radial, record_provenance,
                                   rolling_window, safe_replace_variable,
@@ -921,145 +921,6 @@ class AttenuationCorrection:
 # %% xarray implementation
 # =============================================================================
 
-def _resolve_mlyr_for_attc(ds, names, mlyr_top=None, mlyr_thk=None,
-                           mlyr_btm=None):
-    """
-    Resolve and normalise melting‑layer inputs for attenuation correction.
-
-    This routine accepts any two of the three ML descriptors —
-    *top height*, *bottom height*, and *thickness* — and infers the
-    missing quantity. All inputs are interpreted as heights in
-    kilometres. Scalars and NumPy arrays are assumed to be in km,
-    whilst xarray.DataArray inputs must carry a valid 'units'
-    attribute. The function returns a fully normalised set of ML
-    fields suitable for downstream attenuation algorithms.
-
-    Rules
-    -----
-    • At least two of the following must be provided:
-        - mlyr_top      : height of the melting‑layer top (km)
-        - mlyr_btm      : height of the melting‑layer bottom (km)
-        - mlyr_thk      : melting‑layer thickness (km)
-
-    • mlyr_top and mlyr_btm may be either:
-        - a scalar (applied uniformly to all rays), or
-        - a 1‑D array/DataArray of length equal to the number of rays.
-
-    • mlyr_thk must be a scalar (float or 0‑D DataArray).
-
-    • If exactly two quantities are supplied, the third is inferred
-      using:
-          mlyr_top = mlyr_btm + mlyr_thk
-          mlyr_btm = mlyr_top - mlyr_thk
-          mlyr_thk = mlyr_top - mlyr_btm
-      Thickness inferred from top–bottom must be constant across rays.
-
-    • All returned DataArrays are expressed in kilometres and carry
-      a 'units' attribute set to 'km'.
-
-    Returns
-    -------
-    mlyr_top_da_km : xarray.DataArray
-        1‑D array of melting‑layer top heights (km), one value per ray.
-
-    mlyr_btm_da_km : xarray.DataArray
-        1‑D array of melting‑layer bottom heights (km), one value per ray.
-
-    mlyr_thk_scalar_km : float
-        Scalar melting‑layer thickness (km).
-
-    source : {"explicit", "dataset"}
-        Indicates whether the ML information originated from explicit
-        user input or from dataset metadata.
-    """
-    nrays = ds.sizes[names["azi"]]
-
-    def _to_1d_km(x, name):
-        # DataArray
-        if isinstance(x, xr.DataArray):
-            units = x.attrs.get("units", None)
-            if units is None:
-                raise ValueError(f"{name} DataArray must have a 'units' attribute.")
-            val = convert(x, "km").values
-        else:
-            # scalar or numpy array -> assume km
-            val = np.asarray(x, dtype=float)
-        # scalar -> broadcast
-        if val.ndim == 0:
-            da = xr.DataArray(np.full(nrays, float(val)), dims=(names["azi"],))
-            da.attrs["units"] = "km"
-            return da
-        # 1D -> validate length
-        if val.ndim == 1 and val.size == nrays:
-            da = xr.DataArray(val, dims=(names["azi"],))
-            da.attrs["units"] = "km"
-            return da
-        raise ValueError(f"{name} must be scalar or 1D of length nrays.")
-    # 1. Explicit inputs: any two of (top, bottom, thickness)
-    if any(v is not None for v in (mlyr_top, mlyr_thk, mlyr_btm)):
-        provided = {"top": mlyr_top is not None, "btm": mlyr_btm is not None,
-                    "thk": mlyr_thk is not None}
-        if sum(provided.values()) < 2:
-            raise ValueError("Explicit ML requires at least two of: mlyr_top,"
-                             " mlyr_thk, mlyr_btm.")
-        # Normalise top / bottom to 1D km (or None)
-        ml_top_da_km = (_to_1d_km(mlyr_top, "mlyr_top")
-                        if mlyr_top is not None else None)
-        ml_btm_da_km = (_to_1d_km(mlyr_btm, "mlyr_bottom")
-                        if mlyr_btm is not None else None)
-        # Normalise thickness to scalar km (or None)
-        if mlyr_thk is not None:
-            if isinstance(mlyr_thk, xr.DataArray):
-                if mlyr_thk.ndim != 0:
-                    raise ValueError("mlyr_thk DataArray must be scalar.")
-                ml_thk_scalar_km = float(convert(mlyr_thk, "km").values)
-            else:
-                if np.ndim(mlyr_thk) != 0:
-                    raise ValueError("mlyr_thk must be scalar.")
-                ml_thk_scalar_km = float(mlyr_thk)
-        else:
-            ml_thk_scalar_km = None
-        # Infer missing quantity
-        if ml_top_da_km is None:
-            # need bottom + thickness
-            if ml_btm_da_km is None or ml_thk_scalar_km is None:
-                raise ValueError("Cannot infer mlyr_top: need mlyr_btm and "
-                                 "mlyr_thk.")
-            ml_top_da_km = ml_btm_da_km + ml_thk_scalar_km
-        if ml_btm_da_km is None:
-            # need top + thickness
-            if ml_top_da_km is None or ml_thk_scalar_km is None:
-                raise ValueError("Cannot infer mlyr_btm: need mlyr_top and "
-                                 "mlyr_thk.")
-            ml_btm_da_km = ml_top_da_km - ml_thk_scalar_km
-        if ml_thk_scalar_km is None:
-            # derive from top - bottom; enforce const thickness across rays
-            diff = (ml_top_da_km - ml_btm_da_km).values
-            if diff.ndim != 1 or diff.size != nrays:
-                raise ValueError("Unexpected shape when inferring mlyr_thk.")
-            if not np.allclose(diff, diff[0], equal_nan=False):
-                raise ValueError("Inconsistent ML thickness across rays when "
-                                 "inferring mlyr_thk.")
-            ml_thk_scalar_km = float(diff[0])
-        return ml_top_da_km, ml_btm_da_km, ml_thk_scalar_km, "explicit"
-    # 2. Dataset inputs (MLYRTOP / MLYRTHK / MLYRBTM in ds)
-    top_key = names["MLYRTOP"]
-    thk_key = names["MLYRTHK"]
-    btm_key = names["MLYRBTM"]
-    if {top_key, thk_key}.issubset(ds.data_vars):
-        ml_top_da_km = _to_1d_km(ds[top_key], "MLYRTOP")
-        ml_thk_da = ds[thk_key]
-        if ml_thk_da.ndim != 0:
-            raise ValueError("Dataset MLYRTHK must be scalar.")
-        ml_thk_scalar_km = float(convert(ml_thk_da, "km").values)
-        if btm_key in ds:
-            ml_btm_da_km = _to_1d_km(ds[btm_key], "MLYRBTM")
-        else:
-            ml_btm_da_km = ml_top_da_km - ml_thk_scalar_km
-        return ml_top_da_km, ml_btm_da_km, ml_thk_scalar_km, "dataset"
-    raise ValueError("Missing ML metadata.")
-
-
 def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
                               attc_method='ABRI', mlyr_top=None, mlyr_thk=None,
                               mlyr_btm=None, phidp0=0., pdp_dmin=20,
@@ -1255,10 +1116,14 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
     # =============================================================================
     # Convert the ML height into a 2‑D grid
     ds = dsattvars.copy(deep=False)
-    mltop_km, mlbtm_km, mlthk_km, ml_src = _resolve_mlyr_for_attc(
-        ds, names, mlyr_top=mlyr_top, mlyr_btm=mlyr_btm, mlyr_thk=mlyr_thk)
+    top_da, bottom_da, thk_sc, ml_src = _resolve_melting_layer(
+        dsattvars, top=mlyr_top, bottom=mlyr_btm, thickness=mlyr_thk,
+        azi_dim=names["azi"],
+        names={"MLYRTOP": "MLYRTOP", "MLYRBTM": "MLYRBTM",
+               "MLYRTHK": "MLYRTHK"}
+        )
     # Convert km -> m
-    ml_top_m = convert(mltop_km, 'm')
+    ml_top_m = convert(top_da, 'm')
     # Expand to (azimuth, range)
     mlgrid = ml_top_m.broadcast_like(ds[names["ZH"]])
     # Extract raw contiguous numpy array for the C library
@@ -1309,7 +1174,7 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
     param_atc[12] = coeff_alpha[1]  # maxalpha
     param_atc[13] = niter  # number of iterations
     # param_atc[14] = mlyr_thk * 1000  # BB thickness in meters
-    param_atc[14] = mlthk_km * 1000  # BB thickness in meters
+    param_atc[14] = thk_sc * 1000  # BB thickness in meters
     if isinstance(phidp0, (int, float)):
         param_atc[15] = phidp0
     else:
@@ -1427,9 +1292,9 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
                     #     float(mlyr_btm.mean()) if mlyr_btm is not None else None),
                     # "mlyr_thickness_km (mean)": float(mlyr_thk.mean()),
                     "mlyr_source": ml_src,
-                    "mlyr_top_km (mean)": float(mltop_km.mean()),
-                    "mlyr_bottom_km (mean)": float(mlbtm_km.mean()),
-                    "mlyr_thickness_km (mean)": float(mlthk_km),
+                    "mlyr_top_km (mean)": float(top_da.mean()),
+                    "mlyr_bottom_km (mean)": float(bottom_da.mean()),
+                    "mlyr_thickness_km": float(thk_sc),
                     },
             outputs=[out_name],
             mode="overwrite" if replace_vars else "preserve",
@@ -1457,9 +1322,9 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
             "coeff_alpha": coeff_alpha,
             "niter": niter,
             "mlyr_source": ml_src,
-            "mlyr_top_km (mean)": float(mltop_km.mean()),
-            "mlyr_bottom_km (mean)": float(mlbtm_km.mean()),
-            "mlyr_thickness_km (mean)": float(mlthk_km),
+            "mlyr_top_km (mean)": float(top_da.mean()),
+            "mlyr_bottom_km (mean)": float(bottom_da.mean()),
+            "mlyr_thickness_km": float(thk_sc),
             "merge_into_ds": bool(merge_into_ds),
             "replace_vars": bool(replace_vars),
             "modify_output": modify_output}, extra_attrs=extra,
@@ -1657,7 +1522,7 @@ def _attc_zdr_1d(zh, zdr, rhohv, phidp, pia, ah, alpha, ml_bottom_gate, cclass,
         adp_loc = beta_alpha_ratio * ah
         beta_arr_loc = alpha * beta_alpha_ratio
         # # Above ML -> 0 for ADP and β
-        zdr_corr_loc[~below_ml] = zdr[~below_ml]
+        # zdr_corr_loc[~below_ml] = zdr[~below_ml]
         adp_loc[~below_ml] = 0.0
         beta_arr_loc[~below_ml] = 0.0
         # Non‑met -> NaN
@@ -1930,9 +1795,14 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
     # 3. Attach melting layer and compute bottom gate index per ray
     ds = dsattvars.copy(deep=False)
     # Resolve ML consistently with ZH attenuation
-    mltop_km, mlbtm_km, mlthk_km, ml_src = _resolve_mlyr_for_attc(
-        ds, names, mlyr_top=mlyr_top, mlyr_btm=mlyr_btm, mlyr_thk=mlyr_thk)
-    mlb_grid_km = mlbtm_km.broadcast_like(ds[names["ZH"]])
+    top_da, bottom_da, thk_sc, ml_src = _resolve_melting_layer(
+        dsattvars, top=mlyr_top, bottom=mlyr_btm, thickness=mlyr_thk,
+        azi_dim=names["azi"],
+        names={"MLYRTOP": "MLYRTOP", "MLYRBTM": "MLYRBTM",
+               "MLYRTHK": "MLYRTHK"})
+    # Convert bottom height to km
+    bottom_da = convert(bottom_da, "km")
+    mlb_grid_km = bottom_da.broadcast_like(ds[names["ZH"]])
     # Beam height mapping
     # cone_map = _resolve_beam_height_names(ds, beamhcoord_names)
     cone_map = _resolve_beam_height_names(
@@ -2056,9 +1926,9 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                     #     float(mlyr_btm.mean()) if mlyr_btm is not None else None),
                     # "mlyr_thickness_km (mean)": float(mlyr_thk.mean())
                     "mlyr_source": ml_src,
-                    "mlyr_top_km (mean)": float(mltop_km.mean()),
-                    "mlyr_bottom_km (mean)": float(mlbtm_km.mean()),
-                    "mlyr_thickness_km (mean)": float(mlthk_km),
+                    "mlyr_top_km (mean)": float(top_da.mean()),
+                    "mlyr_bottom_km (mean)": float(bottom_da.mean()),
+                    "mlyr_thickness_km (mean)": float(thk_sc),
                     },
             outputs=[out_name],
             mode="overwrite" if replace_vars else "preserve",
@@ -2088,9 +1958,9 @@ def attenuation_correction_zdr(dsattvars, cclass, inp_names=None,
                     "zh_zdr_model": zh_zdr_model,
                     "rparams": rparams,
                     "mlyr_source": ml_src,
-                    "mlyr_top_km (mean)": float(mltop_km.mean()),
-                    "mlyr_bottom_km (mean)": float(mlbtm_km.mean()),
-                    "mlyr_thickness_km (mean)": float(mlthk_km),
+                    "mlyr_top_km (mean)": float(top_da.mean()),
+                    "mlyr_bottom_km (mean)": float(bottom_da.mean()),
+                    "mlyr_thickness_km (mean)": float(thk_sc),
                     "merge_into_ds": bool(merge_into_ds),
                     "replace_vars": bool(replace_vars),
                     "modify_output": modify_output}, extra_attrs=extra,
