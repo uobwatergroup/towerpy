@@ -3093,7 +3093,7 @@ def _resolve_cmap(units, varname, ucmap, cb_ext=None):
         "mm":       CmapSpec("tpylsc_rad_rainrt", extend="max",
                              set_under="whitesmoke"),
         "km":       CmapSpec("gist_earth", extend="max"),
-        "dV/dh":    CmapSpec("tpylsc_rad_2slope_r", extend="both"),
+        "∂V/∂h":    CmapSpec("tpylsc_div_dbu_rd", extend="both"),
         "dBm":      CmapSpec("tpylsc_rad_pvars", extend="both"),
         "unorm":    CmapSpec("tpylsc_useq_bupkyw", extend="neither"),
         "0-1":      CmapSpec("tpylsc_useq_bupkyw", extend="neither"),
@@ -3240,7 +3240,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                  "unitless": [0.4, 0.9, 1.0],
                  "dB/km": [0, 0.19, 20],
                  "m/s": [-5, 5, 11],
-                 "dV/dh": [-1.8, 0.6, 13],
+                 "∂V/∂h": [-5, 5, 11],
                  "mm/h": [0, 64, 14],
                  "mm": [0, 200, 14],
                  "km": [0, 7, 36],
@@ -3276,7 +3276,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
         }
 
     lpv_short = {"PIA": [0, 20, 21], "alpha": [0, 0.2, 21],
-                 "beta": [0, 0.1, 21]
+                 "beta": [0, 0.1, 21], 'GRAD_VRADV': [-5, 5, 11]
                  }
 
     # Continuous variables
@@ -5256,4 +5256,3 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
         axg.set_facecolor("none")
     plt.tight_layout()
     return fig, axes, mappables
-

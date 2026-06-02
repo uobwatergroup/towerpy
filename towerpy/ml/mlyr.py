@@ -1215,7 +1215,7 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
                               comb_id=None, upplim_thr=0.75, phidp_peak="left",
                               gradv_peak="left", return_diagnostics=True,
                               return_internal=False):
-    """	
+    r"""	
     Detect melting-layer signatures from polarimetric radar profiles.
 
     The melting-layer top, bottom, and thickness are estimated following the

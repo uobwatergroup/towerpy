@@ -742,7 +742,8 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
                 raise ValueError(
                     f"CMAP DataArray dims {cmap.dims} do not match expected "
                     f"({names['azi']}, {names['rng']})")
-            ds[cmap_name] = cmap
+            ds[cmap_name].attrs = sweep_vars_attrs_f.get("CMAP", {})
+            ds[cmap_name].attrs.update({"units": 'relative_frequency'})
         else:
             # Assume numpy-like; enforce dims explicitly
             ds[cmap_name] = ((names["azi"], names["rng"]), np.asarray(cmap))

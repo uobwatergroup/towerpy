@@ -815,7 +815,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     elif mode == "multiple":
         out = phidp0
     elif mode == "mode":
-        # Extract 1D numpy array of valid offsets
+        # Extract array of valid offsets
         vals = phidp0.values
         vals = vals[np.isfinite(vals)]
         vals = vals[vals != 0]
@@ -1187,4 +1187,3 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         extra_attrs=extra,
         module_provenance="towerpy.calib.calib_phidp.phidp_qc_processing")
     return ds_out
-
