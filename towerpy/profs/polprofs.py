@@ -597,7 +597,7 @@ def _build_joint_mask(ds_sel, thresholds, inp_map, azimuth_dim, range_dim):
 
 def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
              method="mean", stats=False):
-    """
+    r"""
     Build a vertical profile from a birdbath radar scan.
 
     Polarimetric variables are optionally thresholded and then aggregated

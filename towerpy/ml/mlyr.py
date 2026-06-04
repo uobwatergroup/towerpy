@@ -699,7 +699,7 @@ def attach_melting_layer(ds, units="km", mlyr_top=None, mlyr_bottom=None,
                          classid=None, source="user-defined", method=None,
                          overwrite=False, delimit_mlyrinppi=False,
                          beam_cone="centre"):
-    """
+    r"""
     Attach melting-layer metadata to a radar sweep dataset.
 
     Melting-layer top, bottom, and thickness are stored as dataset metadata
@@ -851,7 +851,7 @@ def mlyr_ppidelimitation(ds, mlyr_top, mlyr_bottom, mlyr_thickness,
                          beam_cone="centre", beamhcoord_names=None,
                          classid=None, azimuth_dim="azimuth",
                          range_dim="range"):
-    """
+    r"""
     Classify PPI radar bins into rain, melting-layer, and solid-precipitation
     regions.
 

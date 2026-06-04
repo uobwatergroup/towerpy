@@ -705,9 +705,10 @@ def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
 
 
 def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
-                              dbz_min=5., dbz_max=60., mov_avrgf_len=(1, 3),
-                              thr_spdp=10, max_off=180, preset=None,
-                              preset_tol=5, hist_kwargs=None):
+                              dbz_min=5., dbz_max=60., min_rng=None,
+                              max_rng=None, mov_avrgf_len=(1, 3), thr_spdp=10,
+                              max_off=180, preset=None, preset_tol=5,
+                              hist_kwargs=None):
     r"""
     Estimate the initial differential phase offset (:math:`\Phi_{DP}(0)`) 
     from PPI scans.
@@ -739,6 +740,16 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         Minimum reflectivity threshold (dBZ).
     dbz_max : float, default 60.
         Maximum reflectivity threshold (dBZ).
+    min_rng : float or None, optional
+        Minimum range value used for filtering radar gates. Gates with
+        range coordinates smaller than ``min_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
+    max_rng : float or None, optional
+        Maximum range value used for filtering radar gates. Gates with
+        range coordinates larger than ``max_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
     mov_avrgf_len : tuple of int, default (1, 3)
         Window size for smoothing :math:`\Phi_{DP}` using a moving average.
         Recommended to smooth along range only, i.e. ``(1, n)``.
@@ -772,15 +783,26 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
       thresholds.
     * Rays with high :math:`\Phi_{DP}` variability are discarded.
     """
+    ds = ds.copy()
     # 1. Variable mapping
     defaults = {'azi': 'azimuth', 'rng': 'range', "PHIDP": "PHIDP",
                 "DBZ": "DBZH", "RHOHV": "RHOHV"}
     names = {**defaults, **(inp_names or {})}
+    range_dim = names["rng"]
+    azimuth_dim = names["azi"]
+    # Range filtering
+    if min_rng is not None or max_rng is not None:
+        rng = ds[names["rng"]]
+        mask = xr.ones_like(rng, dtype=bool)
+        if min_rng is not None:
+            mask = mask & (rng >= min_rng)
+        if max_rng is not None:
+            mask = mask & (rng <= max_rng)
+        # Apply mask to the entire dataset
+        ds = ds.where(mask)
     phidp = ds[names["PHIDP"]]
     rhohv = ds[names["RHOHV"]]
     zh = ds[names["DBZ"]]
-    range_dim = names["rng"]
-    azimuth_dim = names["azi"]
     # 2. Clean phidp
     phidp_f = _phidp_filtering(
         phidp, rhohv, zh, window=mov_avrgf_len, thr_spdp=thr_spdp,

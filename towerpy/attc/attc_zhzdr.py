@@ -1333,7 +1333,7 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
 
 
 def _theoretical_zdr(zh, model, params):
-    """
+    r"""
     Compute theoretical ZDR corresponding to a given ZH, using either the
     linear or exponential ZH–ZDR model.
 

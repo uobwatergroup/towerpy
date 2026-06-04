@@ -1210,6 +1210,10 @@ class PPIExplorer:
     """
 
     def __init__(self, xrds, polarplot=False, coord_sys="polar"):
+        if isinstance(xrds, xr.DataArray):
+            # Preserve attributes and coordinates
+            name = xrds.name or "field"
+            xrds = xrds.to_dataset(name=name)
         self.xrds = xrds
         self.polarplot = polarplot
         self.coord_sys = coord_sys

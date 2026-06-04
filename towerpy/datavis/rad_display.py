@@ -3114,6 +3114,8 @@ def _resolve_cmap(units, varname, ucmap, cb_ext=None):
     # here im not sure because is DWD special case with no units
     elif varname.lower().startswith('uvrad'):
         spec = CmapSpec("tpylsc_div_dbu_rd", extend="both")
+    elif varname.lower().startswith('ldr'):
+        spec = CmapSpec("tpylsc_rad_2slope_r", extend="both")
     # Override by units
     elif ucmap and units in ucmap:
         spec = CmapSpec(ucmap[units])
@@ -3152,7 +3154,7 @@ def _resolve_var2plot(ds, var2plot):
 
 def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                 cb_ext=None, force_all_ticks=False, custom_rules=None):
-    """
+    r"""
     Generate plotting parameters for a given radar variable.
 
     Parameters
@@ -3256,7 +3258,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
         lpv_units.pop("dB", None)
 
     lpv_standard = {
-        "radar_linear_depolarization_ratio": [-30, 10, 15],
+        "radar_linear_depolarization_ratio": [-30, 10, 17],
         # "radar_specific_differential_phase_hv": [-2, 6, 17],
         # "radar_differential_phase_hv": [0, 180, 19],
         "radar_doppler_spectrum_width_h": [0, 5, 11],
@@ -3300,16 +3302,28 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                 in vars_bounds)):
             arr = np.array([0.1, 0.5, 1., 1.5, 2., 3., 4., 6., 8., 12, 16.,
                             24, 32., 48, 64., 128])
+            arr = np.array([
+                0.1,   # drizzle / very light
+                0.25,
+                0.5,
+                1.0,
+                2.5,   # light / moderate boundary
+                4.0,
+                6.0,
+                10.0,  # moderate / heavy boundary
+                16.0,
+                25.0,
+                40.0,
+                50.0,  # heavy / violent boundary
+                70.0,
+                90.0,
+                110.0,
+                120.0  # upper cap for visualization
+                ])
             custom_bnd = arr
             bounds = [arr.min(), arr.max(), len(arr)]
         elif units == "mm" and not (vars_bounds and (
                 varname in vars_bounds or units in vars_bounds)):
-            #TODO: decide final arr
-            # arr = np.array([0.1, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48,
-            #                 64, 96, 128, 256])
-            arr = np.array((0.1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
-                            75, 100, 125, 150, 200))
-            # arr = np.array((0.1, 1, 5, 10, 20, 30, 40, 50, 75, 100, 150, 200))
             arr = np.array([0.1, 1, 5, 10, 20, 30, 40, 50, 62.5, 75, 87.5,
                             100, 125, 150, 175, 200])
             bounds = [arr.min(), arr.max(), len(arr)]
@@ -3378,7 +3392,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
 
 
 def default_cartopy_config():
-    """
+    r"""
     Return the default configuration dictionary for Cartopy-based plotting.
 
     This dictionary defines all tunable Cartopy options used by
@@ -4890,7 +4904,7 @@ def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
                   vars_bounds=None, ucmap=None, unorm=None, cb_ext=None,
                   fig_title=None, fig_size=None, ylims=None, *, plot_grid=True,
                   line_kwargs=None, lc_kwargs=None, legend_kwargs=None):
-    """
+    r"""
     Plot radar profiles (QVPs, VPs, or RD-QVPs) contained in a dataset.
 
     Parameters
