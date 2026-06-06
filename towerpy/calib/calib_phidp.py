@@ -1162,7 +1162,6 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         else:
             out_var = var if replace_vars else f"{var}_QC"
         # Build attrs
-        # parent_attrs = ds[var].attrs.copy()
         parent_attrs = ds[var].attrs.copy() if var in ds else {}
         canonical_attrs = sweep_vars_attrs_f.get(out_var, {}).copy()
         merged_attrs = {**parent_attrs, **canonical_attrs}
@@ -1176,7 +1175,11 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
                     "rhohv_min": rhohv_min,
                     "dbz_min": dbz_min,
                     "dbz_max": dbz_max,
-                    "phidp0_correction": phidp0_correction},
+                    "phidp0_correction": phidp0_correction,
+                    "mlyr_intp": mlyr_intp,
+                    "mlyr_monotonic": mlyr_monotonic,
+                    "mlyr_geometry_source": src if mlyr_intp else None,
+                    },
             outputs=[out_var],
             mode="overwrite" if replace_vars else "preserve",
             module_provenance="towerpy.calib.calib_phidp.phidp_qc_processing")
@@ -1190,12 +1193,17 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
             ds_out = ds_out.drop_vars(var)
         corrected_vars.append(out_var)
     # Dataset-level provenance
+    # Add ML geometry variables when ML interpolation is used
+    ml_inputs = ["MLYRTOP", "MLYRBTM", "MLYRTHK"] if mlyr_intp else []
     extra = {'step_description': (
         "Applied PhiDP quality control with thresholding, masking, "
-        "interpolation, and smoothing.")}
+        "interpolation, and smoothing."
+        + (" Melting-layer masking and interpolation were applied."
+          if mlyr_intp else "")
+        )}
     ds_out = record_provenance(
         ds_out, step="phidp_qc_processing",
-        inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]],
+        inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"], *ml_inputs],
         outputs=corrected_vars,
         parameters={"mask": mask,
                     "replace_vars": replace_vars,
@@ -1205,7 +1213,11 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
                     "dbz_max": dbz_max,
                     "rhohv_min": rhohv_min,
                     "minthr_pdp0": minthr_pdp0,
-                    "phidp0_correction": phidp0_correction},
+                    "phidp0_correction": phidp0_correction,
+                    "mlyr_intp": mlyr_intp,
+                    "mlyr_monotonic": mlyr_monotonic,
+                    "mlyr_geometry_source": src if mlyr_intp else None,
+                    },
         extra_attrs=extra,
         module_provenance="towerpy.calib.calib_phidp.phidp_qc_processing")
     return ds_out
