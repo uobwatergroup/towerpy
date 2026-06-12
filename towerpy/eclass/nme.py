@@ -747,7 +747,10 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
             ds[cmap_name].attrs.update({"units": 'relative_frequency'})
         else:
             # Assume numpy-like; enforce dims explicitly
-            ds[cmap_name] = ((names["azi"], names["rng"]), np.asarray(cmap))
+            arr = np.asarray(cmap)
+            if arr.shape != (ds.sizes[names["azi"]], ds.sizes[names["rng"]]):
+                raise ValueError("CMAP array has wrong shape")
+            ds[cmap_name] = ((names["azi"], names["rng"]), arr)
             ds[cmap_name].attrs = sweep_vars_attrs_f.get("CMAP", {})
             ds[cmap_name].attrs.update({"units": "relative_frequency"})
     rng_m = convert(ds[names["rng"]], "m")
@@ -756,8 +759,8 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     rng_m = np.ascontiguousarray(rng_m.values, dtype=np.float64)
     azi_rad = np.ascontiguousarray(azi_rad.values, dtype=np.float64)
     elv_rad = np.ascontiguousarray(elv_rad.values, dtype=np.float64)
-    
-    param_clc = np.zeros(5)
+    # param_clc = np.zeros(5)
+    param_clc = np.zeros(5, dtype=np.float64)
     # Resolve radar constant
     rc = float(rcst_dB) if rcst_dB is not None else get_attrval(
         "radconstH", ds, default=None)
@@ -767,7 +770,10 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         "minSNR", ds, default=None)
     param_clc[1] = min_snr
     param_clc[2] = binary_class
-    clc = np.zeros((ds.sizes[names["azi"]], ds.sizes[names["rng"]]))
+    # clc = np.zeros((ds.sizes[names["azi"]], ds.sizes[names["rng"]]))
+    clc = np.ascontiguousarray(np.zeros((ds.sizes[names["azi"]],
+                                         ds.sizes[names["rng"]]),
+                                        dtype=np.float64))
     # Resolve variables
     vars_dict = _resolve_binary_class_vars(ds, binary_class, names)
     # Z = vars_dict["ZH"].fillna(-50.0)

@@ -1189,6 +1189,12 @@ def attenuation_correction_zh(dsattvars, cclass, inp_names=None,
     phidp_m = np.full((nrays, nbins), np.nan)
     phidp_c = np.full((nrays, nbins), np.nan)
     alpha = np.full((nrays, nbins), np.nan)
+    # sanity check
+    zhh_Ac = np.ascontiguousarray(zhh_Ac, dtype=np.float64)
+    Ah = np.ascontiguousarray(Ah, dtype=np.float64)
+    phidp_m = np.ascontiguousarray(phidp_m, dtype=np.float64)
+    phidp_c = np.ascontiguousarray(phidp_c, dtype=np.float64)
+    alpha = np.ascontiguousarray(alpha, dtype=np.float64)
     # Z = ds[names["rng"]].fillna(-50.0)
     Z = np.ascontiguousarray(ds[names["ZH"]].values, dtype=np.float64)
     PHIDP = np.ascontiguousarray(ds[names["PHIDP"]].values, dtype=np.float64)

@@ -504,7 +504,6 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
     if platform.system() == 'Linux':
         librp = npct.load_library('lnxlibreadpolarradardata.so',
                                   Path(__file__).parent.absolute())
-        # librp = npct.load_library('lnxlibreadpolarradardata.so', Path.cwd())
     elif platform.system() == 'Windows':
         librp = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}'
                                      + '/w64libreadpolarradardata.dll')
@@ -515,44 +514,67 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
     librp.readpolarradardata.restype = None
     librp.readpolarradardata.argtypes = [ctp.c_char_p, array1d, array2d,
                                          array1d, array1d, array1d,
-                                         array1d, array1d, ctp.c_char_p]
+                                         array1d, array1d,
+                                         # ctp.c_char_p
+                                         ctp.POINTER(ctp.c_char),
+                                         ]
     # Encode file name
     file_name = str(file_name)
     ukmo_modes = _parse_ukmo_filename(file_name)
     fname = str.encode(file_name)
     # Create empty arrays to read nrays/ngates
     emptyarr1 = [np.empty(20) for i in range(8)]
+    emptyarr1[0] = np.zeros(20, dtype=float)
     emptyarr1[1] = np.empty((1, 1))
-    emptyarr1[7] = bytes(16)
+    # emptyarr1[7] = bytes(16)
+    emptyarr1[7] = bytearray(16)
+    buf1 = (ctp.c_char * 16).from_buffer(emptyarr1[7])
     librp.readpolarradardata(ctp.c_char_p(fname), emptyarr1[0],
                              emptyarr1[1], emptyarr1[2], emptyarr1[3],
                              emptyarr1[4], emptyarr1[5], emptyarr1[6],
-                             ctp.c_char_p(emptyarr1[7]))
+                             # ctp.c_char_p(emptyarr1[7])
+                             buf1
+                             )
     nrays, ngates = int(emptyarr1[6][2]), int(emptyarr1[6][1])
 
     # read all radar variables
     if get_polvar == 'all' or get_polvar is None:
-        emptyarr2 = [np.empty(20) for i in range(8)]
-        emptyarr2[0] = np.array([0, nrays, ngates], dtype=float)
-        emptyarr2[1] = np.empty((nrays, ngates))
-        emptyarr2[2] = np.empty((nrays))
-        emptyarr2[3] = np.empty((nrays))
-        emptyarr2[4] = np.empty((ngates))
-        emptyarr2[5] = np.empty(6)
-        emptyarr2[7] = bytes(16)
+        # emptyarr2 = [np.empty(20) for i in range(8)]
+        # emptyarr2[0] = np.array([0, nrays, ngates], dtype=float)
+        emptyarr2 = [np.zeros(20, dtype=float) for _ in range(8)]
+        emptyarr2[0][:3] = [0, nrays, ngates]
+        # emptyarr2[1] = np.empty((nrays, ngates))
+        # emptyarr2[2] = np.empty((nrays))
+        # emptyarr2[3] = np.empty((nrays))
+        # emptyarr2[4] = np.empty((ngates))
+        # emptyarr2[5] = np.empty(6)
+        # emptyarr2[7] = bytes(16)
+        emptyarr2[1] = np.empty((nrays, ngates), dtype=np.double)
+        emptyarr2[2] = np.empty((nrays,), dtype=np.double)
+        emptyarr2[3] = np.empty((nrays,), dtype=np.double)
+        emptyarr2[4] = np.empty((ngates,), dtype=np.double)
+        emptyarr2[5] = np.empty(6, dtype=np.double)
+        emptyarr2[7] = bytearray(16)
+        buf = (ctp.c_char * 16).from_buffer(emptyarr2[7])
         librp.readpolarradardata(ctp.c_char_p(fname), emptyarr2[0],
                                  emptyarr2[1], emptyarr2[2], emptyarr2[3],
                                  emptyarr2[4], emptyarr2[5], emptyarr2[6],
-                                 ctp.c_char_p(emptyarr2[7]))
+                                 # ctp.c_char_p(emptyarr2[7])
+                                 buf
+                                 )
         nvar = int(emptyarr2[6][0])
-        emptyarr = [np.empty(20) for i in range(8)]
-        emptyarr[0] = np.array([0, nrays, ngates], dtype=float)
+        # emptyarr = [np.empty(20) for i in range(8)]
+        # emptyarr[0] = np.array([0, nrays, ngates], dtype=float)
+        emptyarr = [np.zeros(20, dtype=float) for _ in range(8)]
+        emptyarr[0][:3] = [0, nrays, ngates]
         emptyarr[1] = np.empty((nrays, ngates))
         emptyarr[2] = np.empty((nrays))
         emptyarr[3] = np.empty((nrays))
         emptyarr[4] = np.empty((ngates))
         emptyarr[5] = np.empty(6)
-        emptyarr[7] = bytes(16)
+        # emptyarr[7] = bytes(16)
+        emptyarr[7] = bytearray(16)
+        buf = (ctp.c_char * 16).from_buffer(emptyarr[7])
         vardat = {}
         varnam = {}
         dicaxs = {}
@@ -561,24 +583,36 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
             librp.readpolarradardata(ctp.c_char_p(fname), emptyarr[0],
                                      emptyarr[1], emptyarr[2], emptyarr[3],
                                      emptyarr[4], emptyarr[5], emptyarr[6],
-                                     ctp.c_char_p(emptyarr[7]))
+                                     # ctp.c_char_p(emptyarr[7])
+                                     buf
+                                     )
             varname = emptyarr[7].decode()
             varnam[i] = varname[0:varname.find(']')+1]
-            vardat[i] = np.array(emptyarr[1])
+            # vardat[i] = np.array(emptyarr[1])
+            vardat[i] = np.ascontiguousarray(emptyarr[1].copy())
             dicaxs[i] = [emptyarr[6][4], emptyarr[6][5]]
             if emptyarr[0][0] == 0:
-                outpar = np.array(emptyarr[6])
+                # outpar = np.array(emptyarr[6])
+                outpar = np.ascontiguousarray(emptyarr[6].copy())
     else:
         # read rad variable defined by user
-        emptyarr = [np.empty(20) for i in range(8)]
-        emptyarr[0] = np.array([0, nrays, ngates], dtype=float)
-        emptyarr[1] = np.empty((nrays, ngates))
-        emptyarr[2] = np.empty((nrays))
-        emptyarr[3] = np.empty((nrays))
-        emptyarr[4] = np.empty((ngates))
-        emptyarr[5] = np.empty(6)
-        emptyarr[7] = bytes(16)
-
+        # emptyarr = [np.empty(20) for i in range(8)]
+        # emptyarr[0] = np.array([0, nrays, ngates], dtype=float)
+        # emptyarr[1] = np.empty((nrays, ngates))
+        # emptyarr[2] = np.empty((nrays))
+        # emptyarr[3] = np.empty((nrays))
+        # emptyarr[4] = np.empty((ngates))
+        # emptyarr[5] = np.empty(6)
+        # emptyarr[7] = bytes(16)
+        emptyarr = [np.zeros(20, dtype=float) for _ in range(8)]
+        emptyarr[0][:3] = [0, nrays, ngates]
+        emptyarr[1] = np.empty((nrays, ngates), dtype=np.double)
+        emptyarr[2] = np.empty((nrays,), dtype=np.double)
+        emptyarr[3] = np.empty((nrays,), dtype=np.double)
+        emptyarr[4] = np.empty((ngates,), dtype=np.double)
+        emptyarr[5] = np.empty(6, dtype=np.double)
+        emptyarr[7] = bytearray(16)
+        buf = (ctp.c_char * 16).from_buffer(emptyarr[7])
         vardat = {}
         varnam = {}
         dicaxs = {}
@@ -598,12 +632,15 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
         librp.readpolarradardata(ctp.c_char_p(fname), emptyarr[0],
                                  emptyarr[1], emptyarr[2], emptyarr[3],
                                  emptyarr[4], emptyarr[5], emptyarr[6],
-                                 ctp.c_char_p(emptyarr[7]))
+                                 # ctp.c_char_p(emptyarr[7])
+                                 buf
+                                 )
         varname = emptyarr[7].decode()
         varnam[nvar] = varname[0:varname.find(']')+1]
         vardat[nvar] = np.array(emptyarr[1])
         dicaxs[nvar] = [emptyarr[6][4], emptyarr[6][5]]
-        outpar = np.array(emptyarr[6])
+        # outpar = np.array(emptyarr[6])
+        outpar = np.ascontiguousarray(emptyarr[6].copy())
     poldata = {varnam[i]: j for (i, j) in vardat.items()}
     if any(v.startswith('Zh') for k, v in varnam.items()):
         poldata['ZH [dBZ]'] = poldata.pop('Zh [dBZ]')
@@ -615,8 +652,10 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
         poldata['LDR [dB]'] = poldata.pop('LDR [dB ]')
     if any(v.startswith('Phi') for k, v in varnam.items()):
         poldata['PhiDP [deg]'] = poldata.pop('Phidp [deg]')
-    if any(not v for k, v in varnam.items()):
-        # poldata['Absphase_V [ ]'] = poldata.pop('')
+    # if any(not v for k, v in varnam.items()):
+    #     # poldata['Absphase_V [ ]'] = poldata.pop('')
+    #     poldata.pop('')
+    if any(not v for v in varnam.values()) and '' in poldata:
         poldata.pop('')
     if any(v.startswith('CI [-') for k, v in varnam.items()):
         poldata['CI [dB]'] = poldata.pop('CI [- ]')
@@ -637,11 +676,9 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
         sweep_vars_mapping['VRADH'] = 'V [m/s]'
         sweep_vars_mapping['UWRADH'] = 'W [m/s]'
     if exclude_vars is not None:
-        # evars = exclude_vars
         evars = [val for k, val in sweep_vars_mapping.items()
                  if k not in exclude_vars]
         poldata = {k: val for k, val in poldata.items() if k in evars}
-
     # Create dict to store radparameters
     dttime = dt.datetime(int(emptyarr[5][0]), int(emptyarr[5][1]),
                          int(emptyarr[5][2]), int(emptyarr[5][3]),
@@ -649,10 +686,13 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
                          tzinfo=ZoneInfo(tz))
     outpar[17] = np.rad2deg(emptyarr[3][0])
     # Use xradar to set attributes
-    azimuth = np.rad2deg(emptyarr[2])
-    elevation = np.rad2deg(emptyarr[3])
+    # azimuth = np.rad2deg(emptyarr[2])
+    # elevation = np.rad2deg(emptyarr[3])
+    # rng = emptyarr[4]
+    azimuth = np.ascontiguousarray(np.rad2deg(emptyarr[2]).copy())
+    elevation = np.ascontiguousarray(np.rad2deg(emptyarr[3]).copy())
+    rng = np.ascontiguousarray(emptyarr[4].copy())
     elevation_attrs = xrd.model.get_elevation_attrs()
-    rng = emptyarr[4]
     azimuth_attrs = xrd.model.get_azimuth_attrs(azimuth)
     range_attrs = xrd.model.get_range_attrs(rng)
     # Handle time coordinate
@@ -693,41 +733,42 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
     # =============================================================================
     rswp_metadata = {
         "file_name": file_name,
-        "how":{'RXlossH': np.nan,
-               'RXlossV': np.nan,
-               'antgainH': np.nan,
-               'antgainV': np.nan,
-               'beamwH': np.nan,
-               'beamwV': np.nan,
-               'beamwidth': 1.,
-               'beamwidth_units': 'deg',
-               'endepochs': np.nan,
-               'extensions': np.nan,
-               'poltype': ukmo_modes[1],
-               'scan_count': np.nan,
-               'simulated': 'False',
-               'software': 'Cyclops',
-               'startepochs': np.nan,
-               'sw_version': 'CEDA',
-               'system': np.nan,
-               'task': np.nan,
-               'wavelength': outpar[10]*100,
-               'wavelength_units': 'cm',
-               'frequency': np.nan,
-               'frequency_units': 'GHz',
-               },
-        "how_monitor": {'zdr-offset_90deg_pw0': np.nan,
-                        'zdr-offset_90deg_pw2': np.nan},
-        "how_radar_system": {'dBZ0_H_pw0': np.nan,
-                             'dBZ0_H_pw2': np.nan,
-                             'dBZ0_V_pw0': np.nan,
-                             'dBZ0_V_pw2': np.nan,
-                             'noise_H_pw0': np.nan,
-                             'noise_H_pw2': np.nan,
-                             'noise_V_pw0': np.nan,
-                             'noise_V_pw2': np.nan,
-                             'phidp-offset_system': np.nan,
-                             'zdr-offset_system': np.nan},
+        "how":{
+            # 'RXlossH': np.nan,
+            # 'RXlossV': np.nan,
+            # 'antgainH': np.nan,
+            # 'antgainV': np.nan,
+            'beamwidth': 1.,
+            'beamwidth_units': 'deg',
+            # 'beamwH': np.nan,
+            # 'beamwV': np.nan,
+            # 'endepochs': np.nan,
+            # 'extensions': np.nan,
+            'poltype': ukmo_modes[1],
+            # 'scan_count': np.nan,
+            # 'simulated': 'False',
+            'software': 'Cyclops',
+            # 'startepochs': np.nan,
+            'sw_version': 'CEDA',
+            # 'system': np.nan,
+            # 'task': np.nan,
+            'wavelength': outpar[10]*100,
+            'wavelength_units': 'cm',
+            'frequency': np.nan,
+            'frequency_units': 'GHz',
+            },
+        # "how_monitor": {'zdr-offset_90deg_pw0': np.nan,
+        #                 'zdr-offset_90deg_pw2': np.nan},
+        # "how_radar_system": {'dBZ0_H_pw0': np.nan,
+        #                      'dBZ0_H_pw2': np.nan,
+        #                      'dBZ0_V_pw0': np.nan,
+        #                      'dBZ0_V_pw2': np.nan,
+        #                      'noise_H_pw0': np.nan,
+        #                      'noise_H_pw2': np.nan,
+        #                      'noise_V_pw0': np.nan,
+        #                      'noise_V_pw2': np.nan,
+        #                      'phidp-offset_system': np.nan,
+        #                      'zdr-offset_system': np.nan},
         "what": {'date': dttime.strftime('%Y%m%d'),
                  'object': 'SCAN',
                  'source': f'NOD:gb{site_name.lower()}',
@@ -741,51 +782,53 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
                   'lon': outpar[12],
                   'site_name': site_name,
                   },
-        "dataset1_how": {'NI': np.nan,
-                         'afc_status': np.nan,
-                         'angle_step': np.nan,
-                         'bpwr': np.nan,
-                         'highprf': np.nan,
-                         'lowprf': np.nan,
-                         'polmode': ukmo_modes[1],
-                         'prf': outpar[7],
-                         "prf_units": "Hz",
-                         'pulse': ukmo_modes[0],
-                         # 'pulsewidth': np.nan,
-                         'pulselength': outpar[8],
-                         "pulselength_units": "ns",
-                         'radconstH': outpar[16],
-                         'radconstV': np.nan,
-                         "radconst_units": "dB",
-                         'range': np.nan,
-                         'rpm': outpar[6],
-                         'scan_index': np.nan,
-                         'startazA': np.nan,
-                         'startazT': np.nan,
-                         'startelA': np.nan,
-                         'stopazA': np.nan,
-                         'stopazT': np.nan,
-                         'stopelA': np.nan,
-                         'task': 'SCAN',
-                         'wavelength': outpar[10]*100,
-                         'wavelength_units': 'cm',
-                         'avsamples': outpar[9],
-                         },
-        "dataset1_where": {'a1gate': np.nan,
-                           'elangle': outpar[17],
-                           'nbins': int(outpar[1]),
-                           'nrays': int(outpar[2]),
-                           'rscale': np.nan,
-                           'rstart': np.nan},
-        "dataset1_what": {'enddate': np.nan,
-                          'endtime': np.nan,
-                          'product': 'SCAN',
-                          'startdate': np.nan,
-                          'starttime': np.nan,
-                          # 'sweep_avrg_datetime64': np.nan,
-                          # 'sweep_avrg_datetime': np.nan
-                          }
-                     }
+        "dataset1_how": {
+            # 'NI': np.nan,
+            # 'afc_status': np.nan,
+            # 'angle_step': np.nan,
+            # 'bpwr': np.nan,
+            # 'highprf': np.nan,
+            # 'lowprf': np.nan,
+            'polmode': ukmo_modes[1],
+            'prf': outpar[7],
+            "prf_units": "Hz",
+            'pulse': ukmo_modes[0],
+            # 'pulsewidth': np.nan,
+            'pulselength': outpar[8],
+            "pulselength_units": "ns",
+            'radconstH': outpar[16],
+            # 'radconstV': np.nan,
+            "radconst_units": "dB",
+            # 'range': np.nan,
+            'rpm': outpar[6],
+            # 'scan_index': np.nan,
+            # 'startazA': np.nan,
+            # 'startazT': np.nan,
+            # 'startelA': np.nan,
+            # 'stopazA': np.nan,
+            # 'stopazT': np.nan,
+            # 'stopelA': np.nan,
+            'task': 'SCAN',
+            'wavelength': outpar[10]*100,
+            'wavelength_units': 'cm',
+            'avsamples': outpar[9],
+            },
+        "dataset1_where": {
+            # 'a1gate': np.nan,
+            'elangle': outpar[17],
+            'nbins': int(outpar[1]),
+            'nrays': int(outpar[2]),
+            # 'rscale': np.nan,
+            # 'rstart': np.nan
+            },
+        "dataset1_what": {
+            # 'enddate': np.nan,
+            # 'endtime': np.nan,
+            'product': 'SCAN',
+            # 'startdate': np.nan,
+            # 'starttime': np.nan,
+            }
+        }
     rswp_metadata['how']['frequency'] = (sc.c / (rswp_metadata['how']['wavelength'] * 1e-2) / 1e9)
     scandt_av, scandt_avpy = scan_midtime(sweep['time'].values)
     ts_ns = int(scandt_av.astype("datetime64[ns]").astype("int"))

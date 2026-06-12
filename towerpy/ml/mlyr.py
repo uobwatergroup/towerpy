@@ -650,7 +650,7 @@ def _resolve_melting_layer(ds, top=None, bottom=None, thickness=None, *,
         if isinstance(x, xr.DataArray):
             if x.ndim != 0:
                 raise ValueError(f"{name} DataArray must be scalar.")
-            return float(convert(x, "km").values)
+            return float(convert(x, "km").item())
         if np.ndim(x) != 0:
             raise ValueError(f"{name} must be scalar.")
         return float(x)

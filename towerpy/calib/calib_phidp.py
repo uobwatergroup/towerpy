@@ -993,6 +993,7 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         - multi-stage moving-average smoothing and interpolation,
         - final NME mask.
     """
+    ds = ds.copy()
     sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
     # Resolve variable and coord names
     defaults = {'azi': 'azimuth', 'rng': 'range', "PHIDP": "PHIDP",
@@ -1133,7 +1134,8 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     rest = phidp_i.isel(range=slice(n+1, None))
     phidp_i = xr.concat([first, rest], dim=range_dim)
     # Forward-fill remaining NaNs
-    phidp_i = phidp_i.interpolate_na(dim=range_dim, method="nearest", fill_value=None)
+    phidp_i = phidp_i.interpolate_na(dim=range_dim, method="nearest",
+                                     fill_value=None)
     # Second MAV: include NaNs, extend valid
     phidp_maf = (phidp_i.rolling({range_dim: n}, center=True).mean())
     phidp_maf = fill_both(phidp_maf, dim=range_dim)

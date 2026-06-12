@@ -807,7 +807,8 @@ def fill_both(da, dim="range"):
     # Forward fill
     fwd = da.interpolate_na(dim=dim, method="nearest", fill_value="extrapolate")
     # Reverse *data* only, keep coords intact
-    rev_data = fwd.data[..., ::-1]   # works for Dask arrays too?
+    # rev_data = fwd.data[..., ::-1]   # works for Dask arrays too?
+    rev_data = np.flip(fwd.values, axis=-1)
     rev = xr.DataArray(rev_data, dims=fwd.dims,
                        coords={k: (v if k != dim else fwd.coords[k])
                                for k, v in fwd.coords.items()},
@@ -817,7 +818,8 @@ def fill_both(da, dim="range"):
     rev_filled = rev.interpolate_na(dim=dim, method="nearest",
                                     fill_value="extrapolate")
     # Reverse data back
-    out_data = rev_filled.data[..., ::-1]
+    # out_data = rev_filled.data[..., ::-1]
+    out_data = np.flip(rev_filled.values, axis=-1)
     out = xr.DataArray(out_data, dims=rev_filled.dims, coords=rev_filled.coords,
                        attrs=rev_filled.attrs, name=rev_filled.name)
     return out
@@ -1971,8 +1973,12 @@ def _encode_cf_value(value):
             return value  # plain string is CF-safe
 
     # CF-safe primitive types
-    if isinstance(value, (bytes, int, float, bool)):
+    if isinstance(value, (bytes, int, float)):
         return value
+
+    # Booleans (Python or NumPy) → CF-safe integer
+    if isinstance(value, (bool, np.bool_)):
+        return int(value)
 
     # NumPy scalar types
     if isinstance(value, np.generic):
