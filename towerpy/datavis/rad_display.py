@@ -3469,7 +3469,7 @@ def default_cartopy_config():
             "features": default_cartopy_features,
             "gridlines": {"enabled": True, "draw_labels": True,
                           "label_size": 10},
-            "tick_spacing": {"dx": 1.0, "dy": 1.0},
+            "tick_origin": {}, "tick_spacing": {},
             "alpha_rad": 1.0}
 
 # =============================================================================
@@ -4296,8 +4296,21 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             if default_cartopy_cfg["enable_cartopy"]:
                 # If projection is PlateCarree use lon/lat ticks
                 if isinstance(proj, ccrs.PlateCarree):
-                    x_label = "longitude [degrees_east]"
-                    y_label = "latitude [degrees_north]"
+                    # Get the coordinate DataArrays
+                    da_x = xrds[projcoord_names['x']]
+                    da_y = xrds[projcoord_names['y']]
+                    # Prefer long_name, fallback to standard_name, fallback to coordinate name
+                    x_name = da_x.attrs.get("long_name",
+                                da_x.attrs.get("standard_name",
+                                    projcoord_names["x"]))
+                    y_name = da_y.attrs.get("long_name",
+                                da_y.attrs.get("standard_name",
+                                    projcoord_names["y"]))
+                    # Units (fallback to degrees_east / degrees_north)
+                    x_unit = da_x.attrs.get("units", "degrees_east")
+                    y_unit = da_y.attrs.get("units", "degrees_north")
+                    x_label = f"{x_name} [{x_unit}]"
+                    y_label = f"{y_name} [{y_unit}]"
                     # Determine extent for tick generation
                     if xlims is not None and ylims is not None:
                         xmin, xmax = xlims
@@ -4306,10 +4319,22 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                         # Get actual map extent in PlateCarree coordinates
                         xmin, xmax, ymin, ymax = ax1.get_extent(
                             crs=ccrs.PlateCarree())
-                    dx = default_cartopy_cfg["tick_spacing"]["dx"]
-                    dy = default_cartopy_cfg["tick_spacing"]["dy"]
-                    xticks = np.arange(np.floor(xmin), np.ceil(xmax) + dx, dx)
-                    yticks = np.arange(np.floor(ymin), np.ceil(ymax) + dy, dy)
+                    ts = default_cartopy_cfg.get("tick_spacing", {})
+                    # default 1 if user didn’t pass anything
+                    dx = ts.get("dx", 1.0)
+                    dy = ts.get("dy", 1.0)
+                    # enable overriding tick origin
+                    tick_origin = default_cartopy_cfg.get("tick_origin", {})
+                    x0 = tick_origin.get("x0")
+                    y0 = tick_origin.get("y0")
+                    if x0 is None:
+                        x0 = np.floor(xmin)
+                    if y0 is None:
+                        y0 = np.floor(ymin)
+                    xticks = np.arange(x0, xmax + dx, dx)
+                    yticks = np.arange(y0, ymax + dy, dy)
+                    # xticks = np.arange(np.floor(xmin), np.ceil(xmax) + dx, dx)
+                    # yticks = np.arange(np.floor(ymin), np.ceil(ymax) + dy, dy)
                     ax1.set_xticks(xticks, crs=ccrs.PlateCarree())
                     ax1.set_yticks(yticks, crs=ccrs.PlateCarree())
                     ax1.xaxis.set_major_formatter(LONGITUDE_FORMATTER)
@@ -4321,14 +4346,40 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                     da_y = xrds[projcoord_names['y']]
                     x_unit = da_x.attrs.get("units", "m")
                     y_unit = da_y.attrs.get("units", "m")
-                    x_label = f"{projcoord_names['x']} [{x_unit}]"
-                    y_label = f"{projcoord_names['y']} [{y_unit}]"
-                    # Use raw projected coordinates for ticks
-                    ax1.set_xticks(np.linspace(float(da_x.min()),
-                                               float(da_x.max()), 6))
-                    ax1.set_yticks(np.linspace(float(da_y.min()),
-                                               float(da_y.max()), 6))
-                    # No lon/lat formatter
+                    # Prefer long_name and fallback to coordinate name
+                    x_name = da_x.attrs.get("long_name", projcoord_names["x"])
+                    y_name = da_y.attrs.get("long_name", projcoord_names["y"])
+                    x_label = f"{x_name} [{x_unit}]"
+                    y_label = f"{y_name} [{y_unit}]"
+                    # Projected CRS tick logic (OSGB, UTM, etc.)
+                    tick_origin = default_cartopy_cfg.get("tick_origin", {})
+                    tick_spacing = default_cartopy_cfg.get("tick_spacing", {})
+                    # --- X origin ---
+                    x0 = tick_origin.get("x0")
+                    if not isinstance(x0, (int, float)):
+                        x0 = float(da_x.min())
+                    # --- Y origin ---
+                    y0 = tick_origin.get("y0")
+                    if not isinstance(y0, (int, float)):
+                        y0 = float(da_y.min())
+                    # --- X spacing ---
+                    dx = tick_spacing.get("dx")
+                    use_dx = isinstance(dx, (int, float))
+                    # --- Y spacing ---
+                    dy = tick_spacing.get("dy")
+                    use_dy = isinstance(dy, (int, float))
+                    # --- X ticks ---
+                    if use_dx:
+                        xticks = np.arange(x0, float(da_x.max()) + dx, dx)
+                    else:
+                        xticks = np.linspace(float(da_x.min()), float(da_x.max()), 6)
+                    # --- Y ticks ---
+                    if use_dy:
+                        yticks = np.arange(y0, float(da_y.max()) + dy, dy)
+                    else:
+                        yticks = np.linspace(float(da_y.min()), float(da_y.max()), 6)
+                    ax1.set_xticks(xticks)
+                    ax1.set_yticks(yticks)
                     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
                     ax1.yaxis.set_major_formatter(mticker.ScalarFormatter())
             # elif has_polar:
