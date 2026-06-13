@@ -35,14 +35,21 @@ repository = "https://github.com/uobwatergroup/towerpy"
 readme = { file = ["README.md"], content-type = "text/markdown" }
 
 [tool.setuptools]
-packages = ["towerpy", "towerpy.attc", "towerpy.calib",
-            "towerpy.datavis",
-            "towerpy.eclass", "towerpy.eclass.ukmo_cmaps",
-            "towerpy.eclass.ukmo_cmaps.chenies",
-            "towerpy.eclass.nds_cband", "towerpy.eclass.nds_xband",
-            "towerpy.georad", "towerpy.io", "towerpy.ml",
-            "towerpy.profs", "towerpy.qpe", "towerpy.utils"
-            ]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["towerpy", "towerpy.*"]
+
+[tool.setuptools.package-data]
+"towerpy" = [
+    "io/*.so",
+    "io/*.dll",
+    "eclass/*.so",
+    "eclass/*.dll",
+    "attc/*.so",
+    "attc/*.dll",
+    "eclass/**/*.dat"
+]
 
 [tool.black]
 line-length = 88
