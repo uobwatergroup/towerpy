@@ -409,8 +409,6 @@ def rhohv_noisecorrection(ds, inp_names=None, rhohv_theo=(0.9, 1.0),
         module_provenance="towerpy.calib.calib_rhohv.rhohv_noisecorrection")
     # Plotting
     if plot_method:
-        _plot_rhohvmethod_single(snr_edges, rho_edges, hist, snr_db, rhohv_na,
-                                 snr_centers, theo_line, histmax, opt_noise)
         _plot_rhohvmethod_grid(DBZ, rng_km, rhohv_na, bins_snr=bins_snr,
                                bins_rho=bins_rho, rhohv_theo=rhohv_theo,
                                opt_noise=opt_noise, mode=mode,

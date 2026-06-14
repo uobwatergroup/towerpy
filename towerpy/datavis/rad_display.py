@@ -4924,9 +4924,17 @@ def _plot_rhohvmethod_grid(Z, rng_km, rhohv_na, mode="linear", exp_curvet=20.0,
             maxima = histmax[i]
             theo_line = theo_lines[i]
             rc = rc_values[i]
-
-            if np.isclose(rc, opt_noise, atol=0.5):
+            is_central = np.isclose(rc, opt_noise, atol=0.5)
+            if is_central:
+                snr_db = signal2noiseratio(Z, rng_km, rc, scale="db")
                 title_color, weight = "tab:purple", "bold"
+                # Add raw scatter only for the central panel
+                ax.scatter(snr_db.values.flatten(), rhohv_na.values.flatten(),
+                           s=1, alpha=0.2, color="grey", zorder=10,
+                           label=r"raw $\rho_{HV}$")
+                for spine in ax.spines.values():
+                    spine.set_linewidth(2.5)
+                    spine.set_color("tab:purple")
             else:
                 title_color, weight = "tab:grey", "normal"
 
@@ -4940,7 +4948,10 @@ def _plot_rhohvmethod_grid(Z, rng_km, rhohv_na, mode="linear", exp_curvet=20.0,
                                 norm=mpc.LogNorm(vmin=10**0, vmax=10**1),
                                 cmap="tpylsc_useq_calm_r", rasterized=True)
             ax.tick_params(axis="both", which="major", labelsize=9)
-
+            ax.set_xlim(5, 30)
+            ax.set_ylim(0.8, 1.1)
+            if is_central:
+                ax.legend(fontsize=8)
     clb = fig.colorbar(pcm, ax=axes, location="right", shrink=0.85)
     clb.ax.set_title("n points")
     fig.supxlabel("SNR [dB]")
