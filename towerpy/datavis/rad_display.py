@@ -5074,7 +5074,6 @@ def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
         else:
             points = np.array([x, height]).T.reshape(-1, 1, 2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            # lc = LineCollection(segments, cmap=params.cmap, norm=params.norm)
             if lc_kwargs is None:
                 lc_kwargs = {}
             lc = LineCollection(segments, cmap=params.cmap, norm=params.norm,
@@ -5106,13 +5105,14 @@ def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
         # 7. Labels, limits, grid
         ax.grid(plot_grid)
         ax.set_facecolor("none")
-        # ax.legend(loc=1)
-        if legend_kwargs is None:
-            legend_kwargs = {}
-        ax.legend(**legend_kwargs)
-        if colours:
-            bnd = params.norm_boundaries
-            if bnd is not None and len(bnd) > 1:
+        # Legend: only draw if user explicitly passes kwargs
+        if legend_kwargs:
+            ax.legend(**legend_kwargs)
+        # X-limits from plot_params / vars_bounds if available
+        bnd = getattr(params, "norm_boundaries", None)
+        if bnd is not None:
+            bnd = np.asarray(bnd)
+            if bnd.size > 1:
                 ax.set_xlim(bnd.min(), bnd.max())
         # Y-limits
         if ylims:
