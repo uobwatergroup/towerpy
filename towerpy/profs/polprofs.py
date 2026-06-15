@@ -669,17 +669,18 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         agg = ds_masked.median(dim=names["azi"], skipna=True)
     agg = agg.where(count > valid_gates)
     # 7. Height coordinate
-    height = ds[names["beam_height"]].mean(dim=names["azi"])
-    height.attrs.setdefault("units",
-                            ds[names["beam_height"]].attrs.get("units", "km"))
-    agg = agg.assign_coords(height=height).swap_dims({names["rng"]: "height"})
+    bh = ds[names["beam_height"]]
+    height_1d = bh.mean(dim=names["azi"])  # dims: ('range',)
+    height_1d.attrs.setdefault("units", bh.attrs.get("units", "km"))
+    # use height_1d (dim='range') to replace the range dimension
+    agg = agg.assign_coords(height=height_1d).swap_dims({names["rng"]: "height"})
+    # reattach height as a coord over the new 'height' dim
+    agg = agg.assign_coords(height=("height", height_1d.values))
     if "range" in agg.coords:
         agg = agg.drop_vars("range")
     # 8. Assemble VP dataset
-    data_vars = {}
-    for canon, ds_name in inp_map.items():
-        data_vars[ds_name] = agg[ds_name]   # keep dataset name
-    vp = xr.Dataset(data_vars=data_vars, coords={"height": height})
+    data_vars = {ds_name: agg[ds_name] for ds_name in inp_map.values()}
+    vp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
     # Clean up leftover range dimension/coordinate
     if "range" in vp.coords:
         vp = vp.drop_vars("range")
@@ -695,13 +696,13 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         min_ = min_.where(count > valid_gates)
         max_ = max_.where(count > valid_gates)
         sem = sem.where(count > valid_gates)
-        std = std.assign_coords(height=height).swap_dims(
+        std = std.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        min_ = min_.assign_coords(height=height).swap_dims(
+        min_ = min_.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        max_ = max_.assign_coords(height=height).swap_dims(
+        max_ = max_.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        sem = sem.assign_coords(height=height).swap_dims(
+        sem = sem.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
         if "range" in std.coords:
             std = std.drop_vars("range")
@@ -868,21 +869,20 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     bh = ds[names["beam_height"]]
     # Allow 2D (azimuth, range) or 1D (range)
     if names['azi'] in bh.dims and names["rng"] in bh.dims:
-        height = bh.mean(dim=names['azi'])
+        height_1d = bh.mean(dim=names['azi'])
     else:
-        height = bh
+        height_1d = bh
     # IMPORTANT: keep dimension as "range"
-    height.attrs.setdefault("units", bh.attrs.get('units'))
-    agg = agg.assign_coords(height=height).swap_dims({names["rng"]: "height"})
+    height_1d.attrs.setdefault("units", bh.attrs.get('units'))
+    agg = agg.assign_coords(height=height_1d).swap_dims({names["rng"]: "height"})
+    # reattach height as a coord over the *new* 'height' dim
+    agg = agg.assign_coords(height=("height", height_1d.values))
     # Remove the old range coordinate from all variables
     if "range" in agg.coords:
         agg = agg.drop_vars("range")
     # 7. Assemble QVP dataset
-    data_vars = {}
-    for canon, ds_name in inp_map.items():
-        da = agg[ds_name]          # no rename
-        data_vars[ds_name] = da    # use dataset name
-    qvp = xr.Dataset(data_vars=data_vars, coords={"height": height})
+    data_vars = {ds_name: agg[ds_name] for ds_name in inp_map.values()}
+    qvp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
     if "range" in qvp.coords:
         qvp = qvp.drop_vars("range")
     if "range" in qvp.dims:
@@ -897,13 +897,13 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         min_ = min_.where(count > valid_gates)
         max_ = max_.where(count > valid_gates)
         sem = sem.where(count > valid_gates)
-        std = std.assign_coords(height=height).swap_dims(
+        std = std.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        min_ = min_.assign_coords(height=height).swap_dims(
+        min_ = min_.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        max_ = max_.assign_coords(height=height).swap_dims(
+        max_ = max_.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        sem = sem.assign_coords(height=height).swap_dims(
+        sem = sem.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
         if "range" in std.coords:
             std = std.drop_vars("range")
@@ -952,17 +952,17 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         delta_h1 = xr.ones_like(h, dtype=float) * delta_h1
         delta_h1.attrs.update({"long_name": "vertical_resolution_range_gate",
                                "description": "Δh1 = Δr * sin(elev)",
-                               "units": height.attrs.get("units", "")})
+                               "units": height_1d.attrs.get("units", "")})
         # Δh2 = h * θ * cot(α)
         delta_h2 = h * bw_rad * (np.cos(elv_rad) / np.sin(elv_rad))
         delta_h2.attrs.update({"long_name": "vertical_resolution_beam_broadening",
                                "description": "Δh2 = h * beamwidth * cot(elev)",
-                               "units": height.attrs.get("units", "")})
+                               "units": height_1d.attrs.get("units", "")})
         # Δh = max(Δh1, Δh2)
         delta_h = xr.ufuncs.maximum(delta_h1, delta_h2)
         delta_h.attrs.update({"long_name": "effective_vertical_resolution",
                               "description": "Δh = max(Δh1, Δh2)",
-                              "units": height.attrs.get("units", "")})
+                              "units": height_1d.attrs.get("units", "")})
         # Attach to QVP dataset
         qvp["VRES"] = delta_h
         # Add to provenance

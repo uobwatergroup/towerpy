@@ -5132,7 +5132,7 @@ def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
 def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
                mlyr_btm=None, vars_bounds=None, unorm=None, cb_ext=None,
                ucmap=None, ylims=None, fig_size=None, spec_range=None,
-               fig_title=None, elev_cmap="Spectral"):
+               fig_title=None, elev_cmap="plasma_r"):
     """
     Plot a Range‑Defined Quasi‑Vertical Profile (RD‑QVP) and, optionally,
     the contributing QVPs.
@@ -5141,25 +5141,38 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
     ----------
     rdqvp : xarray.Dataset
         RD‑QVP dataset containing one or more variables defined on a 1D
-        ``height`` coordinate. May include:
-        - ``qvp_interp`` : interpolated QVPs with dims ``(elevation, variable, height)``
-        - ``scan_datetime`` : optional coordinate for scan start/end times
+        ``height`` coordinate. It may additionally contain:
+        
+        * ``qvp_interp`` : interpolated QVPs with dims
+          ``(elevation, variable, height)``.
+        * ``elevation_angle`` : elevation angles for each contributing QVP
+          (dimension ``elevation``), used for colouring individual QVPs.
+        * ``scan_datetime_unix_ns`` / ``scan_datetime_iso`` : optional
+          per‑elevation scan time information (dimension ``elevation``),
+          which may be used to construct the figure title via metadata
+          helpers.
     dss : list of xarray.Dataset or None, default None
-        Optional list of individual QVP scan datasets used to draw the
-        geometry panel (range–height curves).
+        Optional list of original single‑elevation PPI scan datasets used
+        to draw the geometry panel (range–height curves). Each dataset is
+        expected to contain at least:
+        
+        * ``range`` : range coordinate (convertible to km).
+        * ``beamc_height`` : beam‑height field with dims
+          ``(azimuth, range)`` or ``(range,)``.
     all_desc : bool, default True
-        If True, plot individual QVPs (from ``qvp_interp``) coloured by
-        elevation angle. If False, only the RD‑QVP is plotted.
+        If True and ``qvp_interp`` is present, plot individual QVPs
+        (from ``qvp_interp``) coloured by elevation angle. If False,
+        only the RD‑QVP profiles are plotted.
     stats : {'std', 'sem'} or None, default None
         If not None, shade each RD‑QVP profile using the corresponding
         statistic (``'std'`` or ``'sem'``) when the variable
         ``f"{stats}_{var}"`` exists in ``rdqvp``.
     mlyr_top : float or None, default None
-        Height (km) of the melting‑layer top. If provided, a horizontal
-        dashed line is drawn.
+        Height (in the same units as ``height``) of the melting‑layer top.
+        If provided, a horizontal dashed line is drawn.
     mlyr_btm : float or None, default None
-        Height (km) of the melting‑layer bottom. If provided, a horizontal
-        dashed line is drawn.
+        Height (in the same units as ``height``) of the melting‑layer bottom.
+        If provided, a horizontal dashed line is drawn.
     vars_bounds : dict or None, default None
         Optional per‑variable bounds overriding defaults from ``plot_params``.
         Keys are variable names; values are ``(vmin, vmax)``.
@@ -5181,8 +5194,9 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
     fig_title : str or None, default None
         Custom figure title. If None, a title is constructed from dataset
         metadata (profile type, radar name, and scan time).
-    elev_cmap : str, default 'Spectral'
-        Colormap used to colour individual QVPs by elevation angle.
+    elev_cmap : str, default 'plasma_r'
+        Colormap used to colour individual QVPs and geometry curves by
+        elevation index or elevation angle.
 
     Returns
     -------
