@@ -798,8 +798,11 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
             mask = mask & (rng >= min_rng)
         if max_rng is not None:
             mask = mask & (rng <= max_rng)
-        # Apply mask to the entire dataset
-        ds = ds.where(mask)
+        # Only apply mask to true polar 2D fields
+        vars_with_range = [v for v in ds.data_vars
+                           if (ds[v].ndim == 2 and azimuth_dim in ds[v].dims
+                               and range_dim in ds[v].dims)]
+        ds[vars_with_range] = ds[vars_with_range].where(mask)
     phidp = ds[names["PHIDP"]]
     rhohv = ds[names["RHOHV"]]
     zh = ds[names["DBZ"]]
