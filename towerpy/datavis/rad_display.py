@@ -4296,21 +4296,24 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             if default_cartopy_cfg["enable_cartopy"]:
                 # If projection is PlateCarree use lon/lat ticks
                 if isinstance(proj, ccrs.PlateCarree):
-                    # Get the coordinate DataArrays
-                    da_x = xrds[projcoord_names['x']]
-                    da_y = xrds[projcoord_names['y']]
-                    # Prefer long_name, fallback to standard_name, fallback to coordinate name
-                    x_name = da_x.attrs.get("long_name",
-                                da_x.attrs.get("standard_name",
-                                    projcoord_names["x"]))
-                    y_name = da_y.attrs.get("long_name",
-                                da_y.attrs.get("standard_name",
-                                    projcoord_names["y"]))
-                    # Units (fallback to degrees_east / degrees_north)
-                    x_unit = da_x.attrs.get("units", "degrees_east")
-                    y_unit = da_y.attrs.get("units", "degrees_north")
-                    x_label = f"{x_name} [{x_unit}]"
-                    y_label = f"{y_name} [{y_unit}]"
+                    # # Get the coordinate DataArrays
+                    # da_x = xrds[projcoord_names['x']]
+                    # da_y = xrds[projcoord_names['y']]
+                    # # Prefer long_name, fallback to standard_name, fallback to coordinate name
+                    # x_name = da_x.attrs.get("long_name",
+                    #             da_x.attrs.get("standard_name",
+                    #                 projcoord_names["x"]))
+                    # y_name = da_y.attrs.get("long_name",
+                    #             da_y.attrs.get("standard_name",
+                    #                 projcoord_names["y"]))
+                    # # Units (fallback to degrees_east / degrees_north)
+                    # x_unit = da_x.attrs.get("units", "degrees_east")
+                    # y_unit = da_y.attrs.get("units", "degrees_north")
+                    # x_label = f"{x_name} [{x_unit}]"
+                    # y_label = f"{y_name} [{y_unit}]"
+                    # Axis labels must follow the PROJECTION CRS, not the data CRS
+                    x_label = "longitude [degrees_east]"
+                    y_label = "latitude [degrees_north]"
                     # Determine extent for tick generation
                     if xlims is not None and ylims is not None:
                         xmin, xmax = xlims
@@ -4378,8 +4381,10 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                         yticks = np.arange(y0, float(da_y.max()) + dy, dy)
                     else:
                         yticks = np.linspace(float(da_y.min()), float(da_y.max()), 6)
-                    ax1.set_xticks(xticks)
-                    ax1.set_yticks(yticks)
+                    # ax1.set_xticks(xticks)
+                    # ax1.set_yticks(yticks)
+                    ax1.set_xticks(xticks, crs=proj)
+                    ax1.set_yticks(yticks, crs=proj)
                     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
                     ax1.yaxis.set_major_formatter(mticker.ScalarFormatter())
             # elif has_polar:

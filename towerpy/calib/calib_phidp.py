@@ -1074,8 +1074,8 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     first_gate_mask = xr.zeros_like(phidp_f, dtype=bool)
     first_gate_mask = first_gate_mask.isel(range=first_idx)
     # Apply PHIDP(0) only to valid rays
-    phidp_f = xr.where(
-        valid_ray, phidp_f.where(~first_gate_mask, phidp0), phidp_f)
+    phidp_f = xr.where(valid_ray, phidp_f.where(~first_gate_mask, phidp0),
+                       phidp_f)
     # Subtract PHIDP(0) only for valid rays
     phidp_f = xr.where(valid_ray, phidp_f - phidp0, phidp_f)
     # Melting-layer filtering and interpolation
@@ -1158,6 +1158,12 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     # Force to zero rays that are all-nan
     no_valid_after_zh = ~phidp_maf.notnull().any(range_dim)
     phidp_maf = xr.where(no_valid_after_zh, 0, phidp_maf)
+    # Final cleanup: if a ray has PHIDP == 0 everywhere AND ZH is all-NaN,
+    # restore PHIDP to all-NaN (purely cosmetic, does not affect QC logic)
+    zero_ray = (phidp_maf == 0).all(range_dim)
+    nan_zh_ray = ~zh.notnull().any(range_dim)    
+    restore_nan = zero_ray & nan_zh_ray
+    phidp_maf = phidp_maf.where(~restore_nan)
     # Determine output name
     ds_out = ds.copy()
     corrected_vars = []
