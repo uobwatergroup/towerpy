@@ -17,10 +17,14 @@ Towerpy is an open-source toolbox designed for reading, processing and displayin
   <img alt="pt1" src="https://img.shields.io/badge/conda-342B029.svg?&style=for-the-badge&logo=anaconda&logoColor=white"/> 
   <img alt="pt5" src="https://img.shields.io/badge/Numpy-777BB4?style=for-the-badge&logo=numpy&logoColor=white"/>
   <img alt="pt6" src="https://img.shields.io/badge/SciPy-654FF0?style=for-the-badge&logo=SciPy&logoColor=white"/>
+  <img alt="sklearn" src="https://img.shields.io/badge/Scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white"/>
+  <img alt="xarray" src="https://img.shields.io/badge/xarray-white?style=for-the-badge&labelColor=4D4D4D&color=FFFFFF"/>
+  <img alt="matplotlib" src="https://img.shields.io/badge/matplotlib-11557C?style=for-the-badge&labelColor=11557C"/>
+  <img alt="cartopy" src="https://img.shields.io/badge/Cartopy-2C3E50?style=for-the-badge"/>
 </p>
 <p align="left">
   <img alt="info" src="https://img.shields.io/badge/=&nbsp Info &nbsp;=-critical?style=for-the-badge"/>
-  <a href="https://github.com/uobwatergroup/towerpy/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-yellow.svg?style=for-the-badge&logo=gnuprivacyguard"/></a>
+  <a href="https://github.com/uobwatergroup/towerpy/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge"/></a>
   <img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/uobwatergroup/towerpy?style=for-the-badge">
   <a href="https://doi.org/10.1016/j.envsoft.2023.105746"><img src="https://img.shields.io/badge/DOI-10.1016/j.envsoft.2023.105746-important?style=for-the-badge&logo=creativecommons"/></a>
   

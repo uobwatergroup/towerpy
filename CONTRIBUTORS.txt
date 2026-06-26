@@ -1,0 +1,24 @@
+towerpy contributors
+====================
+
+Acknowledgements for the towerpy project
+
+Maintainers
+-----------
+- uobwatergroup — Institutional maintainer (Miguel A. Rico-Ramirez, University of Bristol)
+- Daniel Sanchez-Rivas (enchilaDaSzen) — University of Bonn
+
+Contributors
+------------
+
+
+How to be added
+Contributors are added when they:
+
+- Submit a merged pull request
+- Provide significant feedback, design input, or documentation improvements
+- Contribute examples, notebooks, or testing workflows
+- Help maintain or improve the project in any meaningful way
+
+To request inclusion, open an issue or PR modifying this file.
+

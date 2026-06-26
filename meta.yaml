@@ -43,7 +43,7 @@ test:
 about:
   home: https://github.com/uobwatergroup/towerpy
   summary: 'Towerpy, an open-source toolbox for processing polarimetric radar data'
-  license: "GPL-3.0-or-later"
+  license: "MIT"
   license_file: ["LICENSE"]
   
   description: |
