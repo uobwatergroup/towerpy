@@ -1246,8 +1246,11 @@ def _safe_metadata(ds, elev_dim="elevation"):
             out["elev_str"] = ""
         else:
             # Check if all elevations are (almost) identical
-            if np.allclose(elev, elev[0], rtol=0, atol=1e-1):
-                out["elev_str"] = f"{float(elev[0]):.1f}deg"
+            if np.allclose(elev, elev[0], rtol=0, atol=5e-1):
+                if 'sweep_fixed_angle' in ds.data_vars:
+                    out["elev_str"] = f"{float(ds.sweep_fixed_angle):.1f}deg"
+                else:
+                    out["elev_str"] = f"{float(elev[0]):.1f}deg"
                 # out["elev_str"] = rf"{float(elev[0]):.1f}$^\circ$"
             else:
                 # Mixed elevations -> show min–max

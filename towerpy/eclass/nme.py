@@ -17,7 +17,7 @@ from ..utils.radutilities import record_provenance, apply_correction_chain
 from ..utils.unit_conversion import convert
 
 
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+# warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class NME_ID:
@@ -536,6 +536,134 @@ def lsinterference_filter(ds, inp_names=None, rhv_min=0.3, classid=None,
     return ds_out2
 
 
+NDS_FMAP = {"ZH":    ("cal_mf_ZHH_clutter.dat",  "cal_mf_ZHH_precipi.dat"),
+           "ZDR":   ("cal_mf_ZDR_clutter.dat",  "cal_mf_ZDR_precipi.dat"),
+           "RHOHV": ("cal_mf_Rhv_clutter.dat",  "cal_mf_Rhv_precipi.dat"),
+           "LDR":   ("cal_mf_LDR_clutter.dat",  "cal_mf_LDR_precipi.dat"),
+           "V":     ("cal_mf_Vel_clutter.dat",  "cal_mf_Vel_precipi.dat"),
+           # Texture variables
+           "sZH":    ("cal_mf_sZhh_clutter.dat", "cal_mf_sZhh_precipi.dat"),
+           "sZDR":   ("cal_mf_sZdr_clutter.dat", "cal_mf_sZdr_precipi.dat"),
+           "sRHOHV": ("cal_mf_sRhv_clutter.dat", "cal_mf_sRhv_precipi.dat"),
+           "sPHIDP": ("cal_mf_sPdp_clutter.dat", "cal_mf_sPdp_precipi.dat"),
+           }
+
+
+def _required_nds_files(binary_class):
+    """
+    Return the NDS filenames required for the given ``binary_class`` bitmask.
+
+    Only variables whose bits are set and that have associated NDS files
+    contribute entries to the returned list.
+    """
+
+    required = []
+    BITMASK_MAP2 = {128: "RHOHV",
+                    64: None,        # CMAP has no NDS files
+                    32: "LDR",
+                    16: "V",
+                    8: "sRHOHV",
+                    4: "sPHIDP",
+                    2: "sZDR",
+                    1: "sZH",
+                    }
+    for bit, var in BITMASK_MAP2.items():
+        if binary_class & bit:
+            # NOne for CMAP
+            if var is None:
+                continue
+            required.extend(NDS_FMAP[var])
+    # Should always produce list of strings, not Path objects
+    return required
+
+
+def _validate_nds_files(path_nds, required_files=None):
+    """
+    Validate the Normalised Distribution (NDS) files used by the clutter
+    classifier.
+
+    Each validated ``*.dat`` file must follow the expected NDS format:
+
+    - exactly two whitespace‑separated numeric columns per data line
+    - dot‑decimal floats (plain or scientific notation)
+    - no comma decimal separators (warns if present)
+    - no malformed or non‑numeric tokens
+    - Blank lines and comment lines starting with ``#`` are ignored.
+
+    Parameters
+    ----------
+    path_nds : str or pathlib.Path
+        Path to a directory containing NDS ``.dat`` files.
+    required_files : list of str or None, optional
+        If ``None`` (default), all ``*.dat`` files in the directory are
+        validated. If a list is provided, only those files are validated;
+        missing files raise an error.
+
+    Raises
+    ------
+    ValueError
+        If the directory does not exist, if required files are missing, or if
+        any validated file contains malformed lines or non‑numeric values.
+
+    Warns
+    -----
+    UserWarning
+        If a validated file contains comma decimal separators (invalid under
+        the enforced C locale).
+
+    Notes
+    -----
+    * Validates all ``*.dat`` files by default, or only the files required by
+      the selected ``binary_class`` when ``required_files`` is provided.
+    """
+    path_nds = Path(path_nds)
+    if not path_nds.exists():
+        raise ValueError(f"NDS directory does not exist: {path_nds}")
+    # Determine which files to validate
+    if required_files is None:
+        dat_files = sorted(path_nds.glob("*.dat"))
+    else:
+        # If no files are required, skip validation entirely
+        if len(required_files) == 0:
+            return
+        # Validate only required files
+        dat_files = [path_nds / fname for fname in required_files]
+    if not dat_files:
+        raise ValueError(f"No .dat files found in NDS directory: {path_nds}")
+
+    for f in dat_files:
+        if not f.exists():
+            raise ValueError(f"Required NDS file missing: {f.name}")
+        with f.open("r") as fh:
+            for i, line in enumerate(fh, 1):
+                stripped = line.strip()
+                # Skip blank or comment lines
+                if not stripped or stripped.startswith("#"):
+                    continue
+                # Detect commas (invalid under C locale)
+                if "," in stripped:
+                    warnings.warn(
+                        f"NDS file '{f.name}' contains commas on line {i}."
+                        " These files are invalid under C locale."
+                        " Please convert them to dot-decimal format.")
+                # Split into columns
+                parts = stripped.split()
+                if len(parts) != 2:
+                    raise ValueError(
+                        f"NDS file '{f.name}' has invalid structure on line"
+                        f" {i}: expected 2 columns, found {len(parts)}.")
+                # Validate numeric format (float or scientific notation)
+                for p in parts:
+                    try:
+                        float(p)  # Python float parser handles both formats
+                    except ValueError:
+                        raise ValueError(
+                            f"NDS file '{f.name}' contains a non-numeric token"
+                            f" on line {i}: '{p}'. Expected a float or"
+                            " scientific notation like '-3.5', '0.0004', or"
+                            " '5.4e-04'.")
+
+
 def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
                                inp_names: dict = None) -> dict:
     """
@@ -553,7 +681,7 @@ def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
     else:
         inp_names = {**default_inp_names, **inp_names}
 
-    bitmask_map = {128: "RHOHV",
+    BITMASK_MAP = {128: "RHOHV",
                    64: 'CMAP',
                    32: "LDR",
                    16: "V",
@@ -567,14 +695,14 @@ def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
     dims = list(ds.sizes.keys())
     shape_ref = tuple(ds.sizes[d] for d in dims)
 
-    for bit, canonical_name in bitmask_map.items():
+    for bit, canonical_name in BITMASK_MAP.items():
         mapped_name = inp_names[canonical_name]
         if binary_class & bit:  # required
             if mapped_name not in ds:
                 raise ValueError(
                     f"Variable '{mapped_name}' must be present in dataset "
-                    f"when binary_class includes '{canonical_name}' (bit {bit})."
-                )
+                    f"when binary_class includes '{canonical_name}'"
+                    " (bit {bit}).")
             vars_dict[canonical_name] = ds[mapped_name]
         else:
             # # if not required, then dummy array
@@ -707,10 +835,18 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         echoesID.update(classid)
     # Set path of the NDS
     if path_nds is None:
-        pathnds = str.encode(str(Path(__file__).parent.absolute())
-                             + '/nds_cband/')
+        # pathnds = str.encode(str(Path(__file__).parent.absolute())
+        #                      + '/nds_cband/')
+        # Use built‑in NDS directory
+        nds_path = Path(__file__).parent / "nds_cband"
     else:
-        pathnds = str.encode(path_nds.as_posix().rstrip("/") + "/")
+        # pathnds = str.encode(path_nds.as_posix().rstrip("/") + "/")
+        # Normalise user path
+        nds_path = Path(path_nds)
+    # Validate directory before encoding for C library
+    _validate_nds_files(nds_path, _required_nds_files(binary_class))
+    # Encode only for the C library call
+    pathnds = str(nds_path.as_posix() + "/").encode()
     # Prepare inputs for ctypes
     array1d = npct.ndpointer(dtype=np.double, ndim=1, flags='CONTIGUOUS')
     array2d = npct.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
@@ -796,10 +932,14 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         np.ascontiguousarray(CM, dtype=np.float64),
         rng_m, azi_rad, elv_rad, param_clc, clc)
     # Remap classification IDs
+    if binary_class == 0 and 'SNR_CLASS' in ds.data_vars:
+        clc[ds.SNR_CLASS.values == 3] = 3
+        if names["ZH"] in ds:
+            clc[np.isnan(ds[names['ZH']])] = 3
     if classid is not None:
-       clc.values[clc.values == 0] = echoesID["pcpn"]
-       clc.values[clc.values == 3] = echoesID["noise"]
-       clc.values[clc.values == 5] = echoesID["clutter"]
+       clc[clc == 0] = echoesID["pcpn"]
+       clc[clc == 3] = echoesID["noise"]
+       clc[clc == 5] = echoesID["clutter"]
     # Prepare output dataset
     dims = (names["azi"], names["rng"])
     coords = {names["azi"]: ds[names["azi"]], names["rng"]: ds[names["rng"]]}  
