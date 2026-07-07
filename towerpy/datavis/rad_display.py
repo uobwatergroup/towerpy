@@ -3085,7 +3085,7 @@ def _resolve_cmap(units, varname, ucmap, cb_ext=None):
         "unitless": CmapSpec("tpylsc_rad_pvars", extend="both"),
         "dB":       CmapSpec("tpylsc_rad_2slope", extend="both"),
         "deg/km":   CmapSpec("tpylsc_rad_2slope", extend="both"),
-        "dB/km":    CmapSpec("tpylsc_rad_pvars", extend="max",
+        "dB/km":    CmapSpec("tpylsc_rad_pvars", extend="both",
                              set_under="whitesmoke"),
         "m/s":      CmapSpec("tpylsc_div_dbu_rd", extend="both"),
         "mm/h":     CmapSpec("tpylsc_rad_rainrt", extend="both",
@@ -3240,7 +3240,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                  "deg": [0, 180, 19],
                  "deg/km": [-2, 6, 17],
                  "unitless": [0.4, 0.9, 1.0],
-                 "dB/km": [0, 0.19, 20],
+                 "dB/km": [1e-5, 0.18, 19],
                  "m/s": [-5, 5, 11],
                  "∂V/∂h": [-5, 5, 11],
                  "mm/h": [0, 64, 14],
@@ -3282,6 +3282,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                  }
 
     # Continuous variables
+    force_all_ticks = force_all_ticks
     if "flags" not in units.lower():
         bounds = _lookup_params_override(vars_bounds, varname, units)
         if bounds is not None:
@@ -3344,6 +3345,7 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                        0.95, 0.96, 0.97, 0.98, 0.99, 0.995, 1.]
             ext_override = _lookup_params_override(cb_ext, varname, units)
             ext = ext_override if ext_override is not None else "min"
+            force_all_ticks = True
         else:
             bnd = np.linspace(bounds[0], bounds[1], bounds[2])
         # Normalisation hierarchy 
@@ -3384,7 +3386,6 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
         ext_override = _lookup_params_override(cb_ext, varname, units)
         if ext_override is not None:
             ext = ext_override
-    force_all_ticks = force_all_ticks
     bnd = np.asarray(bnd)
     return PlotParams(range_spec=bounds, norm_boundaries=bnd, cmap=cmap,
                       extend=ext, norm=normp, ticklabels=ticklabels,
@@ -4241,7 +4242,8 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
         cbar = _add_colorbar(
             fig, ax1, mappable, pltprms, fsizes, vunits, coord_sys=coord_sys,
             cartopy_enabled=default_cartopy_cfg["enable_cartopy"],
-            shrink=(0.65 if (coord_sys == "polar" and polarplot) else 1),)
+            shrink=(0.65 if (coord_sys == "polar" and polarplot) else 1),
+            drawedges=False)
     # =============================================================================
     # Plot Artist objects
     # =============================================================================
@@ -4518,8 +4520,8 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
     rname = meta["rname"]
     swp_mode = meta["swp_mode"]
     # ptitle = fig_title or f"{rname.title()} [{swp_mode}] -- {dt_str}"
-    ptitle = fig_title or (f"{rname.title()} [PPI {swp_mode}-{elev_str}]"
-                           f" -- {dt_str}")
+    ptitle = fig_title or (f"{rname.title()} -- {dt_str}"
+                           f" [PPI {swp_mode}: {elev_str}]")
     # Resolve polar coordinate names
     azi_coord = polarcoord_names["azi"]
     rng_coord = polarcoord_names["rng"]
@@ -4599,13 +4601,6 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
                 clb.set_ticklabels(pltprms.ticklabels)
                 clb.ax.tick_params(direction="in")
     # Label only first column and last row 
-    # if coord_sys == "rect":
-    #     r_std = xrds["range"].attrs.get("standard_name", "Range")
-    #     r_unit_src = getcoordunits(xrds, "range", "m")
-    #     # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
-    #     r_unit = r_unit_src if r_unit_src else ''
-    #     x_label = f"{r_std} [{r_unit}]"
-    #     y_label = f"{r_std} [{r_unit}]"
     if coord_sys == "rect":
         x_name = rectcoord_names["x"]
         y_name = rectcoord_names["y"]
@@ -4618,8 +4613,6 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
         x_label = f"{x_std} [{x_unit}]" if x_unit else x_std
         y_label = f"{y_std} [{y_unit}]" if y_unit else y_std
     elif coord_sys == "polar" and not polarplot:
-        # a_std = xrds["azimuth"].attrs.get("standard_name", "Azimuth")
-        # a_unit = "rad" if polarplot else getcoordunits(xrds, "azimuth", "deg")
         a_std = xrds[azi_coord].attrs.get("standard_name", "Azimuth")
         a_unit = getcoordunits(xrds, azi_coord, "deg")
         r_std = xrds["range"].attrs.get("standard_name", "Range")
@@ -4641,6 +4634,7 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
     for ax in axes[nvars:]:
         ax.remove()
     fig.tight_layout()
+    fig.subplots_adjust(top=0.92)
     return fig, axes[:nvars]
 
 
