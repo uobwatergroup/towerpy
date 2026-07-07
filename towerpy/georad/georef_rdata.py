@@ -1,6 +1,7 @@
 """Towerpy: an open-source toolbox for processing polarimetric radar data."""
 
 import numpy as np
+from ..io import modeltp as mdtp
 from ..utils.unit_conversion import convert
 from ..utils.radutilities import get_attrval
 
@@ -207,7 +208,8 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
         rng  = georef['range [m]']
     else:
         elev = np.deg2rad(np.full(rparams['nrays'], elev))
-        azim = np.deg2rad(np.linspace(0, 360, rparams['nrays'], endpoint=False))
+        azim = np.deg2rad(np.linspace(0, 360, rparams['nrays'],
+                                      endpoint=False))
         rng  = gate0 + np.arange(rparams['ngates'], dtype=float) * gateres
     
     elev_deg = np.rad2deg(elev)
@@ -218,8 +220,10 @@ def ppi_georef(rparams, georef=None, polarc_exist=True, elev=0.5,
     # Beam heights
     bhkm  = np.array([height_beamc(ray, rng_km) for ray in elev_deg])
     if bh_geom:
-        bbhkm = np.array([height_beamc(ray - bw/2, rng_km) for ray in elev_deg])
-        bthkm = np.array([height_beamc(ray + bw/2, rng_km) for ray in elev_deg])
+        bbhkm = np.array([height_beamc(ray - bw/2, rng_km)
+                          for ray in elev_deg])
+        bthkm = np.array([height_beamc(ray + bw/2, rng_km)
+                          for ray in elev_deg])
 
     # Cartesian conversion
     s = np.array([earth_arc_distance(ray, rng_km, bhkm[i])
@@ -288,6 +292,7 @@ def ppi_rectgeoref(sweep, radar_altitude=None, bh_geom=True, beamwidth=None):
     * Elevation, azimuth, and range are converted to radians/metres as needed.
     * Cartesian coordinates are returned in kilometres.
     """
+    sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
     # Build georef dict from dataset coords
     georef = {"azim [rad]": convert(sweep.coords["azimuth"], "rad").values,
               "elev [rad]": convert(sweep.coords["elevation"], "rad").values,
@@ -303,78 +308,25 @@ def ppi_rectgeoref(sweep, radar_altitude=None, bh_geom=True, beamwidth=None):
         sweep = sweep.assign_coords({
             "grid_rectx": (("azimuth", "range"), geogrid["grid_rectx"]),
             "grid_recty": (("azimuth", "range"), geogrid["grid_recty"]),
-            "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
-            "beamb_height": (("azimuth", "range"), geogrid["beambottom_height [km]"]),
-            "beamt_height": (("azimuth", "range"), geogrid["beamtop_height [km]"]),
+            "beamc_height": (("azimuth", "range"),
+                             geogrid["beam_height [km]"]),
+            "beamb_height": (("azimuth", "range"),
+                             geogrid["beambottom_height [km]"]),
+            "beamt_height": (("azimuth", "range"),
+                             geogrid["beamtop_height [km]"]),
             })
     else:
         sweep = sweep.assign_coords({
             "grid_rectx": (("azimuth", "range"), geogrid["grid_rectx"]),
             "grid_recty": (("azimuth", "range"), geogrid["grid_recty"]),
-            "beamc_height": (("azimuth", "range"), geogrid["beam_height [km]"]),
+            "beamc_height": (("azimuth", "range"),
+                             geogrid["beam_height [km]"]),
             })
-    # Add metadata for Cartesian coordinates
-    sweep["grid_rectx"].attrs.update({
-        "units": "km",
-        "long_name": "radar-centric Cartesian x-coordinate",
-        "short_name": "XRECT",
-        "standard_name": "radar_cartesian_x_coordinate",
-        "description": ("Cartesian x-coordinate (km) derived from azimuth and"
-                        " range, with origin at the radar location."),
-        "coordinate_system": "radar_cartesian",
-        "reference_point": "radar_location",
-        "axis": "X"})
-    sweep["grid_recty"].attrs.update({
-        "units": "km",
-        "long_name": "radar-centric Cartesian y-coordinate",
-        "short_name": "YRECT",
-        "standard_name": "radar_cartesian_y_coordinate",
-        "description": ("Cartesian y-coordinate (km) derived from azimuth and"
-                        " range, with origin at the radar location."),
-        "coordinate_system": "radar_cartesian",
-        "reference_point": "radar_location",
-        "axis": "Y"})
-    # Base metadata for beam heights (radar-relative)
-    sweep["beamc_height"].attrs.update({
-        "units": "km",
-        "long_name": "beam centre height",
-        "short_name": "BEAM_HEIGHT",
-        "standard_name": "radar_beam_centre_height",
-        "description": ("Height of the radar beam centre (km), computed from "
-                        "elevation, range, and Earth curvature."),
-        "axis": "Z",
-        "coordinate_system": "radar_vertical",
-        "reference_point": "radar_location",
-        "height_reference": "radar",
-        })
-    if bh_geom:
-        sweep["beamb_height"].attrs.update({
-            "units": "km",
-            "long_name": "beam bottom height",
-            "short_name": "BEAM_BOTTOM_HEIGHT",
-            "standard_name": "radar_beam_bottom_height",
-            "description": ("Height of the lower edge of the radar beam (km),"
-                            " computed from elevation, range, beamwidth, and"
-                            " Earth curvature."),
-            "axis": "Z",
-            "coordinate_system": "radar_vertical",
-            "reference_point": "radar_location",
-            "height_reference": "radar",
-        })
-        sweep["beamt_height"].attrs.update({
-            "units": "km",
-            "long_name": "beam top height",
-            "short_name": "BEAM_TOP_HEIGHT",
-            "standard_name": "radar_beam_top_height",
-            "description": ("Height of the upper edge of the radar beam (km),"
-                            " computed from elevation, range, beamwidth, and"
-                            " Earth curvature."),
-            "axis": "Z",
-            "coordinate_system": "radar_vertical",
-            "reference_point": "radar_location",
-            "height_reference": "radar",
-        })
-    # Apply altitude offset
+    # Add metadata for coordinates from modeltp
+    for name, attrs in sweep_vars_attrs_f.items():
+        if name in sweep:
+            sweep[name].attrs.update(attrs)
+    # Apply altitude offset (AMSL)
     if radar_altitude is not None:
         sweep["beamc_height"] = sweep["beamc_height"] + radar_altitude
         if bh_geom:

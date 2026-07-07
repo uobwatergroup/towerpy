@@ -829,7 +829,8 @@ def read_ukmo_ppi_binary(file_name, site_name, get_polvar='all',
             # 'starttime': np.nan,
             }
         }
-    rswp_metadata['how']['frequency'] = (sc.c / (rswp_metadata['how']['wavelength'] * 1e-2) / 1e9)
+    rswp_metadata['how']['frequency'] = (
+        sc.c / (rswp_metadata['how']['wavelength'] * 1e-2) / 1e9)
     scandt_av, scandt_avpy = scan_midtime(sweep['time'].values)
     ts_ns = int(scandt_av.astype("datetime64[ns]").astype("int"))
     rswp_metadata['what']['sweep_avrg_datetime_unix_ns'] = ts_ns

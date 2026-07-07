@@ -14,6 +14,65 @@ variable names realted to function outputs.
 
 sweep_vars_attrs_xrd = model.sweep_vars_mapping
 
+sweep_vars_attrs_rect = {
+    "grid_rectx": {"standard_name": "radar_cartesian_x_coordinate",
+                   "long_name": "radar-centric Cartesian x-coordinate",
+                   "short_name": "XRECT",
+                   "units": "km",
+                   "description": ("Cartesian x-coordinate (km) derived from "
+                                   "azimuth and range, with origin at the "
+                                   "radar location."),
+                   "axis": "X",
+                   "coordinate_system": "radar_cartesian",
+                   "reference_point": "radar_location"},
+    "grid_recty": {"standard_name": "radar_cartesian_y_coordinate",
+                   "long_name": "radar-centric Cartesian y-coordinate",
+                   "short_name": "YRECT",
+                   "units": "km",
+                   "description": ("Cartesian y-coordinate (km) derived from"
+                                   " azimuth and range, with origin at the "
+                                   "radar location."),
+                   "axis": "Y",
+                   "coordinate_system": "radar_cartesian",
+                   "reference_point": "radar_location"}
+    }
+
+sweep_vars_attrs_hbeam = {
+    "beamc_height": {"standard_name": "radar_beam_centre_height",
+                     "long_name": "beam centre height",
+                     "short_name": "BEAM_HEIGHT",
+                     "units": "km",
+                     "description": ("Height of the radar beam centre (km), "
+                                     "computed from elevation, range, and "
+                                     "Earth curvature."),
+                     "axis": "Z",
+                     "coordinate_system": "radar_vertical",
+                     "reference_point": "radar_location",
+                     "height_reference": "radar"},
+    "beamb_height": {"standard_name": "radar_beam_bottom_height",
+                     "long_name": "beam bottom height",
+                     "short_name": "BEAM_BOTTOM_HEIGHT",
+                     "units": "km",
+                     "description": ("Height of the lower edge of the radar "
+                                     "beam (km), computed from elevation, "
+                                     "range, beamwidth, and Earth curvature."),
+                     "axis": "Z",
+                     "coordinate_system": "radar_vertical",
+                     "reference_point": "radar_location",
+                     "height_reference": "radar"},
+    "beamt_height": {"standard_name": "radar_beam_top_height",
+                     "long_name": "beam top height",
+                     "short_name": "BEAM_TOP_HEIGHT",
+                     "units": "km",
+                     "description": ("Height of the upper edge of the radar "
+                                     "beam (km), computed from elevation, "
+                                     "range, beamwidth, and Earth curvature."),
+                     "axis": "Z",
+                     "coordinate_system": "radar_vertical",
+                     "reference_point": "radar_location",
+                     "height_reference": "radar"},
+    }
+
 sweep_vars_attrs_ukmo = {
     'CI': {'standard_name': 'clutter_indicator',
            'long_name': 'pulse-to-pulse variation of power',
@@ -41,27 +100,31 @@ sweep_vars_attrs_clc = {
     }
 
 sweep_vars_attrs_mlyr = {
-    "MLYRTOP": {
-        "standard_name": "mlyr_top",
-        "long_name": "melting-layer top height",
-        "short_name": "MLYRTOP",
-        "units": "km",
-        "description": "Height of the upper boundary of the melting layer",
-        },
-    "MLYRBTM": {
-        "standard_name": "mlyr_bottom",
-        "long_name": "melting-layer bottom height",
-        "short_name": "MLYRBTM",
-        "units": "km",
-        "description": "Height of the lower boundary of the melting layer",
-        },
-    "MLYRTHK": {
-        "standard_name": "mlyr_thickness",
-        "long_name": "melting-layer thickness",
-        "short_name": "MLYRTHK",
-        "units": "km",
-        "description": "Vertical thickness of the melting layer"
-        }
+    "MLYRTOP": {"standard_name": "mlyr_top",
+                "long_name": "melting-layer top height",
+                "short_name": "MLYRTOP",
+                "units": "km",
+                "description": ("Height of the upper boundary of the melting "
+                                "layer"),
+                "axis": "Z",
+                "coordinate_system": "radar_vertical",
+                "reference_point": "radar_location",
+                "height_reference": "radar"},
+    "MLYRBTM": {"standard_name": "mlyr_bottom",
+                "long_name": "melting-layer bottom height",
+                "short_name": "MLYRBTM",
+                "units": "km",
+                "description": ("Height of the lower boundary of the melting "
+                                "layer"),
+                "axis": "Z",
+                "coordinate_system": "radar_vertical",
+                "reference_point": "radar_location",
+                "height_reference": "radar"},
+    "MLYRTHK": {"standard_name": "mlyr_thickness",
+                "long_name": "melting-layer thickness",
+                "short_name": "MLYRTHK",
+                "units": "km",
+                "description": "Vertical thickness of the melting layer"}
     }
 
 sweep_vars_attrs_mlpcp = {
@@ -111,40 +174,40 @@ sweep_vars_attrs_qpe = {
                   "units": "mm h-1"},
     "RAIN_ACCUM": {"standard_name": "rain_accumulation",
                    "long_name": "rainfall_amount",
-                   'short_name': 'MLPCLASS',
+                   'short_name': 'RAINACC',
                    "units": "mm"},
     }
 
 sweep_vars_attrs_profs = {
-    "GRAD_VRADV": {
-        "standard_name": "vertical_gradient_of_radial_velocity",
-        "long_name": "Vertical gradient of Doppler radial velocity",
-        "short_name": "GRAD_VRADV",
-        "units": "∂V/∂h"},
-    'BIN_CLASS': {
-        "standard_name": "precipitation_classification_in_height_bins",
-        "long_name": "Per-height-bin precipitation classification",
-        "short_name": "BIN_CLASS",
-        "units": "flags [6]",
-        "flags": {"no_rain": 0, "light_rain": 1, "modrt_rain": 2,
-                  "heavy_rain": 3, "mixed_pcpn": 4, "solid_pcpn": 5}},
-    'PROF_TYPE': {
-        "standard_name": "precipitation_type_of_profile",
-        "long_name": "Profile precipitation type (0–6 scheme)",
-        "short_name": "PROF_TYPE",
-        "units": "flags [7]",
-        "flags": {"NR": 0, "LR [STR]": 1, "MR [STR]": 2, "HR [STR]": 3,
-                  "LR [CNV]": 4, "MR [CNV]": 5, "HR [CNV]": 6}},
-    'PCP_TYPE': {
-        "standard_name": "scalar_precipitation_type_of_profile",
-        "long_name": "Scalar precipitation type",
-        "short_name": "PCP_TYPE",
-        "units": "flags [7]",
-        "flags": {"NR": 0, "LR [STR]": 1, "MR [STR]": 2, "HR [STR]": 3,
-                  "LR [CNV]": 4, "MR [CNV]": 5, "HR [CNV]": 6}}
+    "GRAD_VRADV": {"standard_name": "vertical_gradient_of_radial_velocity",
+                   "long_name": "Vertical gradient of Doppler radial velocity",
+                   "short_name": "GRAD_VRADV",
+                   "units": "∂V/∂h"},
+    'BIN_CLASS': {"standard_name": "precipitation_classification_in_height_bins",
+                  "long_name": "Per-height-bin precipitation classification",
+                  "short_name": "BIN_CLASS",
+                  "units": "flags [6]",
+                  "flags": {"no_rain": 0, "light_rain": 1, "modrt_rain": 2,
+                            "heavy_rain": 3, "mixed_pcpn": 4, "solid_pcpn": 5}},
+    'PROF_TYPE': {"standard_name": "precipitation_type_of_profile",
+                  "long_name": "Profile precipitation type (0–6 scheme)",
+                  "short_name": "PROF_TYPE",
+                  "units": "flags [7]",
+                  "flags": {"NR": 0, "LR [STR]": 1, "MR [STR]": 2,
+                            "HR [STR]": 3, "LR [CNV]": 4, "MR [CNV]": 5,
+                            "HR [CNV]": 6}},
+    'PCP_TYPE': {"standard_name": "scalar_precipitation_type_of_profile",
+                 "long_name": "Scalar precipitation type",
+                 "short_name": "PCP_TYPE",
+                 "units": "flags [7]",
+                 "flags": {"NR": 0, "LR [STR]": 1, "MR [STR]": 2,
+                           "HR [STR]": 3, "LR [CNV]": 4, "MR [CNV]": 5,
+                           "HR [CNV]": 6}}
     }
 
 sweep_vars_attrs_f = (sweep_vars_attrs_xrd     |
+                      sweep_vars_attrs_rect    |
+                      sweep_vars_attrs_hbeam   |
                       sweep_vars_attrs_ukmo    |
                       sweep_vars_attrs_snr     |
                       sweep_vars_attrs_clc     |
