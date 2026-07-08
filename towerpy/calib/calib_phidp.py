@@ -729,7 +729,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         'RHOHV': 'RHOHV', 'PHIDP': 'PHIDP'}``.
     mode : {"median", "multiple", "mode"}, default "median"
         Output mode:
-    
+
         - "median"   – return a single scalar offset (median of all rays).
         - "multiple" – return ray-wise offsets.
         - "mode"     – return a single scalar offset from an histogram of
@@ -856,6 +856,8 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
             # Apply preset override
             if preset is not None:
                 out = xr.where(np.abs(out - preset) > preset_tol, preset, out)
+        # Guarantee no NaNs in mode output
+        out = out.fillna(0)
     else:
         raise ValueError("mode must be 'median', 'multiple', or 'mode'")
     # 5. Build minimal output dataset

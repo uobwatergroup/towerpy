@@ -1893,12 +1893,14 @@ def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
         # 1. input_processing_chain
         if "input_processing_chain" in ds.attrs:
             chain = copy.deepcopy(ds.attrs["input_processing_chain"])
-            if chain and chain not in sipc:
+            # if chain and chain not in sipc:
+            if chain:
                 sipc.append(chain)
         # 2. list of source_input_processing_chains
         if "source_input_processing_chains" in ds.attrs:
             for chain in ds.attrs["source_input_processing_chains"]:
-                if chain and chain not in sipc:
+                if chain:
+                # if chain and chain not in sipc:
                     sipc.append(copy.deepcopy(chain))
     out.attrs["source_input_processing_chains"] = sipc
     out = record_provenance(
