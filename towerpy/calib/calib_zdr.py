@@ -315,8 +315,8 @@ def _empty_stats():
 
 
 def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
-                           zhmin=5.0, zhmax=30.0, rhvmin=0.98,
-                           return_stats=False):
+                           zhmin=5., zhmax=30., rhvmin=0.98,
+                           invalid_value=np.nan, return_stats=False):
     r"""
     Estimate the :math:`Z_{DR}` calibration offset from vertical profiles.
 
@@ -346,16 +346,20 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
         Maximum ZH threshold (dBZ) for selecting light-rain gates.
     rhvmin : float, default 0.98
         Minimum RHOHV threshold for selecting light-rain gates.
+    invalid_value : float or None, default ``np.nan``
+        Value assigned to the offset when the computation is invalid.
     return_stats : bool, default False
         If True, return (offset, stats_dataset).
 
     Returns
     -------
     offset : xarray.Dataset
-        Scalar ZDR offset, in dB.
+        Scalar ZDR offset, in dB. If the computation is invalid, the offset is
+        set to ``invalid_value`` and the attribute ``zdr_offset_valid=False``
+        is added to the output dataset.
     stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
-    
+
     Notes
     -----
     * The method estimates the differential reflectivity offset following [2]_:
@@ -363,7 +367,12 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
     * Only gates between `min_h` and the melting-layer bottom are used.
     * Only light-rain gates are used, using threshold in RHOHV and ZH, 
       according to [1]_
-    
+    * If the offset cannot be computed (e.g., invalid melting‑layer height or
+      insufficient valid bins), the function assigns ``invalid_value`` to 
+      ``ZDR_OFFSET`` and marks the result as invalid via the
+      ``zdr_offset_valid`` attribute. Users may set ``invalid_value`` to any
+      placeholder (e.g., ``0.0``, ``-999``, ``None``).
+
     References
     ----------
     .. [1] Gorgucci, E., Scarchilli, G., & Chandrasekar, V. (1999). A procedure
@@ -381,9 +390,6 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
     names = {**defaults, **(inp_names or {})}
     height = ds[names["height"]]
     # 2. Determine melting-layer geometry
-    # if detect_mlyr:
-    #     mlyr_kwargs = mlyr_kwargs or {}
-    #     mlyr = detect_mlyr_from_profiles(ds, **mlyr_kwargs)
     if mlyr is None:
         ml_top = 5.0
         ml_thk = 0.75
@@ -394,30 +400,34 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
         ml_thk = float(mlyr["MLYRTHK"])
     # 3. Height slicing using find_nearest_index
     hvals = height.values
+    valid = True
     # Invalid MLyr -> offset = 0
     if np.isnan(ml_bottom) or np.isnan(ml_top):
-        offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+        offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
         stats = _empty_stats() if return_stats else None
+        valid = False
     else:
         i0 = find_nearest_index(hvals, min_h)
         i1 = find_nearest_index(hvals, ml_bottom)
-
         if i1 <= i0:
-            offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+            offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
             stats = _empty_stats() if return_stats else None
+            valid = False
         else:
             ds_sel = ds.isel({names["height"]: slice(i0, i1)})
             zdr_sel = ds_sel[names["ZDR"]]
             zh_sel = ds_sel[names["ZH"]]
             rho_sel = ds_sel[names["RHOHV"]]
             # 4. Apply light-rain filtering
-            mask = ((zh_sel >= zhmin) & (zh_sel <= zhmax) & (rho_sel >= rhvmin))
+            mask = ((zh_sel >= zhmin) & (zh_sel <= zhmax)
+                    & (rho_sel >= rhvmin))
             zdr_filt = zdr_sel.where(mask)
             # 5. minbins
             valid_bins = zdr_filt.count(dim=names["height"])
             if valid_bins <= minbins:
-                offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+                offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
                 stats = _empty_stats() if return_stats else None
+                valid = False
             else:
                 # 6. Compute offset
                 offset = zdr_filt.mean(dim=names["height"], skipna=True)
@@ -449,13 +459,14 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
         "Estimated the ZDR calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "zhmin": zhmin, "zhmax": zhmax, "rhvmin": rhvmin,
               "minbins": minbins, "ml_top": ml_top, "ml_bottom": ml_bottom,
-              "ml_thickness": ml_thk}
+              "ml_thickness": ml_thk, 'invalid_value': invalid_value}
     outputs = 'ZDR_OFFSET'
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(
         mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
     ds_out.attrs["source_input_processing_chains"] = []
+    ds_out.attrs["zdr_offset_valid"] = valid
     if ds_chain:
         ds_out.attrs["source_input_processing_chains"].append(ds_chain)
     if ml_chain:
@@ -470,7 +481,8 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
 
 def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
                             zhmin=0., zhmax=20., rhvmin=0.985, minbins=4,
-                            zdr_0=0.182, return_stats=False):
+                            zdr_0=0.182, invalid_value=np.nan,
+                            return_stats=False):
     r"""
     Estimate the :math:`Z_{DR}` offset from quasi-vertical profiles.
 
@@ -506,13 +518,18 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
         the offset.
     zdr_0 : float, default 0.182
         Intrinsic value of :math:`Z_{DR}` in light rain at ground level.
+    invalid_value : float or None, default ``np.nan``
+        Value assigned to the offset when the computation is invalid.
     return_stats : bool, default False
-        If ``True``, return both the offset and a dataset of summary statistics.
+        If ``True``, return both the offset and a dataset of summary
+        statistics.
 
     Returns
     -------
     offset : xarray.Dataset
-        Scalar ZDR calibration offset, in dB:
+        Scalar ZDR offset, in dB. If the computation is invalid, the offset is
+        set to ``invalid_value`` and the attribute ``zdr_offset_valid=False``
+        is added to the output dataset.
     stats : xarray.Dataset, optional
         Dataset containing ``offset_max``, ``offset_min``, ``offset_std``,
         and ``offset_sem``. Returned only if ``return_stats=True``.
@@ -526,6 +543,11 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
     * Only gates between ``min_h`` and the melting‑layer bottom are used.
     * Only light‑rain gates are selected, using thresholds in ZH and RHOHV.
     * The method follows the QVP‑based calibration approach described in [1]_.
+    * If the offset cannot be computed (e.g., invalid melting‑layer height or
+      insufficient valid bins), the function assigns ``invalid_value`` to 
+      ``ZDR_OFFSET`` and marks the result as invalid via the
+      ``zdr_offset_valid`` attribute. Users may set ``invalid_value`` to any
+      placeholder (e.g., ``0.0``, ``-999``, ``None``).
 
     References
     ----------
@@ -553,16 +575,19 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
         ml_thk = float(mlyr["MLYRTHK"])
     # 3. Height slicing using find_nearest_index
     hvals = height.values
+    valid = True
     # Invalid MLyr -> offset = 0
     if np.isnan(ml_bottom) or np.isnan(ml_top):
-        offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+        offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
         stats = _empty_stats() if return_stats else None
+        valid = False
     else:
         i0 = find_nearest_index(hvals, min_h)
         i1 = find_nearest_index(hvals, ml_bottom)
         if i1 <= i0:
-            offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+            offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
             stats = _empty_stats() if return_stats else None
+            valid = False
         else:
             ds_sel = ds.isel({names["height"]: slice(i0, i1)})
             zdr_sel = ds_sel[names["ZDR"]]
@@ -576,8 +601,9 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
             # 5. minbins
             valid_bins = zdr_filt.count(dim=names["height"])
             if valid_bins <= minbins:
-                offset = xr.DataArray(0.0, name="ZDR_OFFSET")
+                offset = xr.DataArray(invalid_value, name="ZDR_OFFSET")
                 stats = _empty_stats() if return_stats else None
+                valid = False
             else:
                 # 6. Compute offset
                 mean_zdr = zdr_filt.mean(dim=names["height"], skipna=True)
@@ -610,13 +636,15 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
         "using selected quality-controlled radar gates.")}
     params = {"min_h": min_h, "max_h": max_h, "zhmin": zhmin, "zhmax": zhmax,
               "rhvmin": rhvmin, "minbins": minbins, "zdr_0": zdr_0,
-              "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk}
+              "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
+              'invalid_value': invalid_value}
     outputs = 'ZDR_OFFSET'
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(
         mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
     ds_out.attrs["source_input_processing_chains"] = []
+    ds_out.attrs["zdr_offset_valid"] = valid
     if ds_chain:
         ds_out.attrs["source_input_processing_chains"].append(ds_chain)
     if ml_chain:

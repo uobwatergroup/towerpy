@@ -2117,8 +2117,12 @@ class HTIExplorer:
         self._ax_hti.set_xlabel("Date and Time", fontsize=fontsizelabels,
                                 labelpad=15)
         #TODO: do not hardcode height units
-        self._ax_hti.set_ylabel("Height [km]", fontsize=fontsizelabels,
-                                labelpad=15)
+        dsh_attrs = self.ds.height.attrs
+        # self._ax_hti.set_ylabel("Height [km]", fontsize=fontsizelabels,
+        #                         labelpad=15)
+        self._ax_hti.set_ylabel(f"{dsh_attrs.get('short_name', 'Height')}"
+                                f" [{dsh_attrs.get('units', 'km')}]",
+                                fontsize=fontsizelabels, labelpad=15)
         self._ax_hti.grid(self.add_grid)
         self._ax_hti.tick_params(axis='both', direction='in', pad=10,
                                  labelsize=fontsizetick)
@@ -2434,13 +2438,13 @@ def plot_mlyr_detection_from_profiles(ds, rmlyr, diags, *, comb_id,
     ax2 = axs[1]
     # =============================================================================
     ac = 0.7
-    if comb_mult:
-        ax2.plot(comb_mult[comb_idpy], hb_lim_it1, lw=1.5, c="tab:blue",
-                 label=f"$P^*_{{{comb_idpy+1}}}$")
-        ax2.plot(-resimp2d, hb_lim_it1, lw=3.0, c="gold", alpha=ac,
-                 label=f"$-P_{{{comb_idpy+1}}}^*''$")
-        ax2.plot(comb_mult_w[comb_idpy], hb_lim_it1, lw=3.0, c="tab:green",
-                 alpha=ac, label=f"$P_{{{comb_idpy+1}}}$")
+    # if comb_mult:
+    ax2.plot(comb_mult[comb_idpy], hb_lim_it1, lw=1.5, c="tab:blue",
+             label=f"$P^*_{{{comb_idpy+1}}}$")
+    ax2.plot(-resimp2d, hb_lim_it1, lw=3.0, c="gold", alpha=ac,
+             label=f"$-P_{{{comb_idpy+1}}}^*''$")
+    ax2.plot(comb_mult_w[comb_idpy], hb_lim_it1, lw=3.0, c="tab:green",
+             alpha=ac, label=f"$P_{{{comb_idpy+1}}}$")
     if comb_mult_w:
         if ~np.isnan(mlrand[comb_idpy]["idxtop"]):
             ax2.scatter(

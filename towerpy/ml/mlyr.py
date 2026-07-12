@@ -1146,9 +1146,7 @@ def _mlyr_detection_engine(height, dbz, rhohv, zdr, phidp, gradv, profile_type,
         comps.append(ph_norm)
     else:
         comps.append(np.ones_like(dbz_norm[sl]))
-    
     # 7. All non-empty combinations
-    
     n = len(comps)
     combin = np.array(list(map(list, product([0, 1], repeat=n)))[1:])
     comps_arr = np.vstack(comps)
@@ -1177,15 +1175,44 @@ def _mlyr_detection_engine(height, dbz, rhohv, zdr, phidp, gradv, profile_type,
     else:
         comb_idpy = comb_id - 1
         mlyr = mlrandf[comb_idpy] if 0 <= comb_idpy < len(mlrandf) else np.nan
-    # 9. Bright band intensity for combination 7
-    if (isinstance(mlrand, list) and len(mlrand) > 7
-        and not np.isnan(mlrand[7].get("idxmax", np.nan))):
-        idx7 = mlrand[7]["idxmax"]
-        bb_intensity = dbz[sl][idx7]
-        bb_peakh = h_win[idx7]
+    # # 9. Bright band intensity for combination 7
+    # if (isinstance(mlrand, list) and len(mlrand) > 7
+    #     and not np.isnan(mlrand[7].get("idxmax", np.nan))):
+    #     idx7 = mlrand[7]["idxmax"]
+    #     bb_intensity = dbz[sl][idx7]
+    #     bb_peakh = h_win[idx7]
+    # else:
+    #     bb_intensity = np.nan
+    #     bb_peakh = np.nan
+    # 9. Bright-band diagnostics
+    if comb_id is None:
+        # 9a. Bright band intensity for P7 (ZH-only peak) inside sl
+        if (isinstance(mlrand, list) and len(mlrand) > 7
+            and not np.isnan(mlrand[7].get("idxmax", np.nan))):
+            idx7 = mlrand[7]["idxmax"]
+            bb_intensity = dbz[sl][idx7]
+            bb_peakh = h_win[idx7]
+        else:
+            bb_intensity = np.nan
+            bb_peakh = np.nan
     else:
-        bb_intensity = np.nan
-        bb_peakh = np.nan
+        # Use maximum reflectivity inside the selected ML geometry
+        mlyr_sel = mlrandf[comb_idpy] if 0 <= comb_idpy < len(mlrandf) else None
+        if mlyr_sel is None or np.isnan(mlyr_sel["MLYRBTM"]) or np.isnan(mlyr_sel["MLYRTOP"]):
+            bb_intensity = np.nan
+            bb_peakh = np.nan
+        else:
+            # find indices inside ML boundaries
+            mask_ml = (height >= mlyr_sel["MLYRBTM"]) & (height <= mlyr_sel["MLYRTOP"])
+            if np.any(mask_ml):
+                idx_bb = np.nanargmax(dbz[mask_ml])
+                # convert mask index to global index
+                global_idx = np.where(mask_ml)[0][idx_bb]
+                bb_intensity = dbz[global_idx]
+                bb_peakh = height[global_idx]
+            else:
+                bb_intensity = np.nan
+                bb_peakh = np.nan
     # 10. Build diagnostics
     diagnostics = {"bb_intensity": bb_intensity, "bb_peakh": bb_peakh}
     intermediate = {"ml_peakh_all": [r.get("mlpeak", np.nan) for r in mlrand],
@@ -1262,7 +1289,8 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
     gradv_peak : {'left', 'right'}, default 'left'
         Side of the GRADV peak used for boundary selection.
     return_diagnostics : bool, default True
-        If ``True``, include bright‑band diagnostics in the output.
+        If ``True``, include bright‑band diagnostics in the output. See Notes
+        for details on how ``BB_INTENSITY`` and ``BB_PEAKH`` are computed.
     return_internal : bool, default False
         If ``True``, also return intermediate fields from the detection engine.
 
@@ -1288,6 +1316,15 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
       ZDR, PHIDP and GRADV profiles depending on availability and
       configuration.
     * Internal peak detection uses :func:`scipy.signal.find_peaks`.
+    * Bright‑band diagnostics (``BB_INTENSITY`` and ``BB_PEAKH``) are derived
+      from the normalised reflectivity (ZH) profile. This corresponds to
+      combination 8 in Sánchez‑Rivas & Rico‑Ramírez (2021). When ``comb_id``
+      is not None, BB‑diagnostics are computed as the maximum reflectivity
+      value within the melting‑layer boundaries associated with the selected
+      combination. This provides a simple diagnostic proxy for reflectivity
+      enhancement within the melting layer; although these values may
+      correspond to a bright‑band signature, they should be regarded as
+      diagnostic quantities rather than definitive indicators.
     * ``return_internal`` produces a dictionary exposing internal normalised
       profiles, peak‑finding results, and combination scores used during the
       detection process. They are intended for debugging and algorithm
@@ -1338,7 +1375,6 @@ def detect_mlyr_from_profiles(ds, *, inp_names=None, profile_type='qvp',
         else:
             keys = list(mlyr[0].keys())
             arr = {k: np.empty(len(mlyr), dtype=float) for k in keys}
-            
             for i, d in enumerate(mlyr):
                 for k in keys:
                     arr[k][i] = d[k]

@@ -734,6 +734,8 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         ds_name = inp_map["VRADV"]
         vp[f"GRAD_{ds_name}"] = vp[ds_name].differentiate("height")
     # 12. Assign metadata to ALL variables
+    # restore height metadata
+    vp["height"].attrs = height_1d.attrs.copy()
     for var in vp.data_vars:
         if var in sweep_vars_attrs_f:
             vp[var].attrs.update(sweep_vars_attrs_f[var])
@@ -965,9 +967,9 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
                               "units": height_1d.attrs.get("units", "")})
         # Attach to QVP dataset
         qvp["VRES"] = delta_h
-        # Add to provenance
-        
     # 11. Assign metadata to ALL variables
+    # restore height metadata
+    qvp["height"].attrs = height_1d.attrs.copy()
     for var in qvp.data_vars:
         if var in sweep_vars_attrs_f:
             qvp[var].attrs.update(sweep_vars_attrs_f[var])

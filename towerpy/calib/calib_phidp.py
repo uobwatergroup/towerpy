@@ -475,7 +475,7 @@ def _empty_stats():
 
 def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
                              minbins=2, dbz_min=20., dbz_max=60., rhv_min=0.98,
-                             return_stats=False):
+                             invalid_value=np.nan, return_stats=False):
     r"""
     Estimate the :math:`\Phi_{DP}` calibration offset from vertical profiles.
 
@@ -506,13 +506,17 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
         Maximum ZH threshold (dBZ) for selecting rain gates.
     rhv_min : float, default 0.98
         Minimum RHOHV threshold for selecting rain gates.
+    invalid_value : float or None, default ``np.nan``
+        Value assigned to the offset when the computation is invalid.
     return_stats : bool, default False
         If True, return (offset, stats_dataset).
 
     Returns
     -------
     offset : xarray.Dataset
-        Scalar :math:`\Phi_{DP}` calibration offset, in deg.
+        Scalar :math:`\Phi_{DP}` calibration offset, in deg. If the computation
+        is invalid, the offset is set to ``invalid_value`` and the attribute
+        ``phidp_offset_valid=False`` is added to the output dataset.
     stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
 
@@ -523,6 +527,11 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
     * Only gates between `min_h` and the melting-layer bottom are used.
     * Only rain gates are used, using threshold in RHOHV and ZH, according to
       [1]_
+    * If the offset cannot be computed (e.g., invalid melting‑layer height or
+      insufficient valid bins), the function assigns ``invalid_value`` to 
+      ``PHIDP_OFFSET`` and marks the result as invalid via the
+      ``phidp_offset_valid`` attribute. Users may set ``invalid_value`` to any
+      placeholder (e.g., ``0.0``, ``-999``, ``None``).
 
     References
     ----------
@@ -550,18 +559,19 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
         ml_thk = float(mlyr["MLYRTHK"])
     # 3. Height slicing
     hvals = height.values
+    valid = True
     # Invalid MLyr -> offset = 0
     if np.isnan(ml_bottom) or np.isnan(ml_top):
-        offset = xr.DataArray(0.0, name="PHIDP_OFFSET")
+        offset = xr.DataArray(invalid_value, name="PHIDP_OFFSET")
         stats = _empty_stats() if return_stats else None
-
+        valid = False
     else:
         i0 = find_nearest_index(hvals, min_h)
         i1 = find_nearest_index(hvals, ml_bottom)
         if i1 <= i0:
-            offset = xr.DataArray(0.0, name="PHIDP_OFFSET")
+            offset = xr.DataArray(invalid_value, name="PHIDP_OFFSET")
             stats = _empty_stats() if return_stats else None
-
+            valid = False
         else:
             ds_sel = ds.isel({names["height"]: slice(i0, i1)})
             phidp_sel = ds_sel[names["PHIDP"]]
@@ -573,8 +583,9 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
             # 5. minbins
             valid_bins = phidp_filt.count(dim=names["height"])
             if valid_bins <= minbins:
-                offset = xr.DataArray(0.0, name="PHIDP_OFFSET")
+                offset = xr.DataArray(invalid_value, name="PHIDP_OFFSET")
                 stats = _empty_stats() if return_stats else None
+                valid = False
             else:
                 # 6. Compute offset
                 offset = phidp_filt.mean(dim=names["height"], skipna=True)
@@ -606,13 +617,15 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
         "Estimated the PhiDP calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "dbz_min": dbz_min, "dbz_max": dbz_max,
               "rhv_min": rhv_min, "minbins": minbins, "ml_top": ml_top,
-              "ml_bottom": ml_bottom, "ml_thickness": ml_thk}
+              "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
+              'invalid_value': invalid_value}
     outputs = 'PHIDP_OFFSET'
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(
         mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
     ds_out.attrs["source_input_processing_chains"] = []
+    ds_out.attrs["phidp_offset_valid"] = valid
     if ds_chain:
         ds_out.attrs["source_input_processing_chains"].append(ds_chain)
     if ml_chain:
@@ -765,7 +778,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         Maximum allowed difference (deg) between the preset and computed
         offsets before enforcing the preset value.
     hist_kwargs : dict or None, optional
-        Additional keyword arguments passed to `numpy.histogram` when
+        Additional keyword arguments passed to `np.histogram` when
         `mode="mode"`. Defaults to ``{"bins": 72}`` if not provided.
 
     Returns
@@ -774,6 +787,8 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         Dataset containing the detected :math:`\Phi_{DP}` offset(s), with
         variable name ``PHIDP_OFFSET``. In ``"median"`` mode, this is a
         scalar field; in ``"multiple"`` mode, offsets are provided per ray.
+        If the computation is invalid, the attribute
+        ``phidp_offset_valid=False`` is added to the output dataset.
 
     Notes
     -----
@@ -782,6 +797,9 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     * Only meteorological gates are used, based on ZH and :math:`\rho_{HV}`
       thresholds.
     * Rays with high :math:`\Phi_{DP}` variability are discarded.
+    * If the offset cannot be computed (e.g., insufficient valid bins), the
+      function marks the result as invalid via the ``phidp_offset_valid``
+      attribute.
     """
     ds = ds.copy()
     # 1. Variable mapping
@@ -813,6 +831,11 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         range_dim=range_dim, azimuth_dim=azimuth_dim)
     # 3. Extract PHIDP(0)
     finite = phidp_f.notnull()
+    # Validity check
+    if not finite.any(range_dim).any():
+        phidp_offset_valid = False
+    else:
+        phidp_offset_valid = True
     first_gate = finite.idxmax(range_dim)
     phidp0 = phidp_f.sel({range_dim: first_gate})
     # Rays with no finite values -> 0
@@ -845,7 +868,8 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         vals = vals[np.isfinite(vals)]
         vals = vals[vals != 0]
         if len(vals) == 0:
-            out = xr.DataArray(np.nan)
+            out = xr.DataArray(np.nan, name=out_name)
+            phidp_offset_valid = False
         else:
             hist, edges = np.histogram(vals, **hist_cfg)
             mode_bin = np.argmax(hist)
@@ -867,6 +891,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     if mode == "multiple":
         coords[names["azi"]] = ds[names["azi"]]
     ds_out = xr.Dataset({out_name: out}, coords=coords)
+    ds_out.attrs["phidp_offset_valid"] = phidp_offset_valid
     # 6. Record dataset-level provenance
     extra = {'step_description': (
         "Estimated the initial PhiDP offset from PPI scans using selected "
