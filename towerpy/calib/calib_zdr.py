@@ -460,7 +460,7 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
     params = {"min_h": min_h, "zhmin": zhmin, "zhmax": zhmax, "rhvmin": rhvmin,
               "minbins": minbins, "ml_top": ml_top, "ml_bottom": ml_bottom,
               "ml_thickness": ml_thk, 'invalid_value': invalid_value}
-    outputs = 'ZDR_OFFSET'
+    outputs = ['ZDR_OFFSET']
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(
@@ -638,7 +638,7 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
               "rhvmin": rhvmin, "minbins": minbins, "zdr_0": zdr_0,
               "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
               'invalid_value': invalid_value}
-    outputs = 'ZDR_OFFSET'
+    outputs = ['ZDR_OFFSET']
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(

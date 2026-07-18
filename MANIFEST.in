@@ -4,7 +4,7 @@ include towerpy/eclass/lnxlibclutterclassifier.so
 include towerpy/eclass/w64libclutterclassifier.dll
 include towerpy/attc/lnxlibattenuationcorrection.so
 include towerpy/attc/w64libattenuationcorrection.dll
-include towerpy/eclass/mfs_cband/*.dat
-include towerpy/eclass/nds_cband/*.dat
-include towerpy/eclass/nds_xband/*.dat
+include towerpy/eclass/nds_cband_sanchez2023/*.dat
+include towerpy/eclass/nds_cband_rico2008/*.dat
+include towerpy/eclass/nds_xband_sanchez2023/*.dat
 include towerpy/eclass/ukmo_cmaps/*.dat

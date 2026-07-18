@@ -702,7 +702,7 @@ def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
                 raise ValueError(
                     f"Variable '{mapped_name}' must be present in dataset "
                     f"when binary_class includes '{canonical_name}'"
-                    " (bit {bit}).")
+                    f" (bit {bit}).")
             vars_dict[canonical_name] = ds[mapped_name]
         else:
             # # if not required, then dummy array
@@ -712,38 +712,47 @@ def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
     return vars_dict
 
 
-def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
-                    binary_class=255, path_nds=None, classid=None,
-                    mask=None, replace_vars=False):
+def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, rband='C',
+                    cmap=None, binary_class=255, classid=None, path_nds=None,
+                    nds_source='rico2008', mask=None, replace_vars=False):
     r"""
     Classify precipitation, noise, and clutter echoes in PPI scans.
 
     The classification follows Rico-Ramirez and Cluckie (2008), using
-    configurable polarimetric-variable selection and optional clutter-map
-    information. Clutter-based masking can optionally be applied to selected
-    radar variables.
+    configurable polarimetric-variable selection and optional clutter
+    map information. Clutter-based masking can optionally be applied
+    to selected radar variables.
 
     Parameters
     ----------
     ds : xarray.Dataset
         Dataset containing polarimetric variables and polar coordinates
-        (range, azimuth, elevation). Variables must already be noise-filtered.
+        (range, azimuth, elevation). Variables must already be noise
+        filtered.
     inp_names : dict, optional
         Mapping for variable/attribute names in the dataset. Defaults:
-        ``{'azi': 'azimuth', 'rng': 'range', 'ZH': 'DBZH', 'RHOHV': 'RHOHV',
-        'LDR': 'LDR', 'ZDR': 'ZDR', 'PHIDP': 'PHIDP', 'V': 'VRADH',
-        'CMAP': 'CMAP'}``
+        ``{'azi': 'azimuth', 'rng': 'range', 'ZH': 'DBZH',
+           'RHOHV': 'RHOHV', 'LDR': 'LDR', 'ZDR': 'ZDR',
+           'PHIDP': 'PHIDP', 'V': 'VRADH', 'CMAP': 'CMAP'}``
     min_snr : float, default None
         Minimum signal‑to‑noise ratio threshold (in dB). Values below
-        this threshold are classified as noise. If None, the function attempts
-        to retrieve the radar constant from metadata. If missing, default is 0.
+        this threshold are classified as noise. If None, the function
+        attempts to retrieve the radar constant from metadata. If
+        missing, default is 0.
     rcst_dB : float, default None
-        Radar constant (in dB). If None, the function attempts to retrieve
-        the radar constant from metadata. If missing, default is 0.
+        Radar constant (in dB). If None, the function attempts to
+        retrieve the radar constant from metadata. If missing, default
+        is 0.
+    rband : {'C', 'X'}, default 'C'
+        Radar band used to select the built‑in NDS directory when
+        ``path_nds`` is ``None``.
+
+        * ``'C'`` – C‑band NDS sets
+        * ``'X'`` – X‑band NDS sets
     cmap : array-like or xarray.DataArray, optional
-        Clutter frequency map (CMAP) in the range [0, 1]. If provided, it is
-        inserted into the dataset under the variable name defined by
-        ``inp_names["CMAP"]``.
+        Clutter frequency map (CMAP) in the range [0, 1]. If provided,
+        it is inserted into the dataset under the variable name
+        defined by ``inp_names["CMAP"]``.
     binary_class : int, default 255
         Bitmask specifying which polarimetric variables are used in the
         classifier. Each bit corresponds to a variable:
@@ -755,17 +764,26 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
             - 4   -> texture of :math:`\Phi_{DP}`
             - 2   -> texture of :math:`Z_{DR}`
             - 1   -> texture of :math:`Z_{H}`
-        Required variables must exist in the dataset when their bit is set.
-    path_nds : str or pathlib.Path, default None
-        Path to the directory containing the normalised distribution (NDS)
-        files used by the classifier. If ``None``, built-in C-band NDS files
-        are used.
+        Required variables must exist in the dataset when their bit is
+        set.
     classid : dict, default None
         Override classification IDs for ``'pcpn'``, ``'noise'``, and
-        ``'clutter'``. Defaults are ``{'pcpn': 0, 'noise': 3, 'clutter': 5}``.
+        ``'clutter'``. Defaults are
+        ``{'pcpn': 0, 'noise': 3, 'clutter': 5}``.
+    path_nds : str or pathlib.Path, default None
+        Path to a directory containing a complete and compatible set of
+        normalised distribution (NDS) files. If ``None``, Towerpy
+        selects a built‑in NDS directory based on the combination of
+        ``rband`` and ``nds_source``.
+    nds_source : {'rico2008', 'sanchez2023'}, default 'rico2008'
+        Calibration set of normalised distribution (NDS) files used when
+        ``path_nds`` is ``None``:
+
+        * ``'rico2008'`` – C‑band NDS set from [1]_
+        * ``'sanchez2023'`` – C‑band and X‑band NDS sets from [2]_
     mask : bool, list of str, dict of str to str, or None, optional
         Controls which variables receive clutter-based masking.
-    
+
         * ``None`` or ``False``: classification only; no masking applied.
         * ``True``: mask all 2‑D data variables in the dataset.
         * list of str: mask only the listed variables.
@@ -779,14 +797,15 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     -------
     xarray.Dataset
         Dataset containing:
-    
+
         - ``CL_CLASS`` : 2‑D classification field (pcpn / noise / clutter)
         - ``CMAP``     : clutter map (if provided or present in input)
         - masked variables (if ``mask`` is True, a list, or a dict)
         - updated variable-level and dataset-level provenance
-    
+
     Notes
     -----
+    * This function operates in native polar radar coordinates.
     * The normalised frequency distributions describe the empirical
       distributions of the polarimetric variables, as shown in [1]_ or [2]_.
       When providing a custom path, it must point to a directory containing a
@@ -835,13 +854,18 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
         echoesID.update(classid)
     # Set path of the NDS
     if path_nds is None:
-        # pathnds = str.encode(str(Path(__file__).parent.absolute())
-        #                      + '/nds_cband/')
-        # Use built‑in NDS directory
-        nds_path = Path(__file__).parent / "nds_cband"
+        # Towerpy selection
+        if rband == "C" and nds_source == "rico2008":
+            nds_path = Path(__file__).parent / "nds_cband_rico2008"
+        elif rband == "C" and nds_source == "sanchez2023":
+            nds_path = Path(__file__).parent / "nds_cband_sanchez2023"
+        elif rband == "X" and nds_source == "sanchez2023":
+            nds_path = Path(__file__).parent / "nds_xband_sanchez2023"
+        else:
+            raise ValueError(f"Unsupported combination rband={rband},"
+                             f" nds_source={nds_source}")
     else:
-        # pathnds = str.encode(path_nds.as_posix().rstrip("/") + "/")
-        # Normalise user path
+        # User override
         nds_path = Path(path_nds)
     # Validate directory before encoding for C library
     _validate_nds_files(nds_path, _required_nds_files(binary_class))
@@ -852,12 +876,13 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
     array2d = npct.ndpointer(dtype=np.double, ndim=2, flags='CONTIGUOUS')
     if platform.system() == 'Linux':
         libclc = 'lnxlibclutterclassifier.so'
-        load_libclc = npct.load_library(libclc, Path(__file__).parent.absolute())
+        load_libclc = npct.load_library(libclc,
+                                        Path(__file__).parent.absolute())
         # load_libclc = npct.load_library(libclc, Path.cwd())
     elif platform.system() == 'Windows':
         libclc = 'w64libclutterclassifier.dll'
-        load_libclc = ctp.cdll.LoadLibrary(f'{Path(__file__).parent.absolute()}/'
-                                     + libclc)
+        load_libclc = ctp.cdll.LoadLibrary(
+            f'{Path(__file__).parent.absolute()}/' + libclc)
     else:
         load_libclc = None
         libclc = 'no_libraryOS'
@@ -1032,7 +1057,11 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, cmap=None,
               "mask": mask,
               "replace_vars": replace_vars,
               "corrected_vars": corrected_vars,
-              "library": libclc,}
+              "library": libclc,
+              "rband": rband,
+              "nds_source": nds_source,
+              "nds_user_override": path_nds is not None,
+              }
     extra = {'step_description': (
         "Classified precipitation, noise, and clutter echoes, with optional "
         "clutter-based masking of selected radar variables.")}

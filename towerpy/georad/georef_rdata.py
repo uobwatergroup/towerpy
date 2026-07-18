@@ -275,13 +275,13 @@ def ppi_rectgeoref(sweep, radar_altitude=None, bh_geom=True, beamwidth=None):
     -------
     sweep : xarray.Dataset
         The input dataset with additional 2‑D georeferenced coordinates:
-           
+
         - ``grid_rectx`` : Cartesian x‑coordinate (km)
         - ``grid_recty`` : Cartesian y‑coordinate (km)
         - ``beamc_height`` : beam‑centre height (km)
         - ``beamb_height`` : beam‑bottom height (km)
         - ``beamt_height`` : beam‑top height (km)
-       
+
         All returned fields are aligned with the ``(azimuth, range)`` grid and
         include appropriate metadata (units, long_name, short_name).
 
@@ -323,9 +323,11 @@ def ppi_rectgeoref(sweep, radar_altitude=None, bh_geom=True, beamwidth=None):
                              geogrid["beam_height [km]"]),
             })
     # Add metadata for coordinates from modeltp
-    for name, attrs in sweep_vars_attrs_f.items():
-        if name in sweep:
-            sweep[name].attrs.update(attrs)
+    created = ["grid_rectx", "grid_recty", "beamc_height",
+               "beamb_height", "beamt_height"]
+    for vname in created:
+        if vname in sweep and vname in sweep_vars_attrs_f:
+            sweep[vname].attrs.update(sweep_vars_attrs_f[vname])
     # Apply altitude offset (AMSL)
     if radar_altitude is not None:
         sweep["beamc_height"] = sweep["beamc_height"] + radar_altitude

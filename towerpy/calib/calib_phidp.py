@@ -619,7 +619,7 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
               "rhv_min": rhv_min, "minbins": minbins, "ml_top": ml_top,
               "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
               'invalid_value': invalid_value}
-    outputs = 'PHIDP_OFFSET'
+    outputs = ['PHIDP_OFFSET']
     # 9a. Attach provenance of input datasets
     ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
     ml_chain = copy.deepcopy(
