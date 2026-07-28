@@ -640,7 +640,8 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
 
 def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
                      minthr_pdp0=-np.inf, rhohv_min=0.9, dbz_min=5, dbz_max=60,
-                     range_dim="range", azimuth_dim="azimuth"):
+                     min_rng=None, max_rng=None,range_dim="range",
+                     azimuth_dim="azimuth"):
     r"""
     Filter spurious values in :math:`\Phi_{DP}`.
 
@@ -667,6 +668,16 @@ def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
         Minimum reflectivity threshold (dBZ).
     dbz_max : float, default 60
         Maximum reflectivity threshold (dBZ).
+    min_rng : float or None, optional
+        Minimum range value used for filtering radar gates. Gates with
+        range coordinates smaller than ``min_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
+    max_rng : float or None, optional
+        Maximum range value used for filtering radar gates. Gates with
+        range coordinates larger than ``max_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
     range_dim : str, default "range"
         Name of the range dimension.
     azimuth_dim : str, default "azimuth"
@@ -696,6 +707,15 @@ def _phidp_filtering(phidp, rhohv=None, zh=None, window=(1, 3), thr_spdp=10.,
     # rhoHV mask
     if rhohv is not None:
         mask1 = mask1 & (rhohv >= rhohv_min)
+    # Range mask
+    if min_rng is not None or max_rng is not None:
+        rng = phidp[range_dim]
+        mask_rng = xr.ones_like(phidp, dtype=bool)
+        if min_rng is not None:
+            mask_rng = mask_rng & (rng >= min_rng)
+        if max_rng is not None:
+            mask_rng = mask_rng & (rng <= max_rng)
+        mask1 = mask1 & mask_rng
     # Apply mask to PHIDP
     phidp_dspk_rhv = phidp.where(mask1)
     # Rolling std
@@ -942,10 +962,11 @@ def _enforce_monotonic(ray, ml_mask):
 
 
 def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
-                        minthr_pdp0=-5, rhohv_min=0.90, dbz_min=5, dbz_max=60,
-                        phidp0_correction=False, mlyr_intp=False,
-                        mlyr_top=None, mlyr_thk=None, mlyr_btm=None, mask=True,
-                        mlyr_monotonic=False, replace_vars=False):
+                        minthr_pdp0=-5, rhohv_min=0.90, dbz_min=5, dbz_max=50,
+                        phidp0_correction=False, min_rng=None, max_rng=None,
+                        mlyr_intp=False, mlyr_top=None, mlyr_thk=None,
+                        mlyr_btm=None, mask=True, mlyr_monotonic=False,
+                        replace_vars=False):
     r"""
     Apply quality-control processing to differential phase (:math:`\Phi_{DP}`).
 
@@ -961,7 +982,7 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         recommended for thresholding.
     inp_names : dict, optional
         Mapping for variable/attribute names in the dataset.
-        Defaults to ``{'azi': 'azimuth', 'rng': 'range', 'ZH': 'DBZH',
+        Defaults to ``{'azi': 'azimuth', 'rng': 'range', 'DBZ': 'DBZH',
         'RHOHV': 'RHOHV', 'PHIDP': 'PHIDP'}``.
     mov_avrgf_len : tuple of int, default (1, 3)
         Window size ``(m, n)`` for moving-average smoothing, where ``m`` is
@@ -984,6 +1005,16 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         finite gate. If ``False``, use a constant value (1e-5) for rays with
         valid data. Zero offsets are replaced by the median of non-zero
         offsets.
+    min_rng : float or None, optional
+        Minimum range value used for filtering radar gates. Gates with
+        range coordinates smaller than ``min_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
+    max_rng : float or None, optional
+        Maximum range value used for filtering radar gates. Gates with
+        range coordinates larger than ``max_rng`` are discarded. The
+        value must be provided in the same units as the dataset's range
+        coordinate.
     mlyr_intp : bool, default False
         If ``True``, mask the melting-layer region and interpolate
         :math:`\Phi_{DP}` through it using the geometric parameters.
@@ -991,6 +1022,9 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
         Melting-layer geometric parameters (km). Each may be scalar or
         per-azimuth arrays. Any two of the three define the third. Used to
         identify and interpolate through the melting layer.
+    mlyr_monotonic : bool, default False
+        If True, enforce monotonicity inside the melting layer after
+        interpolation.
     mask : bool, list of str, dict of str to str, or None, default True
         Controls which variables receive the QC-processed :math:`\\Phi_{DP}`.
 
@@ -1061,7 +1095,8 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
     phidp_f = _phidp_filtering(
         phidp, rhohv, zh, window=mov_avrgf_len, thr_spdp=t_spdp,
         rhohv_min=rhohv_min, dbz_min=dbz_min, dbz_max=dbz_max,
-        minthr_pdp0=minthr_pdp0, range_dim=range_dim, azimuth_dim=azimuth_dim)
+        minthr_pdp0=minthr_pdp0, min_rng=min_rng, max_rng=max_rng,
+        range_dim=range_dim, azimuth_dim=azimuth_dim)
     # PHIDP(0) handling
     n = mov_avrgf_len[1]
     # Compute PHIDP(0)
@@ -1214,6 +1249,8 @@ def phidp_qc_processing(ds, inp_names=None, mov_avrgf_len=(1, 3), t_spdp=10,
                     "dbz_min": dbz_min,
                     "dbz_max": dbz_max,
                     "phidp0_correction": phidp0_correction,
+                    "min_rng": min_rng,
+                    "max_rng": max_rng,
                     "mlyr_intp": mlyr_intp,
                     "mlyr_monotonic": mlyr_monotonic,
                     "mlyr_geometry_source": src if mlyr_intp else None,
