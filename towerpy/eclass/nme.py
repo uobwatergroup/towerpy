@@ -714,7 +714,7 @@ def _resolve_binary_class_vars(ds: xr.Dataset, binary_class: int,
 
 def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, rband='C',
                     cmap=None, binary_class=255, classid=None, path_nds=None,
-                    nds_source='rico2008', mask=None, replace_vars=False):
+                    nds_source='sanchez2023', mask=None, replace_vars=False):
     r"""
     Classify precipitation, noise, and clutter echoes in PPI scans.
 
@@ -775,7 +775,7 @@ def clutter_classif(ds, inp_names=None, min_snr=None, rcst_dB=None, rband='C',
         normalised distribution (NDS) files. If ``None``, Towerpy
         selects a built‑in NDS directory based on the combination of
         ``rband`` and ``nds_source``.
-    nds_source : {'rico2008', 'sanchez2023'}, default 'rico2008'
+    nds_source : {'rico2008', 'sanchez2023'}, default 'sanchez2023'
         Calibration set of normalised distribution (NDS) files used when
         ``path_nds`` is ``None``:
 
