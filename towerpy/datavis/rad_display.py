@@ -5256,7 +5256,7 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
     # Colormap for elevations (for individual QVPs)
     qvp_interp = rdqvp.data_vars.get("qvp_interp", None)
     if qvp_interp is not None and all_desc:
-        elev_angles = rdqvp.coords.get("elevation_angle", None)
+        elev_angles = rdqvp.coords.get("elevation", None)
         n_elev = qvp_interp.sizes.get("elevation", 0)
         cmap_elev = mpl.colormaps[elev_cmap](np.linspace(0, 1, n_elev))
     else:
@@ -5337,11 +5337,20 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
             else:
                 # Fallback: use height from RD‑QVP if available
                 bh = rdqvp["height"]
-            axg.plot(rng_km.values, bh.values, ls="--", color=cmap_geom[j])
+            if "sweep_fixed_angle" in ds.coords:
+                elev_deg = float(ds.sweep_fixed_angle.item())
+            elif "elevation" in ds.coords:
+                elev_deg = float(convert(ds["elevation"], "deg").mean())
+            else:
+                elev_deg = np.nan
+            label = f"{elev_deg:.1f}" + r"$^{\circ}$"
+            axg.plot(rng_km.values, bh.values, ls="--", color=cmap_geom[j],
+                     label=label)
         if spec_range is not None:
             axg.axvline(spec_range, c="k", lw=2, label=f"RD={spec_range:g} km")
         axg.set_xlabel("Range [km]", fontsize=14)
         axg.grid(True)
+        axg.legend()
         axg.set_facecolor("none")
     plt.tight_layout()
     return fig, axes, mappables
