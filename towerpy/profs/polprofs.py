@@ -814,7 +814,7 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     qvp : xarray.Dataset
         Dataset containing the QVP variables on a height coordinate,
         with optional statistics and vertical‑resolution diagnostics.
-    
+
     Notes
     -----
     * The range dimension is replaced by the height coordinate.
@@ -980,6 +980,15 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         rname_out = {"site_name": ds.attrs["site_name"]}
     else:
         rname_out = {"site_name": "Radar"}
+    # Add elevation coordinate (degrees)
+    if "sweep_fixed_angle" in ds.coords:
+        # sweep_fixed_angle is the authoritative nominal elevation
+        elev_deg = float(ds.sweep_fixed_angle.item())
+        qvp = qvp.assign_coords(elevation=elev_deg)
+    elif "elevation" in ds.coords:
+        # elevation may be per-ray; take mean and convert to degrees
+        elev_deg = float(convert(ds[names["elv"]], "deg").mean())
+        qvp = qvp.assign_coords(elevation=elev_deg)
     # 12. Provenance
     extra = {'step_description': (
         "Built a quasi-vertical profile from a single-elevation PPI scan, "
@@ -1001,7 +1010,8 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
             inputs=[names["rng"], names["elv"]], outputs=["VRES"],
             parameters={
                 "beamwidth_deg": float(bw), "range_gate_km": float(dr),
-                "elevation_deg": float(convert(ds[names["elv"]], "deg")[0])},
+                "elevation_deg": float(convert(ds[names["elv"]], "deg").mean())
+                },
             extra_attrs=extra,
             module_provenance='towerpy.profs.polprofs.build_qvp')
     qvp.attrs["profs_type"] = "Quasi-Vertical Profiles"
@@ -1098,7 +1108,8 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     # Stack into (elevation, variable, height)
     # dims: elevation, variable, height
     qvps_interp_ds = xr.concat(
-        [qvp.to_array("variable") for qvp in qvps_interp], dim="elevation")
+        [qvp.to_array("variable") for qvp in qvps_interp], dim="elevation",
+        coords="minimal", compat="override")
     # 4. Build range profile r_i(h) for each elevation
     range_profiles = []
     # Extract beam-height variable name from qvp_kwargs
@@ -1142,28 +1153,47 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     rdqvp.height.attrs["units"] = "km"
     # 8. Attach interpolated QVPs + elevation metadata
     rdqvp["qvp_interp"] = qvps_interp_ds  # dims: elevation, variable, height
-    # scan_datetimes = []
-    # for qvp in qvps:
-    #     elev = qvp.coords.get("elevation", None)
-    #     elev_angles.append(float(elev.values) if elev is not None else np.nan)
-    #     scan_datetimes.append(qvp.attrs.get("scan_datetime", None))
     elev_angles = []
     scan_datetime_unix_ns = []
     scan_datetime_iso = []
+    sweep_numbers = []
+    prt_modes = []
+    follow_modes = []
+    times = []
     for qvp in qvps:
         elev = qvp.coords.get("elevation", None)
-        elev_angles.append(float(elev.values) if elev is not None else np.nan)
+        if elev is None:
+            elev_angles.append(np.nan)
+        else:
+            elev_angles.append(float(elev))
         ts_ns = qvp.attrs.get("scan_datetime_unix_ns", np.nan)
         ts_iso = qvp.attrs.get("scan_datetime_iso", None)
         scan_datetime_unix_ns.append(ts_ns)
         scan_datetime_iso.append(ts_iso)
+    for ds in dss:
+        sweep_numbers.append(ds.sweep_number.item() if "sweep_number" in ds.coords else np.nan)
+        prt_modes.append(ds.prt_mode.item() if "prt_mode" in ds.coords else None)
+        follow_modes.append(ds.follow_mode.item() if "follow_mode" in ds.coords else None)
+        t_mid_np, _ = scan_midtime(ds.time.values)
+        times.append(t_mid_np)
     rdqvp = rdqvp.assign_coords(
-        elevation=("elevation", np.arange(len(qvps_interp))),
-        elevation_angle=("elevation", elev_angles),
-        # scan_datetime=("elevation", scan_datetimes)
-        scan_datetime_unix_ns=("elevation", scan_datetime_unix_ns),
-        scan_datetime_iso=("elevation", scan_datetime_iso),
+        source_sweep_number=("elevation", sweep_numbers),
+        source_prt_mode=("elevation", prt_modes),
+        source_follow_mode=("elevation", follow_modes),
+        source_time=("elevation", times),
+        source_scan_datetime_unix_ns=("elevation", scan_datetime_unix_ns),
+        source_scan_datetime_iso=("elevation", scan_datetime_iso),
         )
+    # Drop scalar sweep metadata that is no longer meaningful for RD‑QVP
+    for coord in ["sweep_number", "prt_mode", "follow_mode",
+                  "sweep_fixed_angle", "time"]:
+        if coord in rdqvp.coords:
+            rdqvp = rdqvp.drop_vars(coord)
+    # 8.b Add time coord
+    # Compute RD‑QVP time from per-sweep mid-times
+    rdqvp_mid_np, rdqvp_mid_py = scan_midtime(times)
+    # Attach scalar RD‑QVP time
+    rdqvp = rdqvp.assign_coords(time=rdqvp_mid_np)
     # 9. Metadata + provenance
     for var in rdqvp.data_vars:
         if var in sweep_vars_attrs_f:
@@ -1191,7 +1221,6 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
             "spec_range_km": spec_range,
             "power_param": power_param,
             "elevation_angles_deg": elev_angles,
-            # "scan_datetimes": scan_datetimes,
             "scan_datetime_unix_ns": scan_datetime_unix_ns,
             "scan_datetime_iso": scan_datetime_iso,
             },
