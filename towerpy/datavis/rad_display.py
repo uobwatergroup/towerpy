@@ -3107,10 +3107,10 @@ def _resolve_cmap(units, varname, ucmap, cb_ext=None):
         spec = CmapSpec("tpylsc_useq_fiery", extend="max")
     # elif varname.lower() == "alpha":
     elif varname.lower().startswith('alpha'):
-        spec = CmapSpec("tpylsc_useq_fiery", extend="max")
+        spec = CmapSpec("tpylsc_useq_bupkyw", extend="max")
     # elif varname.lower() == "beta":
     elif varname.lower().startswith('beta'):
-        spec = CmapSpec("tpylsc_useq_fiery", extend="max")
+        spec = CmapSpec("tpylsc_useq_bupkyw", extend="max")
     # here im not sure because is DWD special case with no units
     elif varname.lower().startswith('uvrad'):
         spec = CmapSpec("tpylsc_div_dbu_rd", extend="both")
@@ -3277,8 +3277,8 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
         "radar_linear_equivalent_reflectivity_factor_v": [0, 1e6, 20]
         }
 
-    lpv_short = {"PIA": [0, 20, 21], "alpha": [0, 0.2, 21],
-                 "beta": [0, 0.1, 21], 'GRAD_VRADV': [-5, 5, 11]
+    lpv_short = {"PIA": [0, 20, 21], "ALPHA": [0, 0.2, 21],
+                 "BETA": [0, 0.1, 21], 'GRAD_VRADV': [-5, 5, 11]
                  }
 
     # Continuous variables
@@ -3325,10 +3325,14 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
             bounds = [arr.min(), arr.max(), len(arr)]
         elif units == "mm" and not (vars_bounds and (
                 varname in vars_bounds or units in vars_bounds)):
-            arr = np.array([0.1, 1, 5, 10, 20, 30, 40, 50, 62.5, 75, 87.5,
-                            100, 125, 150, 175, 200])
-            bounds = [arr.min(), arr.max(), len(arr)]
-            custom_bnd = arr
+            user_bounds = _lookup_params_override(unorm, varname, units)
+            if user_bounds is None:
+                arr = np.array([0.1, 1, 5, 10, 20, 30, 40, 50, 62.5, 75, 87.5,
+                                100, 125, 150, 175, 200])
+                bounds = [arr.min(), arr.max(), len(arr)]
+                custom_bnd = arr
+            else:
+                custom_bnd = None
         else:
             custom_bnd = None
         # Colormap resolution (with overrides) 
@@ -3345,16 +3349,19 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
                        0.95, 0.96, 0.97, 0.98, 0.99, 0.995, 1.]
             ext_override = _lookup_params_override(cb_ext, varname, units)
             ext = ext_override if ext_override is not None else "min"
-            force_all_ticks = True
+            force_all_ticks = force_all_ticks
         else:
             bnd = np.linspace(bounds[0], bounds[1], bounds[2])
         # Normalisation hierarchy 
         norm_override = _lookup_params_override(unorm, varname, units)
         if norm_override is not None:
             normp = norm_override
+            # IMPORTANT: use user-provided boundaries for ticks
+        if hasattr(norm_override, "boundaries") and norm_override.boundaries is not None:
+            bnd = np.asarray(norm_override.boundaries)
+            bounds = [float(bnd.min()), float(bnd.max()), len(bnd)]
         else:
             normp = mpc.BoundaryNorm(bnd, cmap.N, extend=ext)
-            # normp = mpc.BoundaryNorm(bnd, cmap.N)
         ext_override = _lookup_params_override(cb_ext, varname, units)
         if ext_override is not None:
             ext = ext_override
@@ -3387,6 +3394,10 @@ def plot_params(varname, xrds, vars_bounds=None, unorm=None, ucmap=None,
         if ext_override is not None:
             ext = ext_override
     bnd = np.asarray(bnd)
+    # ensure user override survives rainfall special-case logic
+    if force_all_ticks:
+        force_all_ticks = True
+
     return PlotParams(range_spec=bounds, norm_boundaries=bnd, cmap=cmap,
                       extend=ext, norm=normp, ticklabels=ticklabels,
                       force_all_ticks=force_all_ticks)
@@ -4035,7 +4046,7 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
     mappable : matplotlib.cm.ScalarMappable
         The object associated with the colour‑mapped field.
     ax1 : matplotlib Axes
-        The axes on which the PPI is drawn.    
+        The axes on which the PPI is drawn.
     When ``return_artists=True``, the function returns a
     :class:`PPIArtist` container instead of ``(mappable, ax1)``.
     This object exposes stable attributes for all created artists,
@@ -4235,7 +4246,7 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             "Dataset coords: " + ", ".join(list(xrds.coords)))
 
     # =============================================================================
-    # Creates colorbar         
+    # Creates colorbar
     # =============================================================================
     vunits = _safe_units(xrds[var2plot])
     if add_colorbar:
@@ -4298,21 +4309,6 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
             if default_cartopy_cfg["enable_cartopy"]:
                 # If projection is PlateCarree use lon/lat ticks
                 if isinstance(proj, ccrs.PlateCarree):
-                    # # Get the coordinate DataArrays
-                    # da_x = xrds[projcoord_names['x']]
-                    # da_y = xrds[projcoord_names['y']]
-                    # # Prefer long_name, fallback to standard_name, fallback to coordinate name
-                    # x_name = da_x.attrs.get("long_name",
-                    #             da_x.attrs.get("standard_name",
-                    #                 projcoord_names["x"]))
-                    # y_name = da_y.attrs.get("long_name",
-                    #             da_y.attrs.get("standard_name",
-                    #                 projcoord_names["y"]))
-                    # # Units (fallback to degrees_east / degrees_north)
-                    # x_unit = da_x.attrs.get("units", "degrees_east")
-                    # y_unit = da_y.attrs.get("units", "degrees_north")
-                    # x_label = f"{x_name} [{x_unit}]"
-                    # y_label = f"{y_name} [{y_unit}]"
                     # Axis labels must follow the PROJECTION CRS, not the data CRS
                     x_label = "longitude [degrees_east]"
                     y_label = "latitude [degrees_north]"
@@ -4389,14 +4385,7 @@ def plot_ppi_xr(xrds, var2plot=None, coord_sys='polar', polarplot=False,
                     ax1.set_yticks(yticks, crs=proj)
                     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
                     ax1.yaxis.set_major_formatter(mticker.ScalarFormatter())
-            # elif has_polar:
-            #     # Only use range labels when NOT in Cartopy mode
-            #     r_std = xrds[polarcoord_names['rng']].attrs.get("standard_name", "Range")
-            #     r_unit_src = getcoordunits(xrds, polarcoord_names['rng'], "m")
-            #     # r_unit = "km" if r_unit_src.startswith("k") else r_unit_src
-            #     r_unit = r_unit_src if r_unit_src else ''
-            #     x_label = f"{r_std} [{r_unit}]"
-            #     y_label = f"{r_std} [{r_unit}]"
+
             else:
                 da_x = xrds[coord_namex]
                 da_y = xrds[coord_namey]
@@ -4505,7 +4494,7 @@ def plot_setppi_xr(xrds, varnames=None, coord_sys="polar", polarplot=False,
         Whether to add colourbars to the individual panels.
     **ppi_kwargs
         Additional keyword arguments passed to :func:`plot_ppi_xr`.
-    
+
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -5124,7 +5113,7 @@ def plot_profiles(ds, stats=None, colours=False, mlyr_top=None, mlyr_btm=None,
         ax.set_xlabel(label, fontsize=14)
     hunits = ds["height"].attrs.get('units', 'km')
     axes[0].set_ylabel(f"Height [{hunits}]", fontsize=14)
-    plt.tight_layout()    
+    plt.tight_layout()
     return fig, axes, mappables
 
 
@@ -5141,7 +5130,7 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
     rdqvp : xarray.Dataset
         RD‑QVP dataset containing one or more variables defined on a 1D
         ``height`` coordinate. It may additionally contain:
-        
+
         * ``qvp_interp`` : interpolated QVPs with dims
           ``(elevation, variable, height)``.
         * ``elevation_angle`` : elevation angles for each contributing QVP
@@ -5154,7 +5143,7 @@ def plot_rdqvp(rdqvp, dss=None, all_desc=True, stats=None, mlyr_top=None,
         Optional list of original single‑elevation PPI scan datasets used
         to draw the geometry panel (range–height curves). Each dataset is
         expected to contain at least:
-        
+
         * ``range`` : range coordinate (convertible to km).
         * ``beamc_height`` : beam‑height field with dims
           ``(azimuth, range)`` or ``(range,)``.

@@ -1060,7 +1060,7 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     rdqvp : xarray.Dataset
         RD‑QVP dataset with height coordinate, RD‑QVP variables, interpolated
         QVPs, elevation metadata, and provenance.
-        
+
     Notes
     -----
     * Each elevation is first converted into a QVP using :func:`build_qvp`,
@@ -1109,7 +1109,7 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     # dims: elevation, variable, height
     qvps_interp_ds = xr.concat(
         [qvp.to_array("variable") for qvp in qvps_interp], dim="elevation",
-        coords="minimal", compat="override")
+        coords="minimal", compat="override", join="outer")
     # 4. Build range profile r_i(h) for each elevation
     range_profiles = []
     # Extract beam-height variable name from qvp_kwargs
