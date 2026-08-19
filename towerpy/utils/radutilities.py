@@ -610,10 +610,10 @@ def robust_minmax(arr, method="quantile", floor=None, **kwargs):
         q1, q3 = np.percentile(arr, [25, 75])
         iqr = q3 - q1
         lower, upper = q1 - k * iqr, q3 + k * iqr
-    
+
     elif method == "simple":
         lower, upper = np.nanmin(arr), np.nanmax(arr)
-    
+
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -1188,12 +1188,12 @@ def get_attrval(attr, sweep, default=None, required=True):
         return sweep[attr]
     # substring lookup in data_vars
     matches = []
-    
+
     # wildcard match
     for k, v in sweep.data_vars.items():
         if fnmatch.fnmatch(k, attr):
             matches.append(v)
-    
+
     # substring match if wildcard failed
     if not matches:
         norm_attr = attr.replace("_", "").replace("-", "").lower()
@@ -1201,7 +1201,7 @@ def get_attrval(attr, sweep, default=None, required=True):
             norm_key = k.replace("_", "").replace("-", "").lower()
             if norm_attr in norm_key:
                 matches.append(v)
-    
+
     if matches:
         # Prefer horizontal (_h) over vertical (_v)
         for v in matches:
@@ -1622,8 +1622,6 @@ def record_provenance(ds, step, outputs, parameters, inputs=None,
         # Merge outputs
         existing["outputs"] = sorted(set(existing.get("outputs", [])).union(outputs))
         # Merge parameters
-        # raw = existing["parameters"]
-        # params_dict = json.loads(raw) if isinstance(raw, str) else raw
         params_dict = existing["parameters"]
         for k, v in parameters.items():
             if k in params_dict and params_dict[k] != v:
@@ -1654,7 +1652,6 @@ def record_provenance(ds, step, outputs, parameters, inputs=None,
             # entry[k] = _maybe_json_encode(_py(v))
             entry[k] = _py(v)
     # Write back processing_chain
-    # ds.attrs["processing_chain"] = _maybe_json_encode(chain)
     ds.attrs["processing_chain"] = chain
     return ds
 
@@ -1873,7 +1870,8 @@ def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
                     f"or increase height_tol (current={height_tol}).")
 
     # Concatenate
-    out = xr.concat(datasets, dim="time", coords="minimal", compat="override")
+    out = xr.concat(datasets, dim="time", coords="minimal", compat="override",
+                    join="outer")
     out = out.assign_coords(time=("time",
                                   np.array(times, dtype="datetime64[ns]")))
     out = out.sortby("time")
