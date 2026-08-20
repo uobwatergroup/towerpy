@@ -1024,7 +1024,7 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
 
 
 def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
-                power_param=2., stats=False):
+                power_param=2., keep_qvp_interp=True, stats=False):
     r"""
     Build a range-defined quasi-vertical profile from multiple single-elevation
     PPI scans.
@@ -1051,6 +1051,9 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     power_param : float, default 2.0
         Exponent :math:`p` used in the weighting function for
         :math:`r_i(h) > d - 1`.
+    keep_qvp_interp : bool, default True
+        If ``True``, attach the interpolated QVPs used to compute the RD‑QVPs
+        as ``qvp_interp`` in the returned dataset.
     stats : bool, default False
         If ``True``, propagate QVP statistics (``std_*``, ``min_*``,
         ``max_*``, ``sem_*``) through the RD‑QVP combination.
@@ -1058,8 +1061,9 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     Returns
     -------
     rdqvp : xarray.Dataset
-        RD‑QVP dataset with height coordinate, RD‑QVP variables, interpolated
-        QVPs, elevation metadata, and provenance.
+        RD‑QVP dataset with height coordinate and RD‑QVP variables, and
+        optionally (when ``keep_qvp_interp=True``) the interpolated QVPs,
+        elevation metadata, and provenance.
 
     Notes
     -----
@@ -1152,7 +1156,8 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
                        coords={"height": common_height})
     rdqvp.height.attrs["units"] = "km"
     # 8. Attach interpolated QVPs + elevation metadata
-    rdqvp["qvp_interp"] = qvps_interp_ds  # dims: elevation, variable, height
+    if keep_qvp_interp:
+        rdqvp["qvp_interp"] = qvps_interp_ds  # dims: elevation, variable, height
     elev_angles = []
     scan_datetime_unix_ns = []
     scan_datetime_iso = []
