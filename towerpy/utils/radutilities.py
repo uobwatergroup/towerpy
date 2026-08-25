@@ -1811,36 +1811,111 @@ def apply_correction_chain(ds, varname, step, params, mask=None, suffix="_corr",
     return ds
 
 
-def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
-    """
-    Merge time-indexed datasets into a single time-sorted dataset.
+def _source_node_from_dataset(ds, label, *, include_processing_chain=True,
+                              include_source_provenance=True):
+    node = {"kind": "dataset", "label": label, "processing_chain": [],
+            "source_provenance": []}
+    if include_processing_chain:
+        node["processing_chain"] = copy.deepcopy(
+            ds.attrs.get("processing_chain", []))
+    if include_source_provenance:
+        # Preferred new format
+        if "source_provenance" in ds.attrs:
+            node["source_provenance"] = copy.deepcopy(
+                ds.attrs["source_provenance"])
+            return node
+        # Legacy formats: preserve them as nested ancestors, do not flatten them
+        upstream_sources = []
+        if "source_input_processing_chains" in ds.attrs:
+            for j, chain in enumerate(ds.attrs["source_input_processing_chains"]):
+                if chain:
+                    upstream_sources.append({
+                        "kind": "upstream_processing_chain",
+                        "label": f"{label}_upstream_{j}",
+                        "processing_chain": copy.deepcopy(chain),
+                        "source_provenance": [],
+                        })
+        if "input_processing_chain" in ds.attrs:
+            chain = ds.attrs["input_processing_chain"]
+            if chain:
+                upstream_sources.append({"kind": "upstream_processing_chain",
+                                       "label": f"{label}_upstream_input",
+                                       "processing_chain": copy.deepcopy(chain),
+                                       "source_provenance": []})
+        node["source_provenance"] = upstream_sources
+    return node
 
-    Input datasets are expanded or concatenated along ``time``. If requested,
-    datasets with a height dimension are interpolated onto a common height
-    grid before merging.
+
+def _normalise_source_node(node):
+    node = copy.deepcopy(node)
+    node.pop("label", None)
+    return node
+
+
+def merge_in_time(datasets, *, align_axis=None, align_res=None,
+                  align_tol=1e-5, drop_attrs=None, concat_kw=None,
+                  source_provenance_mode="full",
+                  collapse_identical_sources=True):
+    """
+    Merge scalar-time datasets into a single time-sorted dataset.
+
+    Input datasets are concatenated along ``time``. If ``align_axis`` is given
+    and all inputs contain a compatible one-dimensional coordinate on that axis,
+    datasets are first checked for coordinate consistency or interpolated onto
+    a common axis before merging.
 
     Parameters
     ----------
     datasets : sequence of xarray.Dataset
-        Input datasets to merge. Each dataset must contain a scalar ``time``
-        coordinate and may optionally contain a one-dimensional ``height``
-        coordinate.
-    height_res : float, optional
-        Vertical resolution, in kilometres, of the common height grid used for
-        interpolation. If ``None``, no height-grid interpolation is applied.
-    height_tol : float, default: 1e-5
-        Tolerance used when comparing or constructing height coordinates.
+        Input datasets, each with a scalar ``time`` coordinate.
+    align_axis : str or None, default None
+        Name of the one-dimensional coordinate to align across inputs before
+        merging, for example ``"height"``.
+    align_res : float or None, default None
+        Resolution of the common axis used when interpolating along
+        ``align_axis``. If ``None``, no interpolation is performed and input
+        coordinates must already agree within ``align_tol``.
+    align_tol : float, default 1e-5
+        Absolute tolerance used when comparing input coordinates along
+        ``align_axis``.
+    drop_attrs : iterable of str or None, default None
+        Dataset attributes to remove from the merged output.
+    concat_kw : dict or None, default None
+        Optional keyword arguments passed to :func:`xarray.concat`. The
+        concatenation dimension is always fixed to ``"time"`` and must not be
+        provided here.
+    source_provenance_mode : {"none", "chain", "sources", "full"}, default "full"
+        Controls how provenance from input datasets is attached to the merged
+        output:
+    
+        * ``"none"``: do not attach source provenance
+        * ``"chain"``: attach only each input dataset's local
+          ``processing_chain``
+        * ``"sources"``: attach only each input dataset's recursive
+          ``source_provenance``
+        * ``"full"``: attach both local ``processing_chain`` and recursive
+          ``source_provenance``
+    collapse_identical_sources : bool, default True
+        If ``True``, collapse identical source-provenance entries across all
+        input datasets into a single shared source node. Equality is tested on
+        source-node content after removing per-input labels.
 
     Returns
     -------
     ds : xarray.Dataset
-        Time-sorted dataset with variables stacked along ``time`` and, where
-        applicable, interpolated onto a common ``height`` coordinate.
+        Time-sorted merged dataset. The merge operation is recorded in the
+        dataset attribute ``processing_chain``. Depending on
+        ``source_provenance_mode``, the merged dataset may also include a
+        ``source_provenance`` attribute describing the input datasets.
     """
     if not datasets:
         raise ValueError("merge_in_time: received an empty list.")
-
-    # Validate types and extract times
+    valid_modes = {"none", "chain", "sources", "full"}
+    if source_provenance_mode not in valid_modes:
+        raise ValueError(
+            "source_provenance_mode must be one of "
+            f"{sorted(valid_modes)}, got {source_provenance_mode!r}.")
+    # 1. Validate types and extract times
     times = []
     for i, ds in enumerate(datasets):
         if not isinstance(ds, xr.Dataset):
@@ -1848,65 +1923,109 @@ def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
         if "time" not in ds.coords or ds["time"].dims != ():
             raise ValueError(f"#{i} does not contain a scalar 'time' coord.")
         times.append(np.datetime64(ds["time"].item(), "ns"))
-
     if len(times) != len(set(times)):
         raise ValueError("Duplicate time coordinates detected.")
-
-    # Handle height dimension if present
-    has_height = all("height" in ds.coords for ds in datasets)
-
-    if has_height and height_res is not None:
-        max_height = max(float(ds.height.max()) for ds in datasets)
-        common_height = np.arange(0.0, max_height + height_res, height_res)
-        datasets = [ds.interp(height=common_height) for ds in datasets]
-
-    elif has_height and height_res is None:
-        ref_height = datasets[0]["height"]
-        for ds in datasets[1:]:
-            if not np.allclose(ds["height"], ref_height, rtol=0,
-                               atol=height_tol,equal_nan=True):
+    # 2. Optionally align along a shared one-dimensional axis
+    axis_aligned = False
+    if align_axis is not None:
+        has_align_axis = all(align_axis in ds.coords for ds in datasets)
+        if not has_align_axis:
+            raise ValueError(
+                f"align_axis={align_axis!r} was requested, but not all input "
+                "datasets contain that coordinate.")
+        # Require simple 1D coordinate on the same-named dimension
+        ref_axis = datasets[0][align_axis]
+        if ref_axis.ndim != 1 or ref_axis.dims != (align_axis,):
+            raise ValueError(
+                f"Input #0 has coordinate {align_axis!r}, but it is not a 1D "
+                f"coordinate on dimension {align_axis!r}.")
+        for i, ds in enumerate(datasets[1:], start=1):
+            axis = ds[align_axis]
+            if axis.ndim != 1 or axis.dims != (align_axis,):
                 raise ValueError(
-                    "Height grids differ beyond tolerance. Provide height_res "
-                    f"or increase height_tol (current={height_tol}).")
-
-    # Concatenate
-    out = xr.concat(datasets, dim="time", coords="minimal", compat="override",
-                    join="outer")
-    out = out.assign_coords(time=("time",
-                                  np.array(times, dtype="datetime64[ns]")))
+                    f"Input #{i} has coordinate {align_axis!r}, but it is not "
+                    f"a 1D coordinate on dimension {align_axis!r}.")
+        if align_res is not None:
+            axis_min = min(float(ds[align_axis].min()) for ds in datasets)
+            axis_max = max(float(ds[align_axis].max()) for ds in datasets)
+            common_axis = np.arange(axis_min, axis_max + align_res, align_res)
+            datasets = [ds.interp({align_axis: common_axis}) for ds in datasets]
+            axis_aligned = True
+        else:
+            for i, ds in enumerate(datasets[1:], start=1):
+                axis = ds[align_axis]
+                if axis.shape != ref_axis.shape or not np.allclose(
+                    axis.values, ref_axis.values, rtol=0, atol=align_tol,
+                    equal_nan=True):
+                    raise ValueError(
+                        f"{align_axis!r} coordinates differ beyond tolerance. "
+                        f"Provide align_res or increase align_tol "
+                        f"(current={align_tol})."
+                    )
+            axis_aligned = True
+    # 3. Concatenate and sort by time
+    concat_defaults = {"coords": "minimal", "compat": "override",
+                       "join": "outer"}
+    if concat_kw is not None and "dim" in concat_kw:
+        raise ValueError("concat_kw must not define 'dim'; "
+                         "merge_in_time always uses dim='time'.")
+    concat_opts = {**concat_defaults, **(concat_kw or {})}
+    out = xr.concat(datasets, dim="time", **concat_opts)
+    out = out.assign_coords(
+        time=("time", np.array(times, dtype="datetime64[ns]")))
     out = out.sortby("time")
-    # Remove per-scan metadata that should not persist
-    DROP_ATTRS = {"scan_datetime_unix_ns", "scan_datetime_iso",
-                  "scan_datetime_unit", "input_processing_chain",}
-    for attr in DROP_ATTRS:
+    # 4. Clean output attributes
+    default_drop_attrs = {"scan_datetime_unix_ns",
+                          "scan_datetime_iso",
+                          "scan_datetime_unit",
+                          "input_processing_chain",
+                          "source_input_processing_chains",
+                          "source_provenance",
+                          }
+    if drop_attrs is not None:
+        if isinstance(drop_attrs, str):
+            raise TypeError("drop_attrs must be an iterable of attribute "
+                            "names, not a string.")
+        try:
+            drop_attrs = set(drop_attrs)
+        except TypeError:
+            raise TypeError("drop_attrs must be an iterable of strings.") from None
+        if not all(isinstance(a, str) for a in drop_attrs):
+            raise TypeError("drop_attrs must contain only strings.")
+        default_drop_attrs.update(drop_attrs)
+    for attr in default_drop_attrs:
         out.attrs.pop(attr, None)
-    # Provenance
+    # 5. Build source provenance according to requested mode
+    if source_provenance_mode != "none":
+        include_processing_chain = source_provenance_mode in {"chain", "full"}
+        include_source_provenance = source_provenance_mode in {"sources", "full"}
+        nodes = [_source_node_from_dataset(
+            ds, label=f"input_{i}",
+            include_processing_chain=include_processing_chain,
+            include_source_provenance=include_source_provenance)
+            for i, ds in enumerate(datasets)]
+        norm_nodes = [_normalise_source_node(node) for node in nodes]
+        all_equal = bool(norm_nodes) and all(
+            n == norm_nodes[0] for n in norm_nodes[1:])
+        if collapse_identical_sources and all_equal:
+            collapsed = copy.deepcopy(nodes[0])
+            collapsed["label"] = "common_source"
+            out.attrs["source_provenance"] = [collapsed]
+        else:
+            out.attrs["source_provenance"] = nodes
+    # 6. Record local provenance of the merge operation
     extra_attrs = {"step_description": (
         "Merged time-indexed datasets into a single time-sorted dataset.")}
-    # input_chains = [copy.deepcopy(ds.attrs["input_processing_chain"])
-    #                 for ds in datasets if "input_processing_chain" in ds.attrs]
-    # out.attrs["source_input_processing_chains"] = input_chains
-    sipc = []
-    for ds in datasets:
-        # 1. input_processing_chain
-        if "input_processing_chain" in ds.attrs:
-            chain = copy.deepcopy(ds.attrs["input_processing_chain"])
-            # if chain and chain not in sipc:
-            if chain:
-                sipc.append(chain)
-        # 2. list of source_input_processing_chains
-        if "source_input_processing_chains" in ds.attrs:
-            for chain in ds.attrs["source_input_processing_chains"]:
-                if chain:
-                # if chain and chain not in sipc:
-                    sipc.append(copy.deepcopy(chain))
-    out.attrs["source_input_processing_chains"] = sipc
     out = record_provenance(
         out, step="merge_inputs_time",
-        inputs=[v for ds in datasets for v in ds.data_vars],
+        inputs=sorted(set(v for ds in datasets for v in ds.data_vars)),
         outputs=list(out.data_vars),
-        parameters={"n_datasets": len(datasets), "height_res_km": height_res,
-                    "has_height": has_height},
+        parameters={"n_datasets": len(datasets), "align_axis": align_axis,
+                    "align_res": align_res, "align_tol": align_tol,
+                    "axis_aligned": axis_aligned,
+                    "source_provenance_mode": source_provenance_mode,
+                    "collapse_identical_sources": collapse_identical_sources,
+                    },
         module_provenance="towerpy.utils.merge_in_time",
         extra_attrs=extra_attrs)
     return out
@@ -1916,7 +2035,9 @@ def merge_in_time(datasets, *, height_res=None, height_tol=1e-5):
 # %%% Encode/decode
 # =============================================================================
 
-_PROV_KEYS_DATASET = {'processing_chain', 'source_input_processing_chains',
+_PROV_KEYS_DATASET = {'processing_chain',
+                      'source_provenance',
+                      'source_input_processing_chains',
                       'input_processing_chain'}
 
 _PROV_KEYS_VARIABLE = {'correction_chain', 'correction_params'}

@@ -13,7 +13,8 @@ from ..utils.radutilities import (add_correction_step, despike_isolated,
                                   fill_both, find_nearest, find_nearest_index,
                                   record_provenance, rolling_std_xr,
                                   rolling_window, safe_replace_variable,
-                                  std_mask_isolated, std_mask_threshold)
+                                  std_mask_isolated, std_mask_threshold,
+                                  _source_node_from_dataset)
 
 
 class PhiDP_Calibration:
@@ -475,7 +476,8 @@ def _empty_stats():
 
 def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
                              minbins=2, dbz_min=20., dbz_max=60., rhv_min=0.98,
-                             invalid_value=np.nan, return_stats=False):
+                             invalid_value=np.nan, return_stats=False,
+                             collect_source_provenance=True):
     r"""
     Estimate the :math:`\Phi_{DP}` calibration offset from vertical profiles.
 
@@ -510,13 +512,16 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
         Value assigned to the offset when the computation is invalid.
     return_stats : bool, default False
         If True, return (offset, stats_dataset).
+    collect_source_provenance : bool, default True
+        If ``True``, attach ``source_provenance`` describing the input
+        datasets used to compute the offset.
 
     Returns
     -------
     offset : xarray.Dataset
-        Scalar :math:`\Phi_{DP}` calibration offset, in deg. If the computation
-        is invalid, the offset is set to ``invalid_value`` and the attribute
-        ``phidp_offset_valid=False`` is added to the output dataset.
+        Scalar :math:`\Phi_{DP}` calibration offset, in deg. If the
+        computation is invalid, the offset is set to ``invalid_value`` and the
+        variable ``PHIDP_OFFSET_VALID`` is set to ``0``.
     stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
 
@@ -529,9 +534,9 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
       [1]_
     * If the offset cannot be computed (e.g., invalid melting‑layer height or
       insufficient valid bins), the function assigns ``invalid_value`` to 
-      ``PHIDP_OFFSET`` and marks the result as invalid via the
-      ``phidp_offset_valid`` attribute. Users may set ``invalid_value`` to any
-      placeholder (e.g., ``0.0``, ``-999``, ``None``).
+      ``PHIDP_OFFSET`` and sets ``PHIDP_OFFSET_VALID`` to ``0``.
+      Users may set ``invalid_value`` to any placeholder 
+      (e.g., ``0.0``, ``-999``, ``None``).
 
     References
     ----------
@@ -607,29 +612,49 @@ def phidp_offsetdetection_vp(ds, inp_names=None, mlyr=None, min_h=1.1,
     # 8. Build output dataset
     coords = {name: coord for name, coord in ds.coords.items()
               if coord.dims == ()}
-    data_vars = {"PHIDP_OFFSET": offset}
+    data_vars = {"PHIDP_OFFSET": offset,
+                 "PHIDP_OFFSET_VALID": xr.DataArray(np.int8(valid),
+                                                    name="PHIDP_OFFSET_VALID")}
     if return_stats and stats is not None:
         for k, v in stats.data_vars.items():
             data_vars[k] = v
-    ds_out = xr.Dataset(data_vars, coords=coords)    
+    ds_out = xr.Dataset(data_vars, coords=coords)
+    ds_out["PHIDP_OFFSET"].attrs.update({
+        "long_name": "Differential phase calibration offset",
+        "short_name": "PHIDP_OFFSET",
+        "units": "deg",
+        })
+    ds_out["PHIDP_OFFSET_VALID"].attrs.update({
+        "long_name": "Validity flag for PHIDP offset estimate",
+        "short_name": "PHIDP_OFFSET_VALID",
+        "units": "1",
+        "flags": {"invalid": 0, "valid": 1},
+        })
     # 9. Record provenance
     extra = {'step_description': (
         "Estimated the PhiDP calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "dbz_min": dbz_min, "dbz_max": dbz_max,
               "rhv_min": rhv_min, "minbins": minbins, "ml_top": ml_top,
               "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
-              'invalid_value': invalid_value}
-    outputs = ['PHIDP_OFFSET']
+              'invalid_value': invalid_value,
+              "collect_source_provenance": collect_source_provenance,
+              }
+    outputs = ['PHIDP_OFFSET', 'PHIDP_OFFSET_VALID']
     # 9a. Attach provenance of input datasets
-    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
-    ml_chain = copy.deepcopy(
-        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
-    ds_out.attrs["source_input_processing_chains"] = []
-    ds_out.attrs["phidp_offset_valid"] = valid
-    if ds_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
-    if ml_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
+    # ds_out.attrs["phidp_offset_valid"] = valid
+    if collect_source_provenance:
+        ds_out.attrs["source_provenance"] = []
+        if any(k in ds.attrs for k in ("processing_chain", "source_provenance",
+                                       "source_input_processing_chains",
+                                       "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(ds, label="profiles"))
+        if mlyr is not None and any(
+            k in mlyr.attrs for k in ("processing_chain", "source_provenance",
+                                      "source_input_processing_chains",
+                                      "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(mlyr, label="mlyr"))
     ds_out = record_provenance(
         ds_out, step="compute_phidp0_vps",
         inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]], outputs=outputs,
@@ -807,8 +832,8 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
         Dataset containing the detected :math:`\Phi_{DP}` offset(s), with
         variable name ``PHIDP_OFFSET``. In ``"median"`` mode, this is a
         scalar field; in ``"multiple"`` mode, offsets are provided per ray.
-        If the computation is invalid, the attribute
-        ``phidp_offset_valid=False`` is added to the output dataset.
+        The dataset also contains ``PHIDP_OFFSET_VALID``, a scalar validity
+        flag indicating whether the overall offset detection was successful.
 
     Notes
     -----
@@ -818,8 +843,7 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
       thresholds.
     * Rays with high :math:`\Phi_{DP}` variability are discarded.
     * If the offset cannot be computed (e.g., insufficient valid bins), the
-      function marks the result as invalid via the ``phidp_offset_valid``
-      attribute.
+      function sets ``PHIDP_OFFSET_VALID`` to ``0``..
     """
     ds = ds.copy()
     # 1. Variable mapping
@@ -911,7 +935,17 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     if mode == "multiple":
         coords[names["azi"]] = ds[names["azi"]]
     ds_out = xr.Dataset({out_name: out}, coords=coords)
-    ds_out.attrs["phidp_offset_valid"] = phidp_offset_valid
+    ds_out["PHIDP_OFFSET_VALID"] = xr.DataArray(np.int8(phidp_offset_valid),
+                                                name="PHIDP_OFFSET_VALID")
+    ds_out["PHIDP_OFFSET"].attrs.update({
+        "long_name": "Initial differential phase offset",
+        "short_name": "PHIDP_OFFSET",
+        "units": "deg"})
+    ds_out["PHIDP_OFFSET_VALID"].attrs.update({
+        "long_name": "Overall validity flag for PHIDP offset estimate",
+        "short_name": "PHIDP_OFFSET_VALID",
+        "units": "1",
+        "flags": {"invalid": 0, "valid": 1}})
     # 6. Record dataset-level provenance
     extra = {'step_description': (
         "Estimated the initial PhiDP offset from PPI scans using selected "
@@ -923,7 +957,8 @@ def phidp_offsetdetection_ppi(ds, inp_names=None, mode="median", rhohv_min=0.9,
     ds_out = record_provenance(
         ds_out, step="offsetdetection_ppi",
         inputs=[names["PHIDP"], names["DBZ"], names["RHOHV"]],
-        outputs=[out_name], parameters=params, extra_attrs=extra,
+        outputs=[out_name, "PHIDP_OFFSET_VALID"],
+        parameters=params, extra_attrs=extra,
         module_provenance="towerpy.calib.calib_phidp.phidp_offsetdetection_ppi")
     return ds_out
 

@@ -7,7 +7,8 @@ import numpy as np
 import xarray as xr
 
 from ..datavis import rad_display
-from ..utils.radutilities import find_nearest, find_nearest_index, record_provenance
+from ..utils.radutilities import (find_nearest, find_nearest_index,
+                                  record_provenance, _source_node_from_dataset)
 
 
 class ZDR_Calibration:
@@ -316,7 +317,8 @@ def _empty_stats():
 
 def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
                            zhmin=5., zhmax=30., rhvmin=0.98,
-                           invalid_value=np.nan, return_stats=False):
+                           invalid_value=np.nan, return_stats=False,
+                           collect_source_provenance=True):
     r"""
     Estimate the :math:`Z_{DR}` calibration offset from vertical profiles.
 
@@ -350,13 +352,16 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
         Value assigned to the offset when the computation is invalid.
     return_stats : bool, default False
         If True, return (offset, stats_dataset).
+    collect_source_provenance : bool, default True
+        If ``True``, attach ``source_provenance`` describing the input
+        datasets used to compute the offset.
 
     Returns
     -------
     offset : xarray.Dataset
         Scalar ZDR offset, in dB. If the computation is invalid, the offset is
-        set to ``invalid_value`` and the attribute ``zdr_offset_valid=False``
-        is added to the output dataset.
+        set to ``invalid_value`` and the variable ``ZDR_OFFSET_VALID`` is set
+        to ``0``.
     stats : xarray.Dataset, optional
         Dataset with offset_max, offset_min, offset_std, offset_sem.
 
@@ -449,28 +454,48 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
     # 8. Build output dataset
     coords = {name: coord for name, coord in ds.coords.items()
               if coord.dims == ()}  # keep scalar coords only
-    data_vars = {"ZDR_OFFSET": offset}
+    data_vars = {"ZDR_OFFSET": offset,
+                 "ZDR_OFFSET_VALID": xr.DataArray(np.int8(valid),
+                                                  name="ZDR_OFFSET_VALID")}
     if return_stats and stats is not None:
         for k, v in stats.data_vars.items():
             data_vars[k] = v
     ds_out = xr.Dataset(data_vars, coords=coords)
+    ds_out["ZDR_OFFSET"].attrs.update({
+        "long_name": "Differential reflectivity calibration offset",
+        "short_name": "ZDR_OFFSET",
+        "units": "dB"
+        })
+    ds_out["ZDR_OFFSET_VALID"].attrs.update({
+        "long_name": "Validity flag for ZDR offset estimate",
+        "short_name": "ZDR_OFFSET_VALID",
+        "units": "1",
+        "flags": {"invalid": 0, "valid": 1},
+        })
     # 9. Record dataset-level provenance
     extra = {'step_description': (
         "Estimated the ZDR calibration offset from vertical profiles.")}
     params = {"min_h": min_h, "zhmin": zhmin, "zhmax": zhmax, "rhvmin": rhvmin,
               "minbins": minbins, "ml_top": ml_top, "ml_bottom": ml_bottom,
-              "ml_thickness": ml_thk, 'invalid_value': invalid_value}
-    outputs = ['ZDR_OFFSET']
+              "ml_thickness": ml_thk, 'invalid_value': invalid_value,
+              "collect_source_provenance": collect_source_provenance,
+              }
+    outputs = ['ZDR_OFFSET', 'ZDR_OFFSET_VALID']
     # 9a. Attach provenance of input datasets
-    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
-    ml_chain = copy.deepcopy(
-        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
-    ds_out.attrs["source_input_processing_chains"] = []
-    ds_out.attrs["zdr_offset_valid"] = valid
-    if ds_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
-    if ml_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
+    # ds_out.attrs["zdr_offset_valid"] = valid
+    if collect_source_provenance:
+        ds_out.attrs["source_provenance"] = []
+        if any(k in ds.attrs for k in ("processing_chain", "source_provenance",
+                                       "source_input_processing_chains",
+                                       "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(ds, label="profiles"))
+        if mlyr is not None and any(
+            k in mlyr.attrs for k in ("processing_chain", "source_provenance",
+                                      "source_input_processing_chains",
+                                      "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(mlyr, label="mlyr"))
     ds_out = record_provenance(
         ds_out, step="zdr_offsetdetection_vp",
         inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,
@@ -482,7 +507,7 @@ def zdr_offsetdetection_vp(ds, mlyr=None, inp_names=None, min_h=1.1, minbins=2,
 def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
                             zhmin=0., zhmax=20., rhvmin=0.985, minbins=4,
                             zdr_0=0.182, invalid_value=np.nan,
-                            return_stats=False):
+                            return_stats=False, collect_source_provenance=True):
     r"""
     Estimate the :math:`Z_{DR}` offset from quasi-vertical profiles.
 
@@ -523,13 +548,16 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
     return_stats : bool, default False
         If ``True``, return both the offset and a dataset of summary
         statistics.
+    collect_source_provenance : bool, default True
+        If ``True``, attach ``source_provenance`` describing the input
+        datasets used to compute the offset.
 
     Returns
     -------
     offset : xarray.Dataset
         Scalar ZDR offset, in dB. If the computation is invalid, the offset is
-        set to ``invalid_value`` and the attribute ``zdr_offset_valid=False``
-        is added to the output dataset.
+        set to ``invalid_value`` and the variable ``ZDR_OFFSET_VALID`` is set
+        to ``0``.
     stats : xarray.Dataset, optional
         Dataset containing ``offset_max``, ``offset_min``, ``offset_std``,
         and ``offset_sem``. Returned only if ``return_stats=True``.
@@ -625,11 +653,24 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
     # 8. Build output dataset
     coords = {name: coord for name, coord in ds.coords.items()
               if coord.dims == ()}  # keep scalar coords only
-    data_vars = {"ZDR_OFFSET": offset}
+    data_vars = {"ZDR_OFFSET": offset,
+                 "ZDR_OFFSET_VALID": xr.DataArray(np.int8(valid),
+                                                  name="ZDR_OFFSET_VALID")}
     if return_stats and stats is not None:
         for k, v in stats.data_vars.items():
             data_vars[k] = v
     ds_out = xr.Dataset(data_vars, coords=coords)
+    ds_out["ZDR_OFFSET"].attrs.update({
+        "long_name": "Differential reflectivity calibration offset",
+        "short_name": "ZDR_OFFSET",
+        "units": "dB"
+        })
+    ds_out["ZDR_OFFSET_VALID"].attrs.update({
+        "long_name": "Validity flag for ZDR offset estimate",
+        "short_name": "ZDR_OFFSET_VALID",
+        "units": "1",
+        "flags": {"invalid": 0, "valid": 1},
+        })
     # 9. Record dataset-level provenance
     extra = {'step_description': (
         "Estimated the ZDR calibration offset from quasi-vertical profiles "
@@ -637,18 +678,25 @@ def zdr_offsetdetection_qvp(ds, mlyr=None, inp_names=None, min_h=0., max_h=3.,
     params = {"min_h": min_h, "max_h": max_h, "zhmin": zhmin, "zhmax": zhmax,
               "rhvmin": rhvmin, "minbins": minbins, "zdr_0": zdr_0,
               "ml_top": ml_top, "ml_bottom": ml_bottom, "ml_thickness": ml_thk,
-              'invalid_value': invalid_value}
-    outputs = ['ZDR_OFFSET']
+              'invalid_value': invalid_value,
+              "collect_source_provenance": collect_source_provenance,
+              }
+    outputs = ['ZDR_OFFSET', 'ZDR_OFFSET_VALID']
     # 9a. Attach provenance of input datasets
-    ds_chain = copy.deepcopy(ds.attrs.get("processing_chain", []))
-    ml_chain = copy.deepcopy(
-        mlyr.attrs.get("processing_chain", [])) if mlyr is not None else []
-    ds_out.attrs["source_input_processing_chains"] = []
-    ds_out.attrs["zdr_offset_valid"] = valid
-    if ds_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ds_chain)
-    if ml_chain:
-        ds_out.attrs["source_input_processing_chains"].append(ml_chain)
+    # ds_out.attrs["zdr_offset_valid"] = valid
+    if collect_source_provenance:
+        ds_out.attrs["source_provenance"] = []
+        if any(k in ds.attrs for k in ("processing_chain", "source_provenance",
+                                       "source_input_processing_chains",
+                                       "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(ds, label="profiles"))
+        if mlyr is not None and any(
+            k in mlyr.attrs for k in ("processing_chain", "source_provenance",
+                                      "source_input_processing_chains",
+                                      "input_processing_chain")):
+            ds_out.attrs["source_provenance"].append(
+                _source_node_from_dataset(mlyr, label="mlyr"))
     ds_out = record_provenance(
         ds_out, step="zdr_offsetdetection_qvp",
         inputs=[names["ZDR"], names["ZH"], names["RHOHV"]], outputs=outputs,
