@@ -678,8 +678,12 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     agg = agg.assign_coords(height=("height", height_1d.values))
     if "range" in agg.coords:
         agg = agg.drop_vars("range")
-    # 8. Assemble VP dataset
-    data_vars = {ds_name: agg[ds_name] for ds_name in inp_map.values()}
+    # 8. Assemble VP dataset, preserving source variable attrs
+    data_vars = {}
+    for ds_name in inp_map.values():
+        da = agg[ds_name].copy()
+        da.attrs = ds[ds_name].attrs.copy()
+        data_vars[ds_name] = da
     vp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
     # Clean up leftover range dimension/coordinate
     if "range" in vp.coords:
@@ -712,11 +716,12 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
             max_ = max_.drop_vars("range")
         if "range" in sem.coords:
             sem = sem.drop_vars("range")
-        for canon, ds_name in inp_map.items():
-            vp[f"std_{ds_name}"] = std[ds_name]
-            vp[f"min_{ds_name}"] = min_[ds_name]
-            vp[f"max_{ds_name}"] = max_[ds_name]
-            vp[f"sem_{ds_name}"] = sem[ds_name]
+        for ds_name in inp_map.values():
+            for prefix, darr in [("std", std), ("min", min_), ("max", max_),
+                                 ("sem", sem)]:
+                name = f"{prefix}_{ds_name}"
+                vp[name] = darr[ds_name].copy()
+                vp[name].attrs = ds[ds_name].attrs.copy()
     # 10. Time + elevation
     if "time" in ds.coords:
         mid_np, mid_py = scan_midtime(ds.time.values)
@@ -737,8 +742,16 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     # restore height metadata
     vp["height"].attrs = height_1d.attrs.copy()
     for var in vp.data_vars:
+        attrs = vp[var].attrs.copy()
         if var in sweep_vars_attrs_f:
-            vp[var].attrs.update(sweep_vars_attrs_f[var])
+            for k, v in sweep_vars_attrs_f[var].items():
+                attrs.setdefault(k, v)
+        elif var.startswith("GRAD_"):
+            base = var.removeprefix("GRAD_")
+            attrs.setdefault("long_name", f"Vertical gradient of {base}")
+            base_units = vp[base].attrs.get("units", "") if base in vp else ""
+            attrs.setdefault("units", f"{base_units}/km" if base_units else "1/km")
+        vp[var].attrs = attrs
     # Extract site name
     if "where" in ds.attrs and isinstance(ds.attrs["where"], dict):
         rname_out = {"site_name": ds.attrs["where"].get("site_name", "Radar")}
@@ -850,7 +863,6 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     # 2. Select only the needed variables
     ds_sel = ds[list(inp_map.values())]
     rng_km = convert(ds[names["rng"]], "km")
-    # azi_rad = convert(ds[names["azi"]], "rad")
     elv_rad = convert(ds[names["elv"]], "rad")[0]
     # 3. Resolve thresholds (canonical -> threshold)
     thr = _resolve_thresholds(inp_map, thresholds)
@@ -882,8 +894,12 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     # Remove the old range coordinate from all variables
     if "range" in agg.coords:
         agg = agg.drop_vars("range")
-    # 7. Assemble QVP dataset
-    data_vars = {ds_name: agg[ds_name] for ds_name in inp_map.values()}
+    # 7. Assemble QVP dataset, preserving source variable attrs
+    data_vars = {}
+    for ds_name in inp_map.values():
+        da = agg[ds_name].copy()
+        da.attrs = ds[ds_name].attrs.copy()
+        data_vars[ds_name] = da
     qvp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
     if "range" in qvp.coords:
         qvp = qvp.drop_vars("range")
@@ -915,11 +931,12 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
             max_ = max_.drop_vars("range")
         if "range" in sem.coords:
             sem = sem.drop_vars("range")
-        for canon, ds_name in inp_map.items():
-            qvp[f"std_{ds_name}"] = std[ds_name]
-            qvp[f"min_{ds_name}"] = min_[ds_name]
-            qvp[f"max_{ds_name}"] = max_[ds_name]
-            qvp[f"sem_{ds_name}"] = sem[ds_name]
+        for ds_name in inp_map.values():
+            for prefix, darr in [("std", std), ("min", min_), ("max", max_),
+                                 ("sem", sem)]:
+                name = f"{prefix}_{ds_name}"
+                qvp[name] = darr[ds_name].copy()
+                qvp[name].attrs = ds[ds_name].attrs.copy()
     # 9. Compute mid-scan time
     if "time" in ds.coords:
         mid_np, mid_py = scan_midtime(ds.time.values)
@@ -945,22 +962,22 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
             except Exception:
                 raise ValueError(f"Beamwidth attribute is not numeric: {bw!r}")
         bw_rad = np.deg2rad(bw)
-        # Range gate spacing Δr (km)
+        # Range gate spacing deltar (km)
         dr = (rng_km.diff(names["rng"]).median()).item()   # scalar km
         # Height array
         h = agg["height"]  # dims: ("height",)
-        # Δh1 = Δr * sin(α)
+        # deltah1 = deltar * sin(α)
         delta_h1 = dr * np.sin(elv_rad)
         delta_h1 = xr.ones_like(h, dtype=float) * delta_h1
         delta_h1.attrs.update({"long_name": "vertical_resolution_range_gate",
                                "description": "Δh1 = Δr * sin(elev)",
                                "units": height_1d.attrs.get("units", "")})
-        # Δh2 = h * θ * cot(α)
+        # deltah2 = h * θ * cot(α)
         delta_h2 = h * bw_rad * (np.cos(elv_rad) / np.sin(elv_rad))
         delta_h2.attrs.update({"long_name": "vertical_resolution_beam_broadening",
                                "description": "Δh2 = h * beamwidth * cot(elev)",
                                "units": height_1d.attrs.get("units", "")})
-        # Δh = max(Δh1, Δh2)
+        # deltah = max(deltah1, deltah2)
         delta_h = xr.ufuncs.maximum(delta_h1, delta_h2)
         delta_h.attrs.update({"long_name": "effective_vertical_resolution",
                               "description": "Δh = max(Δh1, Δh2)",
@@ -971,8 +988,13 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     # restore height metadata
     qvp["height"].attrs = height_1d.attrs.copy()
     for var in qvp.data_vars:
+        # start from original attrs already copied from source variable
+        attrs = qvp[var].attrs.copy()
+        # optionally enrich with canonical metadata without overwriting source attrs
         if var in sweep_vars_attrs_f:
-            qvp[var].attrs.update(sweep_vars_attrs_f[var])
+            for k, v in sweep_vars_attrs_f[var].items():
+                attrs.setdefault(k, v)
+        qvp[var].attrs = attrs
     # Extract site name
     if "where" in ds.attrs and isinstance(ds.attrs["where"], dict):
         rname_out = {"site_name": ds.attrs["where"].get("site_name", "Radar")}
@@ -1156,39 +1178,26 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
                        coords={"height": common_height})
     rdqvp.height.attrs["units"] = "km"
     # 8. Attach interpolated QVPs + elevation metadata
-    if keep_qvp_interp:
-        rdqvp["qvp_interp"] = qvps_interp_ds  # dims: elevation, variable, height
-    elev_angles = []
-    scan_datetime_unix_ns = []
-    scan_datetime_iso = []
-    sweep_numbers = []
-    prt_modes = []
-    follow_modes = []
-    times = []
+    # always build provenance lists
+    elev_angles, scan_datetime_unix_ns, scan_datetime_iso = [], [], []
+    sweep_numbers, prt_modes, follow_modes, times = [], [], [], []
     for qvp in qvps:
-        elev = qvp.coords.get("elevation", None)
-        if elev is None:
-            elev_angles.append(np.nan)
-        else:
-            elev_angles.append(float(elev))
-        ts_ns = qvp.attrs.get("scan_datetime_unix_ns", np.nan)
-        ts_iso = qvp.attrs.get("scan_datetime_iso", None)
-        scan_datetime_unix_ns.append(ts_ns)
-        scan_datetime_iso.append(ts_iso)
+        elev_angles.append(float(qvp.coords.get("elevation", np.nan)))
+        scan_datetime_unix_ns.append(qvp.attrs.get("scan_datetime_unix_ns",
+                                                   np.nan))
+        scan_datetime_iso.append(qvp.attrs.get("scan_datetime_iso", None))
     for ds in dss:
-        sweep_numbers.append(ds.sweep_number.item() if "sweep_number" in ds.coords else np.nan)
-        prt_modes.append(ds.prt_mode.item() if "prt_mode" in ds.coords else None)
-        follow_modes.append(ds.follow_mode.item() if "follow_mode" in ds.coords else None)
+        sweep_numbers.append(ds.sweep_number.item() if "sweep_number"
+                             in ds.coords else np.nan)
+        prt_modes.append(ds.prt_mode.item() if "prt_mode" in ds.coords
+                         else None)
+        follow_modes.append(ds.follow_mode.item() if "follow_mode"
+                            in ds.coords else None)
         t_mid_np, _ = scan_midtime(ds.time.values)
         times.append(t_mid_np)
-    rdqvp = rdqvp.assign_coords(
-        source_sweep_number=("elevation", sweep_numbers),
-        source_prt_mode=("elevation", prt_modes),
-        source_follow_mode=("elevation", follow_modes),
-        source_time=("elevation", times),
-        source_scan_datetime_unix_ns=("elevation", scan_datetime_unix_ns),
-        source_scan_datetime_iso=("elevation", scan_datetime_iso),
-        )
+    if keep_qvp_interp:
+        rdqvp["qvp_interp"] = qvps_interp_ds
+        # dims: elevation, variable, height
     # Drop scalar sweep metadata that is no longer meaningful for RD‑QVP
     for coord in ["sweep_number", "prt_mode", "follow_mode",
                   "sweep_fixed_angle", "time"]:
@@ -1200,16 +1209,25 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     # Attach scalar RD‑QVP time
     rdqvp = rdqvp.assign_coords(time=rdqvp_mid_np)
     # 9. Metadata + provenance
-    for var in rdqvp.data_vars:
+    # take attrs from the first interpolated QVP that contains this variable
+    for var in vars_to_combine:
+        src_attrs = {}
+        for qvp in qvps_interp:
+            if var in qvp.data_vars:
+                src_attrs = qvp[var].attrs.copy()
+                break
+        rdqvp[var].attrs = src_attrs
         if var in sweep_vars_attrs_f:
-            rdqvp[var].attrs.update(sweep_vars_attrs_f[var])
+            for k, v in sweep_vars_attrs_f[var].items():
+                rdqvp[var].attrs.setdefault(k, v)
     # 10. Collect QVP variable names (union across elevations)
     all_qvp_vars = sorted( set().union(*[set(qvp.data_vars) for qvp in qvps]))
-    # 11. Extract site name
-    if "where" in ds.attrs and isinstance(ds.attrs["where"], dict):
-        rname_out = {"site_name": ds.attrs["where"].get("site_name", "Radar")}
-    elif "site_name" in ds.attrs:
-        rname_out = {"site_name": ds.attrs["site_name"]}
+    # 11. Extract site name (using first source scan)
+    src0 = dss[0]
+    if "where" in src0.attrs and isinstance(src0.attrs["where"], dict):
+        rname_out = {"site_name": src0.attrs["where"].get("site_name", "Radar")}
+    elif "site_name" in src0.attrs:
+        rname_out = {"site_name": src0.attrs["site_name"]}
     else:
         rname_out = {"site_name": "Radar"}
     # 12. Provenance
@@ -1219,16 +1237,19 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     rdqvp = record_provenance(
         rdqvp, step="build_rdqvp", inputs=all_qvp_vars,
         outputs=list(rdqvp.data_vars),
-        parameters={
-            "n_elevations": len(dss),
-            "qvp_kwargs": qvp_kwargs or {},
-            "height_resolution_km": height_res,
-            "spec_range_km": spec_range,
-            "power_param": power_param,
-            "elevation_angles_deg": elev_angles,
-            "scan_datetime_unix_ns": scan_datetime_unix_ns,
-            "scan_datetime_iso": scan_datetime_iso,
-            },
+        parameters={"n_elevations": len(dss),
+                    "qvp_kwargs": qvp_kwargs or {},
+                    "height_resolution_km": height_res,
+                    "spec_range_km": spec_range,
+                    "power_param": power_param,
+                    "elevation_angles_deg": elev_angles,
+                    "scan_datetime_unix_ns": scan_datetime_unix_ns,
+                    "scan_datetime_iso": scan_datetime_iso,
+                    "source_sweep_number": sweep_numbers,
+                    "source_prt_mode": prt_modes,
+                    "source_follow_mode": follow_modes,
+                    "source_time": [str(t) for t in times]
+                    },
         extra_attrs=extra, module_provenance='towerpy.profs.polprofs.build_rdqvp')
     rdqvp.attrs["profs_type"] = "Range‑Defined Quasi-Vertical Profiles"
     rdqvp.attrs["where"] = rname_out   # Python dict in memory
