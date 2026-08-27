@@ -667,6 +667,8 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         agg = ds_masked.mean(dim=names["azi"], skipna=True)
     elif method == "median":
         agg = ds_masked.median(dim=names["azi"], skipna=True)
+    else:
+        raise ValueError("method must be 'mean' or 'median'.")
     agg = agg.where(count > valid_gates)
     # 7. Height coordinate
     bh = ds[names["beam_height"]]
@@ -676,8 +678,8 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
     agg = agg.assign_coords(height=height_1d).swap_dims({names["rng"]: "height"})
     # reattach height as a coord over the new 'height' dim
     agg = agg.assign_coords(height=("height", height_1d.values))
-    if "range" in agg.coords:
-        agg = agg.drop_vars("range")
+    if names["rng"] in agg.coords:
+        agg = agg.drop_vars(names["rng"])
     # 8. Assemble VP dataset, preserving source variable attrs
     data_vars = {}
     for ds_name in inp_map.values():
@@ -686,10 +688,10 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         data_vars[ds_name] = da
     vp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
     # Clean up leftover range dimension/coordinate
-    if "range" in vp.coords:
-        vp = vp.drop_vars("range")
-    if "range" in vp.dims:
-        vp = vp.drop_dims("range")
+    if names["rng"] in vp.coords:
+        vp = vp.drop_vars(names["rng"])
+    if names["rng"] in vp.dims:
+        vp = vp.drop_dims(names["rng"])
     # 9. Optional statistics
     if stats:
         std = ds_masked.std(dim=names['azi'], skipna=True)
@@ -708,14 +710,14 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
             {names["rng"]: "height"})
         sem = sem.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        if "range" in std.coords:
-            std = std.drop_vars("range")
-        if "range" in min_.coords:
-            min_ = min_.drop_vars("range")
-        if "range" in max_.coords:
-            max_ = max_.drop_vars("range")
-        if "range" in sem.coords:
-            sem = sem.drop_vars("range")
+        if names["rng"] in std.coords:
+            std = std.drop_vars(names["rng"])
+        if names["rng"] in min_.coords:
+            min_ = min_.drop_vars(names["rng"])
+        if names["rng"] in max_.coords:
+            max_ = max_.drop_vars(names["rng"])
+        if names["rng"] in sem.coords:
+            sem = sem.drop_vars(names["rng"])
         for ds_name in inp_map.values():
             for prefix, darr in [("std", std), ("min", min_), ("max", max_),
                                  ("sem", sem)]:
@@ -759,11 +761,12 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         rname_out = {"site_name": ds.attrs["site_name"]}
     else:
         rname_out = {"site_name": "Radar"}
-    # Preserve scalar radar-location coordinates
-    for coord_name in ("longitude", "latitude", "altitude"):
-        if coord_name in ds.coords and ds.coords[coord_name].ndim == 0:
-            vp = vp.assign_coords({coord_name: ds.coords[coord_name].copy(
-                deep=True)})
+    # Preserve scalar radar-location and other coordinates
+    skip_coords = {names["azi"], names["rng"], names["elv"],
+                   names["beam_height"], "height", "time", "elevation"}
+    for coord_name, coord in ds.coords.items():
+        if coord.ndim == 0 and coord_name not in skip_coords:
+            vp = vp.assign_coords({coord_name: coord.copy(deep=True)})
     # 13. Provenance
     extra = {'step_description': (
         "Built a vertical profile from a birdbath scan using azimuthal "
@@ -868,7 +871,7 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     # 2. Select only the needed variables
     ds_sel = ds[list(inp_map.values())]
     rng_km = convert(ds[names["rng"]], "km")
-    elv_rad = convert(ds[names["elv"]], "rad")[0]
+    elv_rad = float(convert(ds[names["elv"]], "rad").mean())
     # 3. Resolve thresholds (canonical -> threshold)
     thr = _resolve_thresholds(inp_map, thresholds)
     # 4. Build joint mask
@@ -892,13 +895,13 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
     else:
         height_1d = bh
     # IMPORTANT: keep dimension as "range"
-    height_1d.attrs.setdefault("units", bh.attrs.get('units'))
+    height_1d.attrs.setdefault('units', bh.attrs.get('units', 'km'))
     agg = agg.assign_coords(height=height_1d).swap_dims({names["rng"]: "height"})
     # reattach height as a coord over the *new* 'height' dim
     agg = agg.assign_coords(height=("height", height_1d.values))
     # Remove the old range coordinate from all variables
-    if "range" in agg.coords:
-        agg = agg.drop_vars("range")
+    if names["rng"] in agg.coords:
+        agg = agg.drop_vars(names["rng"])
     # 7. Assemble QVP dataset, preserving source variable attrs
     data_vars = {}
     for ds_name in inp_map.values():
@@ -906,10 +909,10 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         da.attrs = ds[ds_name].attrs.copy()
         data_vars[ds_name] = da
     qvp = xr.Dataset(data_vars=data_vars, coords={"height": agg["height"]})
-    if "range" in qvp.coords:
-        qvp = qvp.drop_vars("range")
-    if "range" in qvp.dims:
-        qvp = qvp.drop_dims("range")
+    if names["rng"] in qvp.coords:
+        qvp = qvp.drop_vars(names["rng"])
+    if names["rng"] in qvp.dims:
+        qvp = qvp.drop_dims(names["rng"])
     # 8. Optional statistics
     if stats:
         std = ds_masked.std(dim=names['azi'], skipna=True)
@@ -928,14 +931,14 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
             {names["rng"]: "height"})
         sem = sem.assign_coords(height=height_1d).swap_dims(
             {names["rng"]: "height"})
-        if "range" in std.coords:
-            std = std.drop_vars("range")
-        if "range" in min_.coords:
-            min_ = min_.drop_vars("range")
-        if "range" in max_.coords:
-            max_ = max_.drop_vars("range")
-        if "range" in sem.coords:
-            sem = sem.drop_vars("range")
+        if names["rng"] in std.coords:
+            std = std.drop_vars(names["rng"])
+        if names["rng"] in min_.coords:
+            min_ = min_.drop_vars(names["rng"])
+        if names["rng"] in max_.coords:
+            max_ = max_.drop_vars(names["rng"])
+        if names["rng"] in sem.coords:
+            sem = sem.drop_vars(names["rng"])
         for ds_name in inp_map.values():
             for prefix, darr in [("std", std), ("min", min_), ("max", max_),
                                  ("sem", sem)]:
@@ -1016,36 +1019,30 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         # elevation may be per-ray; take mean and convert to degrees
         elev_deg = float(convert(ds[names["elv"]], "deg").mean())
         qvp = qvp.assign_coords(elevation=elev_deg)
-    # Preserve scalar radar-location coordinates
-    for coord_name in ("longitude", "latitude", "altitude"):
-        if coord_name in ds.coords and ds.coords[coord_name].ndim == 0:
-            qvp = qvp.assign_coords({coord_name: ds.coords[coord_name].copy(
-                deep=True)})
+    # Preserve scalar radar-location and other coordinates
+    skip_coords = {names["azi"], names["rng"], names["elv"],
+                   names["beam_height"], "height", "time", "elevation"}
+    for coord_name, coord in ds.coords.items():
+        if coord.ndim == 0 and coord_name not in skip_coords:
+            qvp = qvp.assign_coords({coord_name: coord.copy(deep=True)})
     # 12. Provenance
     extra = {'step_description': (
         "Built a quasi-vertical profile from a single-elevation PPI scan, "
         "with optional thresholding before azimuthal aggregation.")}
+    prov_params = {"aggregation_method": method, "inp_names": dict(inp_map),
+                   "thresholds": thr, "valid_gates": valid_gates,
+                   "elevation_deg": float(qvp.coords.get("elevation", np.nan)),
+                   "beam_geometry": names["beam_height"],
+                   "vertical_resolution": bool(resolution),
+                   }
+    if resolution:
+        prov_params.update({"beamwidth_deg": float(bw),
+                            "range_gate_km": float(dr),
+                            "vertical_resolution_outputs": ["VRES"],})
     qvp = record_provenance(
         qvp, step="build_qvp", inputs=list(inp_map.values()),
-        outputs=list(qvp.data_vars),
-        parameters={"aggregation_method": method,
-                    "inp_names": dict(inp_map),
-                    "thresholds": thr,
-                    "valid_gates": valid_gates,
-                    "elevation_deg": float(qvp.coords.get("elevation", np.nan)),
-                    "beam_geometry": names["beam_height"]},
-        extra_attrs=extra, module_provenance='towerpy.profs.polprofs.build_qvp')
-    #TODO: maybe should not record provenance but use add_correction_step
-    if resolution:
-        qvp = record_provenance(
-            qvp, step="vertical_resolution",
-            inputs=[names["rng"], names["elv"]], outputs=["VRES"],
-            parameters={
-                "beamwidth_deg": float(bw), "range_gate_km": float(dr),
-                "elevation_deg": float(convert(ds[names["elv"]], "deg").mean())
-                },
-            extra_attrs=extra,
-            module_provenance='towerpy.profs.polprofs.build_qvp')
+        outputs=list(qvp.data_vars), parameters=prov_params, extra_attrs=extra,
+        module_provenance='towerpy.profs.polprofs.build_qvp')
     qvp.attrs["profs_type"] = "Quasi-Vertical Profiles"
     qvp.attrs["where"] = rname_out   # Python dict in memory
     # Pass dataset‑level processing chain
@@ -1131,7 +1128,9 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     """
     sweep_vars_attrs_f = mdtp.sweep_vars_attrs_f
     # 1. Build QVPs for each elevation
-    qvp_kwargs = qvp_kwargs or {}
+    qvp_kwargs = dict(qvp_kwargs or {})
+    if stats:
+        qvp_kwargs["stats"] = True
     qvps = []
     for ds in dss:
         qvp = build_qvp(ds, **qvp_kwargs)   # RD‑QVP does not use Δh
@@ -1174,8 +1173,13 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
     # Weighting:
     w = xr.where(r <= d, 1., 1. / xr.ufuncs.fabs(r - (d - 1.))**power_param)
     # 6. Weighted combination for each variable
-    vars_to_combine = [str(v) for v in qvps_interp_ds["variable"].values
-                       if not str(v).startswith(("std_", "min_", "max_", "sem_"))]
+    if stats:
+        vars_to_combine = [str(v) for v in qvps_interp_ds["variable"].values]
+    else:
+        vars_to_combine = [str(v) for v in qvps_interp_ds["variable"].values
+                           if not str(v).startswith(
+                                   ("std_", "min_", "max_", "sem_"))
+                           ]
     rdqvp_vars = {}
     for var in vars_to_combine:
         da = qvps_interp_ds.sel(variable=var)  # dims: (elevation, height)
@@ -1188,14 +1192,15 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
                        coords={"height": common_height})
     rdqvp.height.attrs["units"] = "km"
     # 8. Attach interpolated QVPs + elevation metadata
-    # Preserve scalar radar-location coordinates
-    for coord_name in ("longitude", "latitude", "altitude"):
-        if coord_name in dss[0].coords:
-            coord = dss[0].coords[coord_name]
-            # Site coordinates should be scalar. Avoid copying ray-dependent data.
-            if coord.ndim == 0:
-                rdqvp = rdqvp.assign_coords({coord_name: coord.copy(deep=True)})
-                rdqvp.coords[coord_name].attrs = coord.attrs.copy()
+    # Preserve scalar site/static coordinates from first source scan
+    src = dss[0]
+    skip_coords = {"time", "elevation", "sweep_number", "sweep_fixed_angle",
+                   "prt_mode", "follow_mode", "height", rng_name, azi_name,
+                   beam_height_name}
+    for coord_name, coord in src.coords.items():
+        if coord.ndim == 0 and coord_name not in skip_coords:
+            rdqvp = rdqvp.assign_coords({coord_name: coord.copy(deep=True)})
+            rdqvp.coords[coord_name].attrs = coord.attrs.copy()
     # always build provenance lists
     elev_angles, scan_datetime_unix_ns, scan_datetime_iso = [], [], []
     sweep_numbers, prt_modes, follow_modes, times = [], [], [], []
