@@ -759,6 +759,11 @@ def build_vp(ds, inp_names=None, thresholds=None, valid_gates=0,
         rname_out = {"site_name": ds.attrs["site_name"]}
     else:
         rname_out = {"site_name": "Radar"}
+    # Preserve scalar radar-location coordinates
+    for coord_name in ("longitude", "latitude", "altitude"):
+        if coord_name in ds.coords and ds.coords[coord_name].ndim == 0:
+            vp = vp.assign_coords({coord_name: ds.coords[coord_name].copy(
+                deep=True)})
     # 13. Provenance
     extra = {'step_description': (
         "Built a vertical profile from a birdbath scan using azimuthal "
@@ -1011,6 +1016,11 @@ def build_qvp(ds, inp_names=None, beamwidth=None, thresholds="default",
         # elevation may be per-ray; take mean and convert to degrees
         elev_deg = float(convert(ds[names["elv"]], "deg").mean())
         qvp = qvp.assign_coords(elevation=elev_deg)
+    # Preserve scalar radar-location coordinates
+    for coord_name in ("longitude", "latitude", "altitude"):
+        if coord_name in ds.coords and ds.coords[coord_name].ndim == 0:
+            qvp = qvp.assign_coords({coord_name: ds.coords[coord_name].copy(
+                deep=True)})
     # 12. Provenance
     extra = {'step_description': (
         "Built a quasi-vertical profile from a single-elevation PPI scan, "
@@ -1178,6 +1188,14 @@ def build_rdqvp(dss, qvp_kwargs=None, height_res=0.002, spec_range=50.,
                        coords={"height": common_height})
     rdqvp.height.attrs["units"] = "km"
     # 8. Attach interpolated QVPs + elevation metadata
+    # Preserve scalar radar-location coordinates
+    for coord_name in ("longitude", "latitude", "altitude"):
+        if coord_name in dss[0].coords:
+            coord = dss[0].coords[coord_name]
+            # Site coordinates should be scalar. Avoid copying ray-dependent data.
+            if coord.ndim == 0:
+                rdqvp = rdqvp.assign_coords({coord_name: coord.copy(deep=True)})
+                rdqvp.coords[coord_name].attrs = coord.attrs.copy()
     # always build provenance lists
     elev_angles, scan_datetime_unix_ns, scan_datetime_iso = [], [], []
     sweep_numbers, prt_modes, follow_modes, times = [], [], [], []
