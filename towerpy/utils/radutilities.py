@@ -5,8 +5,9 @@ import datetime as dt
 import fnmatch
 import json
 import cartopy.io.shapereader as shpreader
-from scipy import interpolate
+from numba import njit
 import numpy as np
+from scipy import interpolate
 import xarray as xr
 from ..utils.unit_conversion import np64_to_dtm, convert
 
@@ -911,6 +912,120 @@ def rolling_mad(x, window):
             med[i] = m
             mad[i] = np.median(np.abs(vals - m))
     return mad
+
+
+@njit(cache=True)
+def _compute_std_and_grad_numba(array_2d, std_window, use_nanstd,
+                                grad_medfilt_window):
+    """
+    Compute:
+        1. forward rolling standard deviation along the last axis
+        2. median-filtered centred gradient along the last axis
+
+    The median filter is applied along the last axis only.
+
+    Boundary behaviour:
+      - outside-range values are treated as 0.0, ie, zero-padding
+        more closely than edge-padding.
+      - if a median window contains non-finite values, the smoothed
+        value is NaN.
+    """
+    n_rays, n_gates = array_2d.shape    
+    stdarr = np.empty((n_rays, n_gates), dtype=np.float64)
+    stdarr.fill(np.nan)
+    smooth = np.empty((n_rays, n_gates), dtype=np.float64)
+    gradarr = np.empty((n_rays, n_gates), dtype=np.float64)
+    half = grad_medfilt_window // 2
+    # 1. Rolling standard deviation
+    nwin = n_gates - std_window + 1
+    for nr_i in range(n_rays):
+        if nwin > 0:
+            s = 0.0
+            s2 = 0.0
+            nfinite = 0
+            nnan = 0
+            # initial window
+            for q in range(std_window):
+                x = array_2d[nr_i, q]
+                if np.isfinite(x):
+                    s += x
+                    s2 += x * x
+                    nfinite += 1
+                else:
+                    nnan += 1
+            for r in range(nwin):
+                if use_nanstd:
+                    if nfinite > 0:
+                        mean = s / nfinite
+                        var = s2 / nfinite - mean * mean
+                        if var < 0.0:
+                            var = 0.0
+                        stdarr[nr_i, r] = np.sqrt(var)
+                    else:
+                        stdarr[nr_i, r] = np.nan
+                else:
+                    if nnan > 0:
+                        stdarr[nr_i, r] = np.nan
+                    else:
+                        mean = s / std_window
+                        var = s2 / std_window - mean * mean
+                        if var < 0.0:
+                            var = 0.0
+                        stdarr[nr_i, r] = np.sqrt(var)
+                # slide window
+                if r < nwin - 1:
+                    x_old = array_2d[nr_i, r]
+                    if np.isfinite(x_old):
+                        s -= x_old
+                        s2 -= x_old * x_old
+                        nfinite -= 1
+                    else:
+                        nnan -= 1
+                    x_new = array_2d[nr_i, r + std_window]
+                    if np.isfinite(x_new):
+                        s += x_new
+                        s2 += x_new * x_new
+                        nfinite += 1
+                    else:
+                        nnan += 1
+    # 2. Median filter along range
+    for nr_i in range(n_rays):
+        buf = np.empty(grad_medfilt_window, dtype=np.float64)
+        for r in range(n_gates):
+            bad = False
+            for m in range(grad_medfilt_window):
+                idx = r + m - half
+                if idx < 0 or idx >= n_gates:
+                    val = 0.0
+                else:
+                    val = array_2d[nr_i, idx]
+                    if not np.isfinite(val):
+                        bad = True
+                buf[m] = val
+            if bad:
+                smooth[nr_i, r] = np.nan
+            else:
+                # insertion sort, fast for tiny windows like 3, 5, 7, 9
+                for i in range(1, grad_medfilt_window):
+                    key = buf[i]
+                    j = i - 1
+                    while j >= 0 and buf[j] > key:
+                        buf[j + 1] = buf[j]
+                        j -= 1
+                    buf[j + 1] = key
+                smooth[nr_i, r] = buf[half]
+    # 3. Centred finite-difference gradient
+    for nr_i in range(n_rays):
+        if n_gates == 1:
+            gradarr[nr_i, 0] = np.nan
+        else:
+            gradarr[nr_i, 0] = smooth[nr_i, 1] - smooth[nr_i, 0]
+            for r in range(1, n_gates - 1):
+                gradarr[nr_i, r] = (smooth[nr_i, r + 1]
+                                    - smooth[nr_i, r - 1]) / 2.0
+            gradarr[nr_i, n_gates - 1] = (smooth[nr_i, n_gates - 1]
+                                          - smooth[nr_i, n_gates - 2])
+    return stdarr, gradarr
 
 # =============================================================================
 # %%% Dataset attrs
