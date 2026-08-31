@@ -9,7 +9,7 @@ import xradar as xrd
 from scipy.optimize import minimize_scalar
 from sklearn.metrics import root_mean_squared_error as sklrmse
 
-from ..datavis.rad_display import _plot_rhohvmethod_grid, _plot_rhohvmethod_single
+from ..datavis.rad_display import _plot_rhohvmethod_grid
 from ..eclass.snr import signal2noiseratio
 from ..utils.radutilities import (
     apply_correction_chain,
