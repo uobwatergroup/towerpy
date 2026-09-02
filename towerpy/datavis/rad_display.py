@@ -3769,6 +3769,10 @@ def _plot_contours(ax, ds, varname, *, coord_sys, polarplot=True,
     ckw = {"alpha": 0.5, "zorder": 2, "colors": None, "legend": False}
     if contour_kw:
         ckw.update(contour_kw)
+    if ckw.get("colors") is not None:
+        ckw["cmap"] = None
+    legend = ckw.pop("legend", False)
+    clabel = ckw.pop("clabel", True)
     # =========================================================================
     # RECTANGULAR MODE
     # =========================================================================
@@ -3779,9 +3783,10 @@ def _plot_contours(ax, ds, varname, *, coord_sys, polarplot=True,
         rect_x = ds[xname]
         rect_y = ds[yname]
         contour = ax.contour(rect_x.values, rect_y.values, da.values,
-                             **contour_kw,)
-        ax.clabel(contour, inline=True, fontsize=fs_label)
-        if ckw["legend"]:
+                             **ckw,)
+        if clabel:
+            ax.clabel(contour, inline=True, fontsize=fs_label)
+        if legend:
             handles, labels = contour.legend_elements()
             labels = [lb.replace("x = ", "") for lb in labels]
             ax.legend(handles, labels, title=varname,
@@ -3795,9 +3800,10 @@ def _plot_contours(ax, ds, varname, *, coord_sys, polarplot=True,
             return
         # da must be 2D: (azimuth, range)
         contour = ax.contour(az_grid.values, r_grid_km.values,
-                             da.values, **contour_kw)
-        ax.clabel(contour, inline=True, fontsize=fs_label)
-        if ckw["legend"]:
+                             da.values, **ckw)
+        if clabel:
+            ax.clabel(contour, inline=True, fontsize=fs_label)
+        if legend:
             handles, labels = contour.legend_elements()
             labels = [lb.replace("x = ", "") for lb in labels]
             ax.legend(handles, labels, title=varname,
